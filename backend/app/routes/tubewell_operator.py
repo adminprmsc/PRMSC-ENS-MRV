@@ -17,6 +17,7 @@ from app.models.models import (
     SUBMISSION_STATUS_REVERTED_BACK,
     WATER_LOG_OPERATOR_EDITABLE,
     normalize_water_submission_status,
+    METER_TYPE_TUBEWELL,
 )
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.utils.decorators import min_role_required, tubewell_user_required
@@ -35,6 +36,7 @@ from app.utils.operator_helpers import (
     allowed_file,
     coerce_optional_float as _coerce_optional_float,
     find_solar_system_by_location,
+    meter_to_dict,
     parse_date,
 )
 from app.utils.workflow_helpers import log_verification_action, notify_analysts
@@ -99,6 +101,17 @@ def _signature_svg_or_none(user) -> str | None:
     if sig and str(sig).strip():
         return str(sig).strip()
     return None
+
+
+def _meter_history_payload(meters, meter_type: str) -> list[dict]:
+    rows = [m for m in (meters or []) if m.meter_type == meter_type]
+    rows.sort(key=lambda x: ((x.created_at or datetime.min), str(x.id)), reverse=True)
+    out = []
+    for meter in rows:
+        payload = meter_to_dict(meter)
+        if payload is not None:
+            out.append(payload)
+    return out
 
 
 @tubewell_operator_bp.route("/notifications", methods=["GET"])
@@ -492,6 +505,14 @@ def get_water_systems():
         "longitude": getattr(s, "longitude", None),
         "pump_model": s.pump_model,
         "bulk_meter_installed": getattr(s, "bulk_meter_installed", None),
+        "meter_model": s.active_meter.meter_model if s.active_meter else None,
+        "meter_serial_number": s.active_meter.meter_serial_number if s.active_meter else None,
+        "meter_accuracy_class": s.active_meter.meter_accuracy_class if s.active_meter else None,
+        "installation_date": s.active_meter.installation_date.isoformat()
+        if s.active_meter and s.active_meter.installation_date
+        else None,
+        "current_meter": meter_to_dict(s.active_meter),
+        "meters": _meter_history_payload(s.meters, METER_TYPE_TUBEWELL),
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if getattr(s, "updated_at", None) else None,
     } for s in systems]), 200
@@ -537,6 +558,7 @@ def get_water_system_config():
             assert_user_may_view_or_log_water_system(user, system)
         except TehsilAccessDenied:
             return jsonify({"message": "Access denied for this water system"}), 403
+        active_meter = system.active_meter
         return jsonify({
             "exists": True,
             "config": {
@@ -546,10 +568,14 @@ def get_water_system_config():
                 "depth_of_water_intake": system.depth_of_water_intake,
                 "height_to_ohr": system.height_to_ohr,
                 "pump_flow_rate": system.pump_flow_rate,
-                "meter_model": system.meter_model,
-                "meter_serial_number": system.meter_serial_number,
-                "meter_accuracy_class": system.meter_accuracy_class,
-                "installation_date": system.installation_date.isoformat() if system.installation_date else None,
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number if active_meter else None,
+                "meter_accuracy_class": active_meter.meter_accuracy_class if active_meter else None,
+                "installation_date": active_meter.installation_date.isoformat()
+                if active_meter and active_meter.installation_date
+                else None,
+                "current_meter": meter_to_dict(active_meter),
+                "meters": _meter_history_payload(system.meters, METER_TYPE_TUBEWELL),
             }
         }), 200
     

@@ -6,6 +6,7 @@ import {
   Loader2,
   Save,
   ArrowLeft,
+  Gauge,
   Info,
   Upload,
   FileText,
@@ -56,11 +57,13 @@ import {
   uploadImage,
 } from "../../../../services/tehsilManagerOperatorService";
 import type {
+  SystemMeter,
   WaterSystemCalibrationCertificate,
   WaterSystemRow,
 } from "../../../../types/api";
 
 type ToastType = "success" | "error";
+type MeterUpdateMode = "update_current" | "switch_new";
 
 export default function WaterSystemEditPage() {
   const navigate = useNavigate();
@@ -76,6 +79,9 @@ export default function WaterSystemEditPage() {
   const [system, setSystem] = useState<WaterSystemRow | null>(null);
   const [systemId, setSystemId] = useState<string>("");
   const [detailsLoaded, setDetailsLoaded] = useState(false);
+  const [meterHistory, setMeterHistory] = useState<SystemMeter[]>([]);
+  const [meterUpdateMode, setMeterUpdateMode] =
+    useState<MeterUpdateMode>("update_current");
   const [certs, setCerts] = useState<WaterSystemCalibrationCertificate[]>([]);
   const [certLoading, setCertLoading] = useState(false);
   const [certSaving, setCertSaving] = useState(false);
@@ -163,6 +169,8 @@ export default function WaterSystemEditPage() {
       const detail = (await getWaterSystem(
         match.id,
       )) as Partial<WaterSystemRow>;
+      const activeMeter = detail.current_meter ?? null;
+      setMeterHistory(Array.isArray(detail.meters) ? detail.meters : []);
 
       setFormData({
         latitude: detail.latitude != null ? String(detail.latitude) : "",
@@ -180,10 +188,16 @@ export default function WaterSystemEditPage() {
         pump_head: String(detail.pump_head ?? ""),
         pump_horse_power: String(detail.pump_horse_power ?? ""),
         time_to_fill: String(detail.time_to_fill ?? ""),
-        meter_model: String(detail.meter_model ?? ""),
-        meter_serial_number: String(detail.meter_serial_number ?? ""),
-        meter_accuracy_class: String(detail.meter_accuracy_class ?? ""),
-        installation_date: String(detail.installation_date ?? ""),
+        meter_model: String(activeMeter?.meter_model ?? detail.meter_model ?? ""),
+        meter_serial_number: String(
+          activeMeter?.meter_serial_number ?? detail.meter_serial_number ?? "",
+        ),
+        meter_accuracy_class: String(
+          activeMeter?.meter_accuracy_class ?? detail.meter_accuracy_class ?? "",
+        ),
+        installation_date: String(
+          activeMeter?.installation_date ?? detail.installation_date ?? "",
+        ),
       });
 
       setCertLoading(true);
@@ -244,11 +258,26 @@ export default function WaterSystemEditPage() {
     if (!isResolved) return;
     setSaving(true);
     try {
+      const {
+        meter_model,
+        meter_serial_number,
+        meter_accuracy_class,
+        installation_date,
+        ...rest
+      } = formData;
       await updateWaterSystem(systemId, {
         tehsil: system?.tehsil,
         village: system?.village,
         settlement: system?.settlement ?? "",
-        ...formData,
+        ...rest,
+        current_meter: {
+          meter_type: "tubewell",
+          meter_model,
+          meter_serial_number,
+          meter_accuracy_class,
+          installation_date,
+          update_mode: meterUpdateMode,
+        },
         status: "submitted",
       });
       setToast({ message: "✅ Water system updated!", type: "success" });
@@ -332,7 +361,7 @@ export default function WaterSystemEditPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen bg-muted/30 p-4 md:p-6"
+      className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 md:p-6"
     >
       <Toast
         message={toast.message}
@@ -340,7 +369,7 @@ export default function WaterSystemEditPage() {
         onClose={() => setToast({ message: "", type: "success" })}
       />
 
-      <div className="mx-auto w-full max-w-5xl">
+      <div className="mx-auto w-full max-w-6xl">
         <div className="mb-6 flex items-center gap-3">
           <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="size-4" />
@@ -350,7 +379,9 @@ export default function WaterSystemEditPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                 Edit water system
               </h1>
-              <Badge variant="outline">Edit mode</Badge>
+              <Badge variant="outline" className="border-slate-300 bg-white">
+                Edit mode
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
               Identity and location are locked. Only editable fields are shown
@@ -368,7 +399,7 @@ export default function WaterSystemEditPage() {
           </Alert>
         ) : null}
 
-        <Card className="mb-6 border-slate-200">
+        <Card className="mb-6 border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">System</CardTitle>
             <CardDescription>Read-only identity & location</CardDescription>
@@ -420,7 +451,7 @@ export default function WaterSystemEditPage() {
         </Card>
 
         {!showShimmers && detailsLoaded ? (
-          <Card className="border-slate-200">
+          <Card className="border-slate-200 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Editable fields</CardTitle>
               <CardDescription>
@@ -428,6 +459,13 @@ export default function WaterSystemEditPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="rounded-xl border border-slate-200/80 bg-white/80 p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <Gauge className="size-4 text-slate-600" />
+                  <p className="text-sm font-semibold text-slate-800">
+                    System Configuration
+                  </p>
+                </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Latitude (Optional)</Label>
@@ -522,6 +560,7 @@ export default function WaterSystemEditPage() {
                     disabled={saving || !isResolved}
                   />
                 </div>
+              </div>
               </div>
 
               <Separator />
@@ -665,187 +704,261 @@ export default function WaterSystemEditPage() {
 
               <Separator />
 
-              <div className="space-y-4">
-                <div className="rounded-xl border border-border/70 bg-card p-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <Label className="text-sm font-semibold">
-                        Bulk meter installed? <RequiredMark />
-                      </Label>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Choose <span className="font-semibold">Yes</span> if a
-                        bulk meter is installed; otherwise choose{" "}
-                        <span className="font-semibold">No</span>.
-                      </p>
-                    </div>
-                    <div className="inline-flex w-fit overflow-hidden rounded-lg border">
-                      <Button
-                        type="button"
-                        variant={
-                          formData.bulk_meter_installed ? "default" : "ghost"
-                        }
-                        className="rounded-none px-5"
-                        onClick={() =>
-                          setFormData((p) => ({
-                            ...p,
-                            bulk_meter_installed: true,
-                          }))
-                        }
-                        disabled={saving || !isResolved}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={
-                          !formData.bulk_meter_installed ? "default" : "ghost"
-                        }
-                        className="rounded-none px-5"
-                        onClick={() =>
-                          setFormData((p) => ({
-                            ...p,
-                            bulk_meter_installed: false,
-                          }))
-                        }
-                        disabled={saving || !isResolved}
-                      >
-                        No
-                      </Button>
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base">Metering Information</CardTitle>
+                  <CardDescription>
+                    Manage the active meter, switch to a new meter, and review meter history.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <Label className="text-sm font-semibold">Meter update mode</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Update current meter edits the active record. Switch to new meter creates a new history entry and keeps old one inactive.
+                        </p>
+                      </div>
+                      <div className="inline-flex w-fit overflow-hidden rounded-xl border bg-white p-1">
+                        <Button
+                          type="button"
+                          variant={
+                            meterUpdateMode === "update_current" ? "default" : "ghost"
+                          }
+                          className="rounded-lg px-4"
+                          onClick={() => setMeterUpdateMode("update_current")}
+                          disabled={saving || !isResolved}
+                        >
+                          Update current
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={meterUpdateMode === "switch_new" ? "default" : "ghost"}
+                          className="rounded-lg px-4"
+                          onClick={() => setMeterUpdateMode("switch_new")}
+                          disabled={saving || !isResolved}
+                        >
+                          Switch new
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {!formData.bulk_meter_installed ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>
-                        Tank capacity (OHR)
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.ohr_tank_capacity}
-                        onChange={onChange("ohr_tank_capacity")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Required to fill tank (OHR)
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.ohr_fill_required}
-                        onChange={onChange("ohr_fill_required")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Pump capacity
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.pump_capacity}
-                        onChange={onChange("pump_capacity")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Pump head
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.pump_head}
-                        onChange={onChange("pump_head")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Pump horse power (kVA/W)
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.pump_horse_power}
-                        onChange={onChange("pump_horse_power")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Time to fill (minutes)
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.time_to_fill}
-                        onChange={onChange("time_to_fill")}
-                        disabled={saving || !isResolved}
-                      />
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <Label className="text-sm font-semibold">
+                          Bulk meter installed? <RequiredMark />
+                        </Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Choose <span className="font-semibold">Yes</span> if a
+                          bulk meter is installed; otherwise choose{" "}
+                          <span className="font-semibold">No</span>.
+                        </p>
+                      </div>
+                      <div className="inline-flex w-fit overflow-hidden rounded-xl border bg-white p-1">
+                        <Button
+                          type="button"
+                          variant={
+                            formData.bulk_meter_installed ? "default" : "ghost"
+                          }
+                          className="rounded-lg px-4"
+                          onClick={() =>
+                            setFormData((p) => ({
+                              ...p,
+                              bulk_meter_installed: true,
+                            }))
+                          }
+                          disabled={saving || !isResolved}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={
+                            !formData.bulk_meter_installed ? "default" : "ghost"
+                          }
+                          className="rounded-lg px-4"
+                          onClick={() =>
+                            setFormData((p) => ({
+                              ...p,
+                              bulk_meter_installed: false,
+                            }))
+                          }
+                          disabled={saving || !isResolved}
+                        >
+                          No
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>
-                        Installation date
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        type="date"
-                        value={formData.installation_date}
-                        onChange={onChange("installation_date")}
-                        disabled={saving || !isResolved}
-                      />
+
+                  {!formData.bulk_meter_installed ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Tank capacity (OHR)
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.ohr_tank_capacity}
+                          onChange={onChange("ohr_tank_capacity")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Required to fill tank (OHR)
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.ohr_fill_required}
+                          onChange={onChange("ohr_fill_required")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Pump capacity
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.pump_capacity}
+                          onChange={onChange("pump_capacity")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Pump head
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.pump_head}
+                          onChange={onChange("pump_head")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Pump horse power (kVA/W)
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.pump_horse_power}
+                          onChange={onChange("pump_horse_power")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Time to fill (minutes)
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          value={formData.time_to_fill}
+                          onChange={onChange("time_to_fill")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Meter model
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        value={formData.meter_model}
-                        onChange={onChange("meter_model")}
-                        disabled={saving || !isResolved}
-                      />
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Installation date
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          type="date"
+                          value={formData.installation_date}
+                          onChange={onChange("installation_date")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Meter model
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          value={formData.meter_model}
+                          onChange={onChange("meter_model")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Meter serial number
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          value={formData.meter_serial_number}
+                          onChange={onChange("meter_serial_number")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Accuracy class
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          value={formData.meter_accuracy_class}
+                          onChange={onChange("meter_accuracy_class")}
+                          disabled={saving || !isResolved}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Meter serial number
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        value={formData.meter_serial_number}
-                        onChange={onChange("meter_serial_number")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Accuracy class
-                        <RequiredMark />
-                      </Label>
-                      <Input
-                        value={formData.meter_accuracy_class}
-                        onChange={onChange("meter_accuracy_class")}
-                        disabled={saving || !isResolved}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+
+                  <Card className="border-dashed bg-white">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Meter history</CardTitle>
+                      <CardDescription>
+                        Changing meter details creates a new active meter entry and keeps old meter records as inactive.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {meterHistory.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No meter history available.</p>
+                      ) : (
+                        meterHistory.map((meter) => (
+                          <div
+                            key={meter.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">
+                                {meter.meter_model || "Unknown model"} · {meter.meter_serial_number || "No serial"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Accuracy: {meter.meter_accuracy_class || "—"} · Installed: {meter.installation_date || "—"}
+                              </p>
+                            </div>
+                            <Badge variant={meter.is_active ? "default" : "outline"}>
+                              {meter.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </CardContent>
+              </Card>
 
               <Separator />
 

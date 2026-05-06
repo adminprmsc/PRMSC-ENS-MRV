@@ -16,6 +16,8 @@ SUBMISSION_STATUS_SUBMITTED = "submitted"
 SUBMISSION_STATUS_ACCEPTED = "accepted"
 SUBMISSION_STATUS_REJECTED = "rejected"
 SUBMISSION_STATUS_REVERTED_BACK = "reverted_back"
+METER_TYPE_TUBEWELL = "tubewell"
+METER_TYPE_SOLAR = "solar"
 
 # Rows a tubewell operator may edit or delete (water_energy_logging_daily)
 WATER_LOG_OPERATOR_EDITABLE = frozenset(
@@ -207,9 +209,30 @@ class WaterSystem(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    meters = db.relationship(
+        "SystemMeter",
+        backref="water_system",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
     records = db.relationship(
         "WaterEnergyLoggingDaily", backref="system", lazy=True
     )
+
+    @property
+    def active_meter(self):
+        return next(
+            (
+                m
+                for m in sorted(
+                    self.meters or [],
+                    key=lambda x: ((x.created_at or datetime.min), str(x.id)),
+                    reverse=True,
+                )
+                if m.is_active and m.meter_type == METER_TYPE_TUBEWELL
+            ),
+            None,
+        )
 
 
 class WaterSystemCalibrationCertificate(db.Model):
@@ -298,9 +321,50 @@ class SolarSystem(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    meters = db.relationship(
+        "SystemMeter",
+        backref="solar_system",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
     records = db.relationship(
         "SolarEnergyLoggingMonthly", backref="system", lazy=True
     )
+
+    @property
+    def active_meter(self):
+        return next(
+            (
+                m
+                for m in sorted(
+                    self.meters or [],
+                    key=lambda x: ((x.created_at or datetime.min), str(x.id)),
+                    reverse=True,
+                )
+                if m.is_active and m.meter_type == METER_TYPE_SOLAR
+            ),
+            None,
+        )
+
+
+class SystemMeter(db.Model):
+    __tablename__ = "system_meters"
+
+    id = db.Column(db.String(36), primary_key=True, default=get_uuid)
+    meter_type = db.Column(db.String(32), nullable=False)
+    water_system_id = db.Column(
+        db.String(36), db.ForeignKey("water_systems.id", ondelete="CASCADE"), nullable=True
+    )
+    solar_system_id = db.Column(
+        db.String(36), db.ForeignKey("solar_systems.id", ondelete="CASCADE"), nullable=True
+    )
+    meter_model = db.Column(db.String(100))
+    meter_serial_number = db.Column(db.String(100))
+    meter_accuracy_class = db.Column(db.String(50))
+    installation_date = db.Column(db.Date)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class SolarEnergyLoggingMonthly(db.Model):

@@ -7,6 +7,8 @@ export const tehsilRoutes = {
   /** View and edit which water systems each tubewell operator may log (in your tehsil). */
   operatorAssignments: `${TEHSIL_BASE}/operator-assignments`,
   waterSystems: `${TEHSIL_BASE}/water-systems`,
+  waterSystemView: (systemId: string) =>
+    `${TEHSIL_BASE}/water-systems/${encodeURIComponent(systemId)}/view`,
   calibrationCertificates: `${TEHSIL_BASE}/calibration-certificates`,
   waterSubmissions: `${TEHSIL_BASE}/submissions`,
   waterSubmissionDetails: (id: string) =>
@@ -16,6 +18,8 @@ export const tehsilRoutes = {
     `${TEHSIL_BASE}/water-form/${encodeURIComponent(waterSystemKey)}/edit`,
   waterData: `${TEHSIL_BASE}/water-data`,
   solarSites: `${TEHSIL_BASE}/solar-sites`,
+  solarSiteView: (systemId: string) =>
+    `${TEHSIL_BASE}/solar-sites/${encodeURIComponent(systemId)}/view`,
   solarSiteEdit: (systemId: string) =>
     `${TEHSIL_BASE}/solar-sites/${encodeURIComponent(systemId)}/edit`,
   solarForm: `${TEHSIL_BASE}/solar-form`,

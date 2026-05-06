@@ -3,6 +3,18 @@
  * IDs are UUID strings from the API.
  */
 
+export type SystemMeter = {
+  id: string;
+  meter_type: "tubewell" | "solar" | string;
+  meter_model?: string | null;
+  meter_serial_number?: string | null;
+  meter_accuracy_class?: string | null;
+  installation_date?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type WaterSystemRow = {
   id: string;
   tehsil: string;
@@ -29,6 +41,8 @@ export type WaterSystemRow = {
   meter_accuracy_class?: string | null;
   calibration_requirement?: string | null;
   installation_date?: string | null;
+  current_meter?: SystemMeter | null;
+  meters?: SystemMeter[] | null;
   created_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -64,6 +78,8 @@ export type SolarSystemRow = {
   meter_model?: string | null;
   meter_serial_number?: string | null;
   green_meter_connection_date?: string | null;
+  current_meter?: SystemMeter | null;
+  meters?: SystemMeter[] | null;
   remarks?: string | null;
   created_by?: string | null;
   created_at?: string | null;

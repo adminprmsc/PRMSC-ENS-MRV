@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Lock, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Gauge, Loader2, Lock, Save, Trash2 } from "lucide-react";
 
 import Toast from "../../../../components/Toast";
 import { Button } from "../../../../components/ui/button";
@@ -16,7 +16,11 @@ import { Input } from "../../../../components/ui/input";
 import { Label } from "../../../../components/ui/label";
 import { Separator } from "../../../../components/ui/separator";
 import { Textarea } from "../../../../components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "../../../../components/ui/alert";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "../../../../components/ui/alert";
 import { Badge } from "../../../../components/ui/badge";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import {
@@ -33,9 +37,10 @@ import {
   getSolarSystem,
   updateSolarSystem,
 } from "../../../../services/tehsilManagerOperatorService";
-import type { SolarSystemRow } from "../../../../types/api";
+import type { SolarSystemRow, SystemMeter } from "../../../../types/api";
 
 type ToastType = "success" | "error";
+type MeterUpdateMode = "update_current" | "switch_new";
 
 const INSTALLATION_TYPE_OPTIONS = [
   "Ground mounted",
@@ -58,6 +63,9 @@ export default function SolarSiteEditPage() {
 
   const [site, setSite] = useState<SolarSystemRow | null>(null);
   const [monthlyLogCount, setMonthlyLogCount] = useState<number>(0);
+  const [meterHistory, setMeterHistory] = useState<SystemMeter[]>([]);
+  const [meterUpdateMode, setMeterUpdateMode] =
+    useState<MeterUpdateMode>("update_current");
 
   const [formData, setFormData] = useState({
     latitude: "",
@@ -87,28 +95,32 @@ export default function SolarSiteEditPage() {
     setLoadingInitial(true);
     try {
       const s = (await getSolarSystem(id)) as SolarSystemRow;
+      const activeMeter = s.current_meter ?? null;
       setSite(s);
-      setMonthlyLogCount(typeof s.monthly_log_count === "number" ? s.monthly_log_count : 0);
+      setMeterHistory(Array.isArray(s.meters) ? s.meters : []);
+      setMonthlyLogCount(
+        typeof s.monthly_log_count === "number" ? s.monthly_log_count : 0,
+      );
 
       setFormData({
         latitude: s.latitude != null ? String(s.latitude) : "",
         longitude: s.longitude != null ? String(s.longitude) : "",
-        installation_location:
-          (INSTALLATION_TYPE_OPTIONS as readonly string[]).includes(
-            String(s.installation_location ?? ""),
-          )
-            ? String(s.installation_location ?? "")
-            : String(s.installation_location ?? "")
-              ? "Other"
-              : "",
-        installation_location_other:
-          (INSTALLATION_TYPE_OPTIONS as readonly string[]).includes(
-            String(s.installation_location ?? ""),
-          )
-            ? ""
-            : String(s.installation_location ?? ""),
-        solar_panel_capacity: s.solar_panel_capacity != null ? String(s.solar_panel_capacity) : "",
-        inverter_capacity: s.inverter_capacity != null ? String(s.inverter_capacity) : "",
+        installation_location: (
+          INSTALLATION_TYPE_OPTIONS as readonly string[]
+        ).includes(String(s.installation_location ?? ""))
+          ? String(s.installation_location ?? "")
+          : String(s.installation_location ?? "")
+            ? "Other"
+            : "",
+        installation_location_other: (
+          INSTALLATION_TYPE_OPTIONS as readonly string[]
+        ).includes(String(s.installation_location ?? ""))
+          ? ""
+          : String(s.installation_location ?? ""),
+        solar_panel_capacity:
+          s.solar_panel_capacity != null ? String(s.solar_panel_capacity) : "",
+        inverter_capacity:
+          s.inverter_capacity != null ? String(s.inverter_capacity) : "",
         inverter_serial_number: String(s.inverter_serial_number ?? ""),
         solar_connection_date: s.solar_connection_date
           ? String(s.solar_connection_date).slice(0, 10)
@@ -118,17 +130,24 @@ export default function SolarSiteEditPage() {
         electricity_connection_date: s.electricity_connection_date
           ? String(s.electricity_connection_date).slice(0, 10)
           : "",
-        meter_model: String(s.meter_model ?? ""),
-        meter_serial_number: String(s.meter_serial_number ?? ""),
+        meter_model: String(activeMeter?.meter_model ?? s.meter_model ?? ""),
+        meter_serial_number: String(
+          activeMeter?.meter_serial_number ?? s.meter_serial_number ?? "",
+        ),
         green_connection_date: s.green_connection_date
           ? String(s.green_connection_date).slice(0, 10)
           : s.green_meter_connection_date
             ? String(s.green_meter_connection_date).slice(0, 10)
-            : "",
+            : activeMeter?.installation_date
+              ? String(activeMeter.installation_date).slice(0, 10)
+              : "",
         remarks: String(s.remarks ?? ""),
       });
     } catch (e: unknown) {
-      setToast({ message: getApiErrorMessage(e, "Failed to load solar site"), type: "error" });
+      setToast({
+        message: getApiErrorMessage(e, "Failed to load solar site"),
+        type: "error",
+      });
     } finally {
       setLoadingInitial(false);
     }
@@ -182,11 +201,21 @@ export default function SolarSiteEditPage() {
         ...formData,
         installation_location,
         installation_location_other: undefined,
+        current_meter: {
+          meter_type: "solar",
+          meter_model: formData.meter_model,
+          meter_serial_number: formData.meter_serial_number,
+          installation_date: formData.green_connection_date,
+          update_mode: meterUpdateMode,
+        },
       });
       setToast({ message: "✅ Solar site updated!", type: "success" });
       setTimeout(() => navigate(tehsilRoutes.solarSites), 900);
     } catch (e: unknown) {
-      setToast({ message: getApiErrorMessage(e, "Update failed"), type: "error" });
+      setToast({
+        message: getApiErrorMessage(e, "Update failed"),
+        type: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -202,7 +231,8 @@ export default function SolarSiteEditPage() {
       });
       return;
     }
-    if (!window.confirm("Delete this solar site? This cannot be undone.")) return;
+    if (!window.confirm("Delete this solar site? This cannot be undone."))
+      return;
 
     setDeleting(true);
     try {
@@ -210,7 +240,10 @@ export default function SolarSiteEditPage() {
       setToast({ message: "Solar site deleted.", type: "success" });
       setTimeout(() => navigate(tehsilRoutes.solarSites), 700);
     } catch (e: unknown) {
-      setToast({ message: getApiErrorMessage(e, "Delete failed"), type: "error" });
+      setToast({
+        message: getApiErrorMessage(e, "Delete failed"),
+        type: "error",
+      });
     } finally {
       setDeleting(false);
     }
@@ -220,7 +253,7 @@ export default function SolarSiteEditPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen bg-muted/30 p-4 md:p-6"
+      className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 md:p-6"
     >
       <Toast
         message={toast.message}
@@ -228,7 +261,7 @@ export default function SolarSiteEditPage() {
         onClose={() => setToast({ message: "", type: "success" })}
       />
 
-      <div className="mx-auto w-full max-w-5xl">
+      <div className="mx-auto w-full max-w-6xl">
         <div className="mb-6 flex items-center gap-3">
           <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="size-4" />
@@ -238,7 +271,9 @@ export default function SolarSiteEditPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                 Edit solar site
               </h1>
-              <Badge variant="outline">Edit mode</Badge>
+              <Badge variant="outline" className="border-slate-300 bg-white">
+                Edit mode
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
               Location is locked. Update technical and metering fields below.
@@ -255,7 +290,7 @@ export default function SolarSiteEditPage() {
           </Alert>
         ) : null}
 
-        <Card className="mb-6 border-slate-200">
+        <Card className="mb-6 border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Site</CardTitle>
             <CardDescription>Read-only identity & location</CardDescription>
@@ -264,7 +299,10 @@ export default function SolarSiteEditPage() {
             {showShimmers ? (
               <>
                 {Array.from({ length: 5 }).map((_, idx) => (
-                  <div key={idx} className="rounded-lg border bg-background p-3">
+                  <div
+                    key={idx}
+                    className="rounded-lg border bg-background p-3"
+                  >
                     <Skeleton className="h-3 w-24" />
                     <Skeleton className="mt-2 h-4 w-full" />
                   </div>
@@ -291,7 +329,9 @@ export default function SolarSiteEditPage() {
                   <p className="mt-1 font-medium">{site?.village || "—"}</p>
                 </div>
                 <div className="rounded-lg border bg-background p-3 md:col-span-2">
-                  <p className="text-[11px] text-muted-foreground">Settlement</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Settlement
+                  </p>
                   <p className="mt-1 font-medium">{site?.settlement || "—"}</p>
                 </div>
               </>
@@ -300,12 +340,21 @@ export default function SolarSiteEditPage() {
         </Card>
 
         {!showShimmers ? (
-          <Card className="border-slate-200">
+          <Card className="border-slate-200 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Editable fields</CardTitle>
-              <CardDescription>Coordinates, assets, and metering</CardDescription>
+              <CardDescription>
+                Coordinates, assets, and metering
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="rounded-xl border border-slate-200/80 bg-white/80 p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <Gauge className="size-4 text-slate-600" />
+                  <p className="text-sm font-semibold text-slate-800">
+                    Technical Configuration
+                  </p>
+                </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Latitude (Optional)</Label>
@@ -348,7 +397,9 @@ export default function SolarSiteEditPage() {
                         ...prev,
                         installation_location: next,
                         installation_location_other:
-                          next === "Other" ? prev.installation_location_other : "",
+                          next === "Other"
+                            ? prev.installation_location_other
+                            : "",
                       }));
                     }}
                     disabled={saving || deleting || !isResolved}
@@ -357,7 +408,9 @@ export default function SolarSiteEditPage() {
                       <SelectValue placeholder="Select installation type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__empty__">Select installation type</SelectItem>
+                      <SelectItem value="__empty__">
+                        Select installation type
+                      </SelectItem>
                       {INSTALLATION_TYPE_OPTIONS.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
@@ -420,45 +473,129 @@ export default function SolarSiteEditPage() {
                   />
                 </div>
               </div>
+              </div>
 
               <Separator />
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Meter model</Label>
-                  <Input
-                    value={formData.meter_model}
-                    onChange={onChange("meter_model")}
-                    disabled={saving || deleting || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Meter serial</Label>
-                  <Input
-                    value={formData.meter_serial_number}
-                    onChange={onChange("meter_serial_number")}
-                    disabled={saving || deleting || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Green connection date</Label>
-                  <Input
-                    type="date"
-                    value={formData.green_connection_date}
-                    onChange={onChange("green_connection_date")}
-                    disabled={saving || deleting || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Remarks</Label>
-                  <Textarea
-                    value={formData.remarks}
-                    onChange={onChange("remarks")}
-                    disabled={saving || deleting || !isResolved}
-                    className="min-h-24 resize-none"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Remarks</Label>
+                <Textarea
+                  value={formData.remarks}
+                  onChange={onChange("remarks")}
+                  disabled={saving || deleting || !isResolved}
+                  className="min-h-24 resize-none"
+                />
               </div>
+
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base">Metering Information</CardTitle>
+                  <CardDescription>
+                    Manage the active meter, choose replacement mode, and review meter history.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <Label className="text-sm font-semibold">Meter update mode</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Update current meter edits the active record. Switch to new meter creates a new history entry and keeps old one inactive.
+                        </p>
+                      </div>
+                      <div className="inline-flex w-fit overflow-hidden rounded-xl border bg-white p-1">
+                        <Button
+                          type="button"
+                          variant={
+                            meterUpdateMode === "update_current" ? "default" : "ghost"
+                          }
+                          className="rounded-lg px-4"
+                          onClick={() => setMeterUpdateMode("update_current")}
+                          disabled={saving || deleting || !isResolved}
+                        >
+                          Update current
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={meterUpdateMode === "switch_new" ? "default" : "ghost"}
+                          className="rounded-lg px-4"
+                          onClick={() => setMeterUpdateMode("switch_new")}
+                          disabled={saving || deleting || !isResolved}
+                        >
+                          Switch new
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Meter model</Label>
+                      <Input
+                        value={formData.meter_model}
+                        onChange={onChange("meter_model")}
+                        disabled={saving || deleting || !isResolved}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Meter serial</Label>
+                      <Input
+                        value={formData.meter_serial_number}
+                        onChange={onChange("meter_serial_number")}
+                        disabled={saving || deleting || !isResolved}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Green Meter connection date</Label>
+                      <Input
+                        type="date"
+                        value={formData.green_connection_date}
+                        onChange={onChange("green_connection_date")}
+                        disabled={saving || deleting || !isResolved}
+                      />
+                    </div>
+                  </div>
+
+                  <Card className="border-dashed bg-white">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Meter history</CardTitle>
+                      <CardDescription>
+                        Updating meter details creates a new active meter entry and
+                        keeps previous meters as inactive.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {meterHistory.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No meter history available.
+                        </p>
+                      ) : (
+                        meterHistory.map((meter) => (
+                          <div
+                            key={meter.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">
+                                {meter.meter_model || "Unknown model"} ·{" "}
+                                {meter.meter_serial_number || "No serial"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Installed: {meter.installation_date || "—"}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={meter.is_active ? "default" : "outline"}
+                            >
+                              {meter.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </CardContent>
+              </Card>
 
               <Separator />
 
@@ -545,4 +682,3 @@ export default function SolarSiteEditPage() {
     </motion.div>
   );
 }
-

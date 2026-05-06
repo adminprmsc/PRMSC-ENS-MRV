@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, Pencil, Plus, RefreshCcw, Search, Zap } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Search,
+  Zap,
+} from "lucide-react";
 
 import { Button } from "../../../components/ui/button";
 import {
@@ -21,13 +28,6 @@ import {
   TableHeader,
   TableRow,
 } from "../../../components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
@@ -51,16 +51,12 @@ const kv = (v: unknown) => {
 
 export default function SolarSites() {
   const navigate = useNavigate();
-  const { getSolarSystems, getSolarSystem } = useTehsilManagerOperatorApi();
+  const { getSolarSystems } = useTehsilManagerOperatorApi();
 
   const [sites, setSites] = useState<SolarSystemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailSite, setDetailSite] = useState<SolarSystemRow | null>(null);
 
   const load = async (soft = false) => {
     try {
@@ -95,18 +91,8 @@ export default function SolarSites() {
     });
   }, [sites, search]);
 
-  const openDetails = async (s: SolarSystemRow) => {
-    setDetailSite(null);
-    setDetailOpen(true);
-    setDetailLoading(true);
-    try {
-      const detail = (await getSolarSystem(s.id)) as SolarSystemRow;
-      setDetailSite(detail);
-    } catch (e: unknown) {
-      toast.error(getApiErrorMessage(e, "Could not load site details"));
-    } finally {
-      setDetailLoading(false);
-    }
+  const openDetails = (s: SolarSystemRow) => {
+    navigate(tehsilRoutes.solarSiteView(s.id));
   };
 
   const goToEdit = (s: SolarSystemRow) => {
@@ -222,7 +208,7 @@ export default function SolarSites() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void openDetails(s)}
+                                onClick={() => openDetails(s)}
                               >
                                 <Eye className="size-4" />
                                 View
@@ -247,122 +233,6 @@ export default function SolarSites() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog
-        open={detailOpen}
-        onOpenChange={(v) => {
-          setDetailOpen(v);
-          if (!v) setDetailSite(null);
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Solar site details</DialogTitle>
-            <DialogDescription>
-              {detailSite
-                ? `${detailSite.tehsil} • ${detailSite.village}${
-                    detailSite.settlement ? ` • ${detailSite.settlement}` : ""
-                  }`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-
-          {detailLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 10 }).map((_, idx) => (
-                <Skeleton key={idx} className="h-4 w-full" />
-              ))}
-            </div>
-          ) : detailSite ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Identity</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">System ID</span>
-                    <span className="font-mono text-xs">{detailSite.id}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">UID</span>
-                    <span className="font-mono text-xs">
-                      {kv(detailSite.unique_identifier)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Created</span>
-                    <span>{formatDate(detailSite.created_at)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Updated</span>
-                    <span>{formatDate(detailSite.updated_at)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Technical</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Installation location
-                    </span>
-                    <span>{kv(detailSite.installation_location)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Panel capacity
-                    </span>
-                    <span>{kv(detailSite.solar_panel_capacity)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Inverter capacity
-                    </span>
-                    <span>{kv(detailSite.inverter_capacity)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Inverter serial
-                    </span>
-                    <span>{kv(detailSite.inverter_serial_number)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Solar connection date
-                    </span>
-                    <span>
-                      {kv(
-                        detailSite.solar_connection_date ??
-                          detailSite.installation_date,
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Monthly logs</span>
-                    <span>{kv(detailSite.monthly_log_count)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-
-          {detailSite ? (
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDetailOpen(false)}>
-                Close
-              </Button>
-              <Button onClick={() => goToEdit(detailSite)} className="gap-2">
-                <Pencil className="size-4" />
-                Edit
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

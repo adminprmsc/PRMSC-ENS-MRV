@@ -191,7 +191,24 @@ const WaterSystemForm = () => {
   const handleSubmit = async (status: SubmissionStatus = "submitted") => {
     setLoading(true);
     try {
-      await createWaterSystem({ ...formData, status });
+      const {
+        meter_model,
+        meter_serial_number,
+        meter_accuracy_class,
+        installation_date,
+        ...rest
+      } = formData;
+      await createWaterSystem({
+        ...rest,
+        status,
+        current_meter: {
+          meter_type: "tubewell",
+          meter_model,
+          meter_serial_number,
+          meter_accuracy_class,
+          installation_date,
+        },
+      });
       setToast({
         message: "✅ Registration complete!",
         type: "success",

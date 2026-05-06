@@ -12,6 +12,7 @@ from app.models.models import (
     WaterSystemCalibrationCertificate,
     WaterEnergyLoggingDaily,
     SolarSystem,
+    SystemMeter,
     SolarEnergyLoggingMonthly,
     Notification,
     User,
@@ -23,6 +24,8 @@ from app.models.models import (
     SUBMISSION_STATUS_ACCEPTED,
     SUBMISSION_STATUS_REJECTED,
     SUBMISSION_STATUS_REVERTED_BACK,
+    METER_TYPE_TUBEWELL,
+    METER_TYPE_SOLAR,
 )
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.utils.decorators import min_role_required, tehsil_manager_required
@@ -44,8 +47,11 @@ from app.utils.operator_helpers import (
     ALLOWED_EXTENSIONS,
     allowed_file,
     coerce_optional_float as _coerce_optional_float,
+    coerce_optional_str as _coerce_optional_str,
     find_solar_system_by_location,
+    meter_to_dict,
     parse_date,
+    upsert_active_system_meter,
 )
 from app.services import UserService, StorageService
 from app.utils.workflow_helpers import log_verification_action, notify_operator
@@ -694,13 +700,6 @@ def replace_water_operator_assignments(operator_id):
     )
 
 
-def _coerce_optional_str(val):
-    if val is None:
-        return None
-    s = str(val).strip()
-    return s if s != "" else None
-
-
 @tehsil_manager_bp.route("/tehsil-manager/submission/<submission_id>", methods=["GET"])
 @jwt_required()
 @min_role_required("ADMIN")
@@ -783,14 +782,6 @@ def add_water_system():
             )
         except ValueError as exc:
             return jsonify({"message": str(exc)}), 400
-        existing_system.meter_model = _coerce_optional_str(data.get("meter_model"))
-        existing_system.meter_serial_number = _coerce_optional_str(
-            data.get("meter_serial_number")
-        )
-        existing_system.meter_accuracy_class = _coerce_optional_str(
-            data.get("meter_accuracy_class")
-        )
-        existing_system.installation_date = parse_date(data.get('installation_date'))
         # Meter installed toggle + alternative fields
         bmi = _coerce_optional_bool(data.get("bulk_meter_installed"))
         if bmi is not None:
@@ -809,15 +800,32 @@ def add_water_system():
         except ValueError as exc:
             return jsonify({"message": str(exc)}), 400
 
+        active_meter = existing_system.active_meter
+        meter_payload = _current_meter_payload(
+            data,
+            METER_TYPE_TUBEWELL,
+            fallback={
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number
+                if active_meter
+                else None,
+                "meter_accuracy_class": active_meter.meter_accuracy_class
+                if active_meter
+                else None,
+                "installation_date": active_meter.installation_date
+                if active_meter
+                else None,
+            },
+        )
         ok, err = _validate_water_system_meter_logic(
             {
                 **data,
                 "bulk_meter_installed": existing_system.bulk_meter_installed,
-                "meter_model": existing_system.meter_model,
-                "meter_serial_number": existing_system.meter_serial_number,
-                "meter_accuracy_class": existing_system.meter_accuracy_class,
-                "installation_date": existing_system.installation_date.isoformat()
-                if existing_system.installation_date
+                "meter_model": meter_payload.get("meter_model"),
+                "meter_serial_number": meter_payload.get("meter_serial_number"),
+                "meter_accuracy_class": meter_payload.get("meter_accuracy_class"),
+                "installation_date": meter_payload["installation_date"].isoformat()
+                if meter_payload.get("installation_date")
                 else None,
                 "ohr_tank_capacity": existing_system.ohr_tank_capacity,
                 "ohr_fill_required": existing_system.ohr_fill_required,
@@ -829,6 +837,25 @@ def add_water_system():
         )
         if not ok:
             return jsonify({"message": err}), 400
+        meter_row = upsert_active_system_meter(
+            meter_type=METER_TYPE_TUBEWELL,
+            water_system_id=str(existing_system.id),
+            meter_model=meter_payload.get("meter_model")
+            if existing_system.bulk_meter_installed
+            else None,
+            meter_serial_number=meter_payload.get("meter_serial_number")
+            if existing_system.bulk_meter_installed
+            else None,
+            meter_accuracy_class=meter_payload.get("meter_accuracy_class")
+            if existing_system.bulk_meter_installed
+            else None,
+            installation_date=meter_payload.get("installation_date")
+            if existing_system.bulk_meter_installed
+            else None,
+            update_mode=_meter_update_mode(data),
+        )
+        if meter_row:
+            db.session.add(meter_row)
         
         try:
             db.session.commit()
@@ -873,16 +900,47 @@ def add_water_system():
         pump_head=to_float_or_none(data.get("pump_head")),
         pump_horse_power=to_float_or_none(data.get("pump_horse_power")),
         time_to_fill=to_float_or_none(data.get("time_to_fill")),
-        meter_model=data.get('meter_model'),
-        meter_serial_number=data.get('meter_serial_number'),
-        meter_accuracy_class=data.get('meter_accuracy_class'),
-        installation_date=parse_date(data.get('installation_date')),
+        meter_model=None,
+        meter_serial_number=None,
+        meter_accuracy_class=None,
+        installation_date=None,
         created_by=get_jwt_identity()
     )
-    ok, err = _validate_water_system_meter_logic(data)
+    meter_payload = _current_meter_payload(data, METER_TYPE_TUBEWELL)
+    ok, err = _validate_water_system_meter_logic(
+        {
+            **data,
+            "meter_model": meter_payload.get("meter_model"),
+            "meter_serial_number": meter_payload.get("meter_serial_number"),
+            "meter_accuracy_class": meter_payload.get("meter_accuracy_class"),
+            "installation_date": meter_payload["installation_date"].isoformat()
+            if meter_payload.get("installation_date")
+            else None,
+        }
+    )
     if not ok:
         return jsonify({"message": err}), 400
     db.session.add(new_system)
+    db.session.flush()
+    meter_row = upsert_active_system_meter(
+        meter_type=METER_TYPE_TUBEWELL,
+        water_system_id=str(new_system.id),
+        meter_model=meter_payload.get("meter_model")
+        if new_system.bulk_meter_installed
+        else None,
+        meter_serial_number=meter_payload.get("meter_serial_number")
+        if new_system.bulk_meter_installed
+        else None,
+        meter_accuracy_class=meter_payload.get("meter_accuracy_class")
+        if new_system.bulk_meter_installed
+        else None,
+        installation_date=meter_payload.get("installation_date")
+        if new_system.bulk_meter_installed
+        else None,
+        update_mode=_meter_update_mode(data),
+    )
+    if meter_row:
+        db.session.add(meter_row)
     db.session.commit()
     return jsonify({"message": "Water system added successfully", "id": str(new_system.id)}), 201
 
@@ -953,12 +1011,33 @@ def add_solar_system():
         existing_system.electricity_connection_date = electricity_connection_date
         existing_system.green_connection_date = green_connection_date
         existing_system.installation_date = solar_connection_date
-        existing_system.meter_model = _coerce_optional_str(data.get("meter_model"))
-        existing_system.meter_serial_number = _coerce_optional_str(
-            data.get("meter_serial_number")
-        )
         existing_system.green_meter_connection_date = green_connection_date
         existing_system.remarks = _coerce_optional_str(data.get("remarks"))
+        active_meter = existing_system.active_meter
+        meter_payload = _current_meter_payload(
+            data,
+            METER_TYPE_SOLAR,
+            fallback={
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number
+                if active_meter
+                else None,
+                "installation_date": active_meter.installation_date
+                if active_meter
+                else green_connection_date,
+            },
+        )
+        meter_row = upsert_active_system_meter(
+            meter_type=METER_TYPE_SOLAR,
+            solar_system_id=str(existing_system.id),
+            meter_model=meter_payload.get("meter_model"),
+            meter_serial_number=meter_payload.get("meter_serial_number"),
+            installation_date=meter_payload.get("installation_date")
+            or green_connection_date,
+            update_mode=_meter_update_mode(data),
+        )
+        if meter_row:
+            db.session.add(meter_row)
         
         try:
             db.session.commit()
@@ -990,13 +1069,29 @@ def add_solar_system():
         electricity_connection_date=electricity_connection_date,
         green_connection_date=green_connection_date,
         installation_date=solar_connection_date,
-        meter_model=data.get('meter_model'),
-        meter_serial_number=data.get('meter_serial_number'),
+        meter_model=None,
+        meter_serial_number=None,
         green_meter_connection_date=green_connection_date,
         remarks=data.get('remarks'),
         created_by=get_jwt_identity()
     )
     db.session.add(new_system)
+    db.session.flush()
+    meter_payload = _current_meter_payload(
+        data,
+        METER_TYPE_SOLAR,
+        fallback={"installation_date": green_connection_date},
+    )
+    meter_row = upsert_active_system_meter(
+        meter_type=METER_TYPE_SOLAR,
+        solar_system_id=str(new_system.id),
+        meter_model=meter_payload.get("meter_model"),
+        meter_serial_number=meter_payload.get("meter_serial_number"),
+        installation_date=meter_payload.get("installation_date") or green_connection_date,
+        update_mode=_meter_update_mode(data),
+    )
+    if meter_row:
+        db.session.add(meter_row)
     db.session.commit()
     return jsonify({"message": "Solar system added successfully", "id": str(new_system.id)}), 201
 
@@ -1055,6 +1150,14 @@ def _coerce_optional_bool(value):
     return None
 
 
+def _coerce_optional_date(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, date):
+        return value
+    return parse_date(value)
+
+
 def _require_fields(data: dict, keys: list[str]) -> list[str]:
     missing = []
     for k in keys:
@@ -1065,6 +1168,48 @@ def _require_fields(data: dict, keys: list[str]) -> list[str]:
         if isinstance(v, str) and not v.strip():
             missing.append(k)
     return missing
+
+
+def _current_meter_payload(data: dict, meter_type: str, fallback: dict | None = None) -> dict:
+    fallback = fallback or {}
+    raw = data.get("current_meter")
+    def _pick(field_key: str, legacy_key: str):
+        if isinstance(raw, dict) and field_key in raw:
+            return raw.get(field_key)
+        if legacy_key in data:
+            return data.get(legacy_key)
+        return fallback.get(field_key)
+
+    return {
+        "meter_type": meter_type,
+        "meter_model": _coerce_optional_str(_pick("meter_model", "meter_model")),
+        "meter_serial_number": _coerce_optional_str(
+            _pick("meter_serial_number", "meter_serial_number")
+        ),
+        "meter_accuracy_class": _coerce_optional_str(
+            _pick("meter_accuracy_class", "meter_accuracy_class")
+        ),
+        "installation_date": _coerce_optional_date(
+            _pick("installation_date", "installation_date")
+        ),
+    }
+
+
+def _meter_history_payload(meters: list[SystemMeter], meter_type: str) -> list[dict]:
+    rows = [m for m in (meters or []) if m.meter_type == meter_type]
+    rows.sort(key=lambda x: ((x.created_at or datetime.min), str(x.id)), reverse=True)
+    return [meter_to_dict(m) for m in rows if meter_to_dict(m) is not None]
+
+
+def _meter_update_mode(data: dict) -> str:
+    raw = data.get("meter_update_mode")
+    current_meter = data.get("current_meter")
+    if isinstance(current_meter, dict) and current_meter.get("update_mode") is not None:
+        raw = current_meter.get("update_mode")
+    mode = str(raw).strip().lower() if raw is not None else "auto"
+    if mode not in {"auto", "update_current", "switch_new"}:
+        mode = "auto"
+    return mode
 
 
 def _validate_water_system_meter_logic(payload: dict) -> tuple[bool, str | None]:
@@ -1162,14 +1307,21 @@ def update_water_system(system_id):
         if bmi is None:
             return jsonify({"message": "bulk_meter_installed must be boolean"}), 400
         system.bulk_meter_installed = bmi
-    if "meter_model" in data:
-        system.meter_model = _coerce_optional_str(data.get("meter_model"))
-    if "meter_serial_number" in data:
-        system.meter_serial_number = _coerce_optional_str(data.get("meter_serial_number"))
-    if "meter_accuracy_class" in data:
-        system.meter_accuracy_class = _coerce_optional_str(data.get("meter_accuracy_class"))
-    if "installation_date" in data:
-        system.installation_date = parse_date(data.get("installation_date"))
+    active_meter = system.active_meter
+    meter_payload = _current_meter_payload(
+        data,
+        METER_TYPE_TUBEWELL,
+        fallback={
+            "meter_model": active_meter.meter_model if active_meter else None,
+            "meter_serial_number": active_meter.meter_serial_number
+            if active_meter
+            else None,
+            "meter_accuracy_class": active_meter.meter_accuracy_class
+            if active_meter
+            else None,
+            "installation_date": active_meter.installation_date if active_meter else None,
+        },
+    )
     # Alternative fields for no-bulk-meter systems
     try:
         for k in (
@@ -1188,11 +1340,11 @@ def update_water_system(system_id):
     ok, err = _validate_water_system_meter_logic(
         {
             "bulk_meter_installed": system.bulk_meter_installed,
-            "meter_model": system.meter_model,
-            "meter_serial_number": system.meter_serial_number,
-            "meter_accuracy_class": system.meter_accuracy_class,
-            "installation_date": system.installation_date.isoformat()
-            if system.installation_date
+            "meter_model": meter_payload.get("meter_model"),
+            "meter_serial_number": meter_payload.get("meter_serial_number"),
+            "meter_accuracy_class": meter_payload.get("meter_accuracy_class"),
+            "installation_date": meter_payload["installation_date"].isoformat()
+            if meter_payload.get("installation_date")
             else None,
             "ohr_tank_capacity": system.ohr_tank_capacity,
             "ohr_fill_required": system.ohr_fill_required,
@@ -1204,6 +1356,25 @@ def update_water_system(system_id):
     )
     if not ok:
         return jsonify({"message": err}), 400
+    meter_row = upsert_active_system_meter(
+        meter_type=METER_TYPE_TUBEWELL,
+        water_system_id=str(system.id),
+        meter_model=meter_payload.get("meter_model")
+        if system.bulk_meter_installed
+        else None,
+        meter_serial_number=meter_payload.get("meter_serial_number")
+        if system.bulk_meter_installed
+        else None,
+        meter_accuracy_class=meter_payload.get("meter_accuracy_class")
+        if system.bulk_meter_installed
+        else None,
+        installation_date=meter_payload.get("installation_date")
+        if system.bulk_meter_installed
+        else None,
+        update_mode=_meter_update_mode(data),
+    )
+    if meter_row:
+        db.session.add(meter_row)
 
     try:
         db.session.commit()
@@ -1235,6 +1406,7 @@ def get_water_system(system_id):
     except TehsilAccessDenied:
         return jsonify({"message": "Access denied for this water system"}), 403
 
+    active_meter = system.active_meter
     return (
         jsonify(
             {
@@ -1260,12 +1432,18 @@ def get_water_system(system_id):
                 "pump_head": system.pump_head,
                 "pump_horse_power": system.pump_horse_power,
                 "time_to_fill": system.time_to_fill,
-                "meter_model": system.meter_model,
-                "meter_serial_number": system.meter_serial_number,
-                "meter_accuracy_class": system.meter_accuracy_class,
-                "installation_date": system.installation_date.isoformat()
-                if system.installation_date
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number
+                if active_meter
                 else None,
+                "meter_accuracy_class": active_meter.meter_accuracy_class
+                if active_meter
+                else None,
+                "installation_date": active_meter.installation_date.isoformat()
+                if active_meter and active_meter.installation_date
+                else None,
+                "current_meter": meter_to_dict(active_meter),
+                "meters": _meter_history_payload(system.meters, METER_TYPE_TUBEWELL),
                 "created_by": system.created_by,
                 "created_at": system.created_at.isoformat() if system.created_at else None,
                 "updated_at": system.updated_at.isoformat() if system.updated_at else None,
@@ -1515,11 +1693,15 @@ def get_solar_systems():
                 "installation_date": s.installation_date.isoformat()
                 if s.installation_date
                 else None,
-                "meter_model": s.meter_model,
-                "meter_serial_number": s.meter_serial_number,
+                "meter_model": s.active_meter.meter_model if s.active_meter else None,
+                "meter_serial_number": s.active_meter.meter_serial_number
+                if s.active_meter
+                else None,
                 "green_meter_connection_date": s.green_meter_connection_date.isoformat()
                 if s.green_meter_connection_date
                 else None,
+                "current_meter": meter_to_dict(s.active_meter),
+                "meters": _meter_history_payload(s.meters, METER_TYPE_SOLAR),
                 "remarks": s.remarks,
                 "created_by": s.created_by,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -1586,6 +1768,7 @@ def get_solar_system(system_id):
     except TehsilAccessDenied:
         return jsonify({"message": "Access denied for this solar system"}), 403
 
+    active_meter = system.active_meter
     return (
         jsonify(
             {
@@ -1612,11 +1795,15 @@ def get_solar_system(system_id):
                 "installation_date": system.installation_date.isoformat()
                 if system.installation_date
                 else None,
-                "meter_model": system.meter_model,
-                "meter_serial_number": system.meter_serial_number,
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number
+                if active_meter
+                else None,
                 "green_meter_connection_date": system.green_meter_connection_date.isoformat()
                 if system.green_meter_connection_date
                 else None,
+                "current_meter": meter_to_dict(active_meter),
+                "meters": _meter_history_payload(system.meters, METER_TYPE_SOLAR),
                 "remarks": system.remarks,
                 "created_at": system.created_at.isoformat() if system.created_at else None,
                 "updated_at": system.updated_at.isoformat() if system.updated_at else None,
@@ -1695,10 +1882,6 @@ def update_solar_system(system_id):
         system.electricity_connection_date = parse_date(
             data.get("electricity_connection_date")
         )
-    if "meter_model" in data:
-        system.meter_model = _coerce_optional_str(data.get("meter_model"))
-    if "meter_serial_number" in data:
-        system.meter_serial_number = _coerce_optional_str(data.get("meter_serial_number"))
     green_connection_date = (
         parse_date(data.get("green_connection_date"))
         if "green_connection_date" in data
@@ -1711,6 +1894,31 @@ def update_solar_system(system_id):
         system.green_meter_connection_date = green_connection_date
     if "remarks" in data:
         system.remarks = _coerce_optional_str(data.get("remarks"))
+    active_meter = system.active_meter
+    meter_payload = _current_meter_payload(
+        data,
+        METER_TYPE_SOLAR,
+        fallback={
+            "meter_model": active_meter.meter_model if active_meter else None,
+            "meter_serial_number": active_meter.meter_serial_number
+            if active_meter
+            else None,
+            "installation_date": active_meter.installation_date
+            if active_meter
+            else system.green_connection_date,
+        },
+    )
+    meter_row = upsert_active_system_meter(
+        meter_type=METER_TYPE_SOLAR,
+        solar_system_id=str(system.id),
+        meter_model=meter_payload.get("meter_model"),
+        meter_serial_number=meter_payload.get("meter_serial_number"),
+        installation_date=meter_payload.get("installation_date")
+        or system.green_connection_date,
+        update_mode=_meter_update_mode(data),
+    )
+    if meter_row:
+        db.session.add(meter_row)
 
     try:
         db.session.commit()
@@ -1757,6 +1965,7 @@ def get_solar_system_config():
     system = find_solar_system_by_location(ct, village, settlement)
 
     if system:
+        active_meter = system.active_meter
         return jsonify({
             "exists": True,
             "config": {
@@ -1769,9 +1978,11 @@ def get_solar_system_config():
                 "electricity_connection_date": system.electricity_connection_date.isoformat() if system.electricity_connection_date else None,
                 "green_connection_date": system.green_connection_date.isoformat() if system.green_connection_date else None,
                 "installation_date": system.installation_date.isoformat() if system.installation_date else None,
-                "meter_model": system.meter_model,
-                "meter_serial_number": system.meter_serial_number,
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number if active_meter else None,
                 "green_meter_connection_date": system.green_meter_connection_date.isoformat() if system.green_meter_connection_date else None,
+                "current_meter": meter_to_dict(active_meter),
+                "meters": _meter_history_payload(system.meters, METER_TYPE_SOLAR),
                 "remarks": system.remarks,
                 "created_at": system.created_at.isoformat() if system.created_at else None,
                 "updated_at": system.updated_at.isoformat() if system.updated_at else None,

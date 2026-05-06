@@ -4,8 +4,10 @@ from app.models.models import (
     WaterSystem,
     WaterEnergyLoggingDaily,
     SolarSystem,
+    SystemMeter,
     SolarEnergyLoggingMonthly,
     SUBMISSION_STATUS_REJECTED,
+    METER_TYPE_TUBEWELL,
 )
 from sqlalchemy import extract, func, or_
 
@@ -39,12 +41,16 @@ def get_program_summary():
     ohr_count = ws_query.count()
     solar_facilities = ss_query.count()
     
-    # Count systems where bulk flow meter is installed
-    # In our schema, meter_serial_number being present means a bulk meter is installed
-    bulk_meters = ws_query.filter(
-        WaterSystem.meter_serial_number != None,
-        WaterSystem.meter_serial_number != ''
-    ).count()
+    ws_subq = ws_query.with_entities(WaterSystem.id).subquery()
+    bulk_meters = (
+        db.session.query(SystemMeter)
+        .join(ws_subq, SystemMeter.water_system_id == ws_subq.c.id)
+        .filter(
+            SystemMeter.meter_type == METER_TYPE_TUBEWELL,
+            SystemMeter.is_active.is_(True),
+        )
+        .count()
+    )
     
     return jsonify({
         "ohr_count": ohr_count,

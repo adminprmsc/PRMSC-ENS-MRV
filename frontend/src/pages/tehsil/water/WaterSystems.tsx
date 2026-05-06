@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, Pencil, Plus, RefreshCcw, Search } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Search,
+} from "lucide-react";
 
 import { Button } from "../../../components/ui/button";
 import {
@@ -21,13 +27,6 @@ import {
   TableHeader,
   TableRow,
 } from "../../../components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
 import { Badge } from "../../../components/ui/badge";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { tehsilRoutes } from "../../../constants/routes";
@@ -52,16 +51,12 @@ const kv = (v: unknown) => {
 
 export default function WaterSystems() {
   const navigate = useNavigate();
-  const { getWaterSystems, getWaterSystem } = useTehsilManagerOperatorApi();
+  const { getWaterSystems } = useTehsilManagerOperatorApi();
 
   const [systems, setSystems] = useState<WaterSystemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailSystem, setDetailSystem] = useState<WaterSystemRow | null>(null);
 
   const load = async (soft = false) => {
     try {
@@ -97,18 +92,8 @@ export default function WaterSystems() {
     });
   }, [systems, search]);
 
-  const openDetails = async (s: WaterSystemRow) => {
-    setDetailSystem(null);
-    setDetailOpen(true);
-    setDetailLoading(true);
-    try {
-      const detail = (await getWaterSystem(s.id)) as WaterSystemRow;
-      setDetailSystem(detail);
-    } catch (e: unknown) {
-      toast.error(getApiErrorMessage(e, "Could not load system details"));
-    } finally {
-      setDetailLoading(false);
-    }
+  const openDetails = (s: WaterSystemRow) => {
+    navigate(tehsilRoutes.waterSystemView(s.id));
   };
 
   const goToEdit = (s: WaterSystemRow) => {
@@ -228,7 +213,7 @@ export default function WaterSystems() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void openDetails(s)}
+                                onClick={() => openDetails(s)}
                               >
                                 <Eye className="size-4" />
                                 View
@@ -253,176 +238,6 @@ export default function WaterSystems() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog
-        open={detailOpen}
-        onOpenChange={(v) => {
-          setDetailOpen(v);
-          if (!v) {
-            setDetailSystem(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Water system details</DialogTitle>
-            <DialogDescription>
-              {detailSystem
-                ? `${detailSystem.tehsil} • ${detailSystem.village}${detailSystem.settlement ? ` • ${detailSystem.settlement}` : ""}`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-
-          {detailSystem ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Identity</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">System ID</span>
-                    <span className="font-mono text-xs">{detailSystem.id}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">UID</span>
-                    <span className="font-mono text-xs">
-                      {kv(detailSystem.unique_identifier)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Created</span>
-                    <span>{formatDate(detailSystem.created_at)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Updated</span>
-                    <span>{formatDate(detailSystem.updated_at)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  {detailLoading ? (
-                    <div className="space-y-2">
-                      {Array.from({ length: 6 }).map((_, idx) => (
-                        <Skeleton key={idx} className="h-4 w-full" />
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Bulk meter installed
-                        </span>
-                        <span>{detailSystem.bulk_meter_installed ? "Yes" : "No"}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Pump model
-                        </span>
-                        <span>{kv(detailSystem.pump_model)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Pump serial (Optional)
-                        </span>
-                        <span>{kv(detailSystem.pump_serial_number)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Flow rate</span>
-                        <span>{kv(detailSystem.pump_flow_rate)}</span>
-                      </div>
-                      {detailSystem.bulk_meter_installed ? (
-                        <>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Meter model
-                            </span>
-                            <span>{kv(detailSystem.meter_model)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Meter serial
-                            </span>
-                            <span>{kv(detailSystem.meter_serial_number)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Accuracy class
-                            </span>
-                            <span>{kv(detailSystem.meter_accuracy_class)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Installation date
-                            </span>
-                            <span>{kv(detailSystem.installation_date)}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Tank capacity (OHR)
-                            </span>
-                            <span>{kv(detailSystem.ohr_tank_capacity)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Required to fill tank (OHR)
-                            </span>
-                            <span>{kv(detailSystem.ohr_fill_required)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Pump capacity
-                            </span>
-                            <span>{kv(detailSystem.pump_capacity)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Pump head
-                            </span>
-                            <span>{kv(detailSystem.pump_head)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Pump horse power (kVA/W)
-                            </span>
-                            <span>{kv(detailSystem.pump_horse_power)}</span>
-                          </div>
-                          <div className="flex justify-between gap-3">
-                            <span className="text-muted-foreground">
-                              Time to fill
-                            </span>
-                            <span>{kv(detailSystem.time_to_fill)}</span>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-
-          {detailSystem ? (
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDetailOpen(false)}>
-                Close
-              </Button>
-              <Button onClick={() => goToEdit(detailSystem)} className="gap-2">
-                <Pencil className="size-4" />
-                Edit
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

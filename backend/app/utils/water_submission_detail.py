@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from app.models.models import (
+    METER_TYPE_TUBEWELL,
     Submission,
     User,
     VerificationLog,
     WaterEnergyLoggingDaily,
     WaterSystem,
 )
+from app.utils.operator_helpers import meter_to_dict
 
 
 def build_water_submission_detail_response(submission: Submission) -> dict:
@@ -23,6 +25,18 @@ def build_water_submission_detail_response(submission: Submission) -> dict:
     record = WaterEnergyLoggingDaily.query.get(submission.record_id)
     if record:
         system = WaterSystem.query.get(record.water_system_id)
+        active_meter = system.active_meter if system else None
+        meter_history = []
+        if system:
+            rows = [m for m in (system.meters or []) if m.meter_type == METER_TYPE_TUBEWELL]
+            rows.sort(
+                key=lambda x: (x.created_at.isoformat() if x.created_at else "", str(x.id)),
+                reverse=True,
+            )
+            for m in rows:
+                payload = meter_to_dict(m)
+                if payload is not None:
+                    meter_history.append(payload)
         record_data = {
             "year": record.log_date.year if record.log_date else None,
             "month": record.log_date.month if record.log_date else None,
@@ -57,12 +71,18 @@ def build_water_submission_detail_response(submission: Submission) -> dict:
                 "height_to_ohr": system.height_to_ohr if system else None,
                 "pump_flow_rate": system.pump_flow_rate if system else None,
                 "bulk_meter_installed": system.bulk_meter_installed if system else None,
-                "meter_model": system.meter_model if system else None,
-                "meter_serial_number": system.meter_serial_number if system else None,
-                "meter_accuracy_class": system.meter_accuracy_class if system else None,
-                "installation_date": system.installation_date.isoformat()
-                if system and system.installation_date
+                "meter_model": active_meter.meter_model if active_meter else None,
+                "meter_serial_number": active_meter.meter_serial_number
+                if active_meter
                 else None,
+                "meter_accuracy_class": active_meter.meter_accuracy_class
+                if active_meter
+                else None,
+                "installation_date": active_meter.installation_date.isoformat()
+                if active_meter and active_meter.installation_date
+                else None,
+                "current_meter": meter_to_dict(active_meter),
+                "meters": meter_history,
             },
         }
 

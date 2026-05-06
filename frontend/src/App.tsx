@@ -25,12 +25,14 @@ import ChangePasswordPage from "./pages/account/ChangePassword";
 
 import WaterSystemForm from "./pages/tehsil/water/WaterSystemForm";
 import WaterSystemEditPage from "./pages/tehsil/water/systems/WaterSystemEditPage";
+import WaterSystemViewPage from "./pages/tehsil/water/systems/WaterSystemViewPage";
 import WaterSystems from "./pages/tehsil/water/WaterSystems";
 import WaterAlertsPage from "./pages/tehsil/water/WaterAlertsPage";
 import CalibrationCertificates from "./pages/tehsil/water/CalibrationCertificates";
 import SolarSites from "./pages/tehsil/solar/SolarSites";
 import SolarSystemForm from "./pages/tehsil/solar/SolarSystemForm";
 import SolarSiteEditPage from "./pages/tehsil/solar/sites/SolarSiteEditPage";
+import SolarSiteViewPage from "./pages/tehsil/solar/sites/SolarSiteViewPage";
 import SolarMonthlyLogging from "./pages/tehsil/solar/monthly-logging/SolarMonthlyLogging";
 import SolarMonthlyLogEditPage from "./pages/tehsil/solar/monthly-logging/SolarMonthlyLogEditPage";
 import SolarSupplyDataForm from "./pages/tehsil/solar/SolarSupplyDataForm";
@@ -213,6 +215,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/tehsil/water-systems/:systemId/view"
+              element={
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
+                  <WaterSystemViewPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/tehsil/calibration-certificates"
@@ -272,6 +282,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
                   <SolarSites />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tehsil/solar-sites/:systemId/view"
+              element={
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
+                  <SolarSiteViewPage />
                 </ProtectedRoute>
               }
             />

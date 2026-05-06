@@ -25,7 +25,11 @@ import {
   SelectValue,
 } from "../../../components/ui/select";
 import { Textarea } from "../../../components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "../../../components/ui/alert";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "../../../components/ui/alert";
 import { Separator } from "../../../components/ui/separator";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import {
@@ -183,11 +187,24 @@ const SolarSystemForm = () => {
         formData.installation_location === "Other"
           ? formData.installation_location_other.trim()
           : formData.installation_location.trim();
+      const {
+        meter_model,
+        meter_serial_number,
+        green_connection_date,
+        ...rest
+      } = formData;
       await createSolarSystem({
-        ...formData,
-        installation_location,
-        // do not send helper field to API
+        ...rest,
+        meter_model: undefined,
+        meter_serial_number: undefined,
         installation_location_other: undefined,
+        installation_location,
+        current_meter: {
+          meter_type: "solar",
+          meter_model,
+          meter_serial_number,
+          installation_date: green_connection_date,
+        },
       });
       setToast({ message: "Solar site registered.", type: "success" });
       setTimeout(() => navigate(tehsilRoutes.solarSites), 1200);
@@ -524,9 +541,9 @@ const SolarSystemForm = () => {
                     </Label>
                     <Select
                       value={
-                        (INSTALLATION_TYPE_OPTIONS as readonly string[]).includes(
-                          formData.installation_location,
-                        )
+                        (
+                          INSTALLATION_TYPE_OPTIONS as readonly string[]
+                        ).includes(formData.installation_location)
                           ? formData.installation_location
                           : formData.installation_location
                             ? "Other"
@@ -539,7 +556,9 @@ const SolarSystemForm = () => {
                           ...prev,
                           installation_location: next,
                           installation_location_other:
-                            next === "Other" ? prev.installation_location_other : "",
+                            next === "Other"
+                              ? prev.installation_location_other
+                              : "",
                         }));
                       }}
                     >
@@ -675,7 +694,7 @@ const SolarSystemForm = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>
-                        Green Connection Date
+                        Green Meter Connection Date
                         <RequiredMark />
                       </Label>
                       <Input
@@ -746,7 +765,7 @@ const SolarSystemForm = () => {
             </CardContent>
           </Card>
         </motion.div>
-        </div>
+      </div>
     </motion.div>
   );
 };
