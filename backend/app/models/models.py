@@ -302,6 +302,8 @@ class SolarSystem(db.Model):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     installation_location = db.Column(db.String(100))
+    disco_info = db.Column(db.String(100))
+    bill_reference_number = db.Column(db.String(100))
     solar_panel_capacity = db.Column(db.Float)
     inverter_capacity = db.Column(db.Float)
     inverter_serial_number = db.Column(db.String(100))

@@ -48,6 +48,19 @@ const INSTALLATION_TYPE_OPTIONS = [
   "Other",
 ] as const;
 
+const DISCO_OPTIONS = [
+  "LESCO",
+  "PESCO",
+  "GEPCO",
+  "FESCO",
+  "IESCO",
+  "MEPCO",
+  "HESCO",
+  "SEPCO",
+  "QESCO",
+  "TESCO",
+] as const;
+
 export default function SolarSiteEditPage() {
   const navigate = useNavigate();
   const { systemId } = useParams();
@@ -72,6 +85,8 @@ export default function SolarSiteEditPage() {
     longitude: "",
     installation_location: "",
     installation_location_other: "",
+    disco_info: "",
+    bill_reference_number: "",
     solar_panel_capacity: "",
     inverter_capacity: "",
     inverter_serial_number: "",
@@ -117,6 +132,8 @@ export default function SolarSiteEditPage() {
         ).includes(String(s.installation_location ?? ""))
           ? ""
           : String(s.installation_location ?? ""),
+        disco_info: String(s.disco_info ?? ""),
+        bill_reference_number: String(s.bill_reference_number ?? ""),
         solar_panel_capacity:
           s.solar_panel_capacity != null ? String(s.solar_panel_capacity) : "",
         inverter_capacity:
@@ -162,6 +179,8 @@ export default function SolarSiteEditPage() {
     if (!isResolved) return false;
     return (
       formData.installation_location.trim() &&
+      formData.disco_info.trim() &&
+      formData.bill_reference_number.trim() &&
       formData.solar_panel_capacity.trim() &&
       formData.inverter_capacity.trim() &&
       formData.inverter_serial_number.trim() &&
@@ -334,6 +353,20 @@ export default function SolarSiteEditPage() {
                   </p>
                   <p className="mt-1 font-medium">{site?.settlement || "—"}</p>
                 </div>
+                <div className="rounded-lg border bg-background p-3 md:col-span-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    DISCO / Electricity provider
+                  </p>
+                  <p className="mt-1 font-medium">{site?.disco_info || "—"}</p>
+                </div>
+                <div className="rounded-lg border bg-background p-3 md:col-span-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Bill reference number
+                  </p>
+                  <p className="mt-1 font-medium">
+                    {site?.bill_reference_number || "—"}
+                  </p>
+                </div>
               </>
             )}
           </CardContent>
@@ -427,6 +460,44 @@ export default function SolarSiteEditPage() {
                       className="h-11"
                     />
                   ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>DISCO / Electricity provider</Label>
+                  <Select
+                    value={formData.disco_info || "__empty__"}
+                    onValueChange={(v) => {
+                      if (v == null) return;
+                      setFormData((prev) => ({
+                        ...prev,
+                        disco_info: v === "__empty__" ? "" : v,
+                      }));
+                    }}
+                    disabled={saving || deleting || !isResolved}
+                  >
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Select electricity provider" />
+                    </SelectTrigger>
+                    <SelectContent className="h-72">
+                      <SelectItem value="__empty__">
+                        Select electricity provider
+                      </SelectItem>
+                      {DISCO_OPTIONS.map((d) => (
+                        <SelectItem key={d} value={d}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Bill reference number</Label>
+                  <Input
+                    value={formData.bill_reference_number}
+                    onChange={onChange("bill_reference_number")}
+                    disabled={saving || deleting || !isResolved}
+                    placeholder="Enter electricity bill reference"
+                    className="h-11"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>PV capacity (kWp)</Label>

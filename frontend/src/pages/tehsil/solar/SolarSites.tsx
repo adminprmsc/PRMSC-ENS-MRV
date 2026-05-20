@@ -79,7 +79,9 @@ export default function SolarSites() {
         s.village?.toLowerCase().includes(q) ||
         (s.settlement ?? "").toLowerCase().includes(q) ||
         (s.unique_identifier ?? "").toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q)
+        s.id.toLowerCase().includes(q) ||
+        (s.disco_info ?? "").toLowerCase().includes(q) ||
+        (s.bill_reference_number ?? "").toLowerCase().includes(q)
       );
     });
   }, [sites, search]);
@@ -146,7 +148,7 @@ export default function SolarSites() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by tehsil, village, UID, or ID…"
+                placeholder="Search by tehsil, village, DISCO, bill ref, UID, or ID…"
                 className="pl-9"
               />
             </div>
@@ -166,6 +168,8 @@ export default function SolarSites() {
                       <TableHead>Village</TableHead>
                       <TableHead>Settlement</TableHead>
                       <TableHead>UID</TableHead>
+                      <TableHead>DISCO</TableHead>
+                      <TableHead>Bill ref</TableHead>
                       <TableHead>Panel (kW)</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Updated</TableHead>
@@ -176,7 +180,7 @@ export default function SolarSites() {
                     {filtered.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={10}
                           className="h-24 text-center text-muted-foreground"
                         >
                           No solar sites found.
@@ -192,6 +196,10 @@ export default function SolarSites() {
                           <TableCell>{kv(s.settlement)}</TableCell>
                           <TableCell className="font-mono text-xs">
                             {kv(s.unique_identifier)}
+                          </TableCell>
+                          <TableCell>{kv(s.disco_info)}</TableCell>
+                          <TableCell className="max-w-[10rem] truncate font-mono text-xs">
+                            {kv(s.bill_reference_number)}
                           </TableCell>
                           <TableCell>{kv(s.solar_panel_capacity)}</TableCell>
                           <TableCell>{formatDate(s.created_at)}</TableCell>

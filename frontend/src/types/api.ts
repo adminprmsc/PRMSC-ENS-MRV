@@ -68,6 +68,8 @@ export type SolarSystemRow = {
   latitude?: number | null;
   longitude?: number | null;
   installation_location?: string | null;
+  disco_info?: string | null;
+  bill_reference_number?: string | null;
   solar_panel_capacity?: number | null;
   inverter_capacity?: number | null;
   inverter_serial_number?: string | null;

@@ -52,6 +52,19 @@ const INSTALLATION_TYPE_OPTIONS = [
   "Other",
 ] as const;
 
+const DISCO_OPTIONS = [
+  "LESCO",
+  "PESCO",
+  "GEPCO",
+  "FESCO",
+  "IESCO",
+  "MEPCO",
+  "HESCO",
+  "SEPCO",
+  "QESCO",
+  "TESCO",
+] as const;
+
 const SolarSystemForm = () => {
   const { user } = useAuth();
   const { createSolarSystem, getSolarSystemConfig } =
@@ -91,6 +104,8 @@ const SolarSystemForm = () => {
     longitude: "",
     installation_location: "",
     installation_location_other: "",
+    disco_info: "",
+    bill_reference_number: "",
     solar_panel_capacity: "",
     inverter_capacity: "",
     inverter_serial_number: "",
@@ -267,6 +282,8 @@ const SolarSystemForm = () => {
   > = {
     1: ["tehsil", "village", "installation_location"],
     2: [
+      "disco_info",
+      "bill_reference_number",
       "solar_panel_capacity",
       "inverter_capacity",
       "inverter_serial_number",
@@ -288,6 +305,8 @@ const SolarSystemForm = () => {
     longitude: "Longitude",
     installation_location: "Installation Type",
     installation_location_other: "Installation Type (Other)",
+    disco_info: "DISCO / Electricity provider",
+    bill_reference_number: "Bill reference number",
     solar_panel_capacity: "PV Capacity",
     inverter_capacity: "Inverter Capacity",
     inverter_serial_number: "Inverter Serial",
@@ -681,6 +700,51 @@ const SolarSystemForm = () => {
 
               {activeStep === 2 ? (
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>
+                      DISCO / Electricity provider
+                      <RequiredMark />
+                    </Label>
+                    <Select
+                      value={formData.disco_info || "__empty__"}
+                      onValueChange={(v) => {
+                        if (v == null) return;
+                        setFormData((prev) => ({
+                          ...prev,
+                          disco_info: v === "__empty__" ? "" : v,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="h-11 w-full">
+                        <SelectValue placeholder="Select electricity provider" />
+                      </SelectTrigger>
+                      <SelectContent className="h-72">
+                        <SelectItem value="__empty__">
+                          Select electricity provider
+                        </SelectItem>
+                        {DISCO_OPTIONS.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>
+                      Bill reference number
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      name="bill_reference_number"
+                      value={formData.bill_reference_number}
+                      onChange={handleChange}
+                      className="h-11"
+                      placeholder="Enter electricity bill reference"
+                    />
+                  </div>
+
                   <div className="space-y-2">
                     <Label>
                       PV Capacity (kWp)

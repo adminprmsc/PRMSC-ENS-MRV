@@ -151,6 +151,18 @@ export default function SolarSiteViewPage() {
                     <span>{kv(site.installation_location)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
+                    <span className="text-muted-foreground">DISCO / Electricity provider</span>
+                    <span>{kv(site.disco_info)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md border bg-slate-50/60 px-3 py-2">
+                    <span className="shrink-0 text-muted-foreground">
+                      Bill reference number
+                    </span>
+                    <span className="break-all text-right font-mono text-xs">
+                      {kv(site.bill_reference_number)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
                     <span className="text-muted-foreground">Panel capacity (kW)</span>
                     <span>{kv(site.solar_panel_capacity)}</span>
                   </div>

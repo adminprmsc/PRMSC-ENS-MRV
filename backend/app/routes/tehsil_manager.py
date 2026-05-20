@@ -967,6 +967,9 @@ def add_solar_system():
     village = data.get('village')
     if not village:
         return jsonify({"message": "village is required"}), 400
+    bill_reference_number = _coerce_optional_str(data.get("bill_reference_number"))
+    if not bill_reference_number:
+        return jsonify({"message": "bill_reference_number is required"}), 400
 
     settlement_raw = (data.get("settlement") or "").strip()
     settlement_db = settlement_raw if settlement_raw else None
@@ -990,6 +993,8 @@ def add_solar_system():
         existing_system.installation_location = _coerce_optional_str(
             data.get("installation_location")
         )
+        existing_system.disco_info = _coerce_optional_str(data.get("disco_info"))
+        existing_system.bill_reference_number = bill_reference_number
         try:
             if "latitude" in data:
                 existing_system.latitude = _coerce_optional_float(data.get("latitude"))
@@ -1061,6 +1066,8 @@ def add_solar_system():
         latitude=_coerce_optional_float(data.get("latitude")),
         longitude=_coerce_optional_float(data.get("longitude")),
         installation_location=data.get('installation_location'),
+        disco_info=data.get("disco_info"),
+        bill_reference_number=bill_reference_number,
         solar_panel_capacity=data.get('solar_panel_capacity'),
         inverter_capacity=data.get('inverter_capacity'),
         inverter_serial_number=data.get('inverter_serial_number'),
@@ -1693,6 +1700,8 @@ def get_solar_systems():
                 "latitude": s.latitude,
                 "longitude": s.longitude,
                 "installation_location": s.installation_location,
+                "disco_info": s.disco_info,
+                "bill_reference_number": s.bill_reference_number,
                 "solar_panel_capacity": s.solar_panel_capacity,
                 "inverter_capacity": s.inverter_capacity,
                 "inverter_serial_number": s.inverter_serial_number,
@@ -1793,6 +1802,8 @@ def get_solar_system(system_id):
                 "latitude": system.latitude,
                 "longitude": system.longitude,
                 "installation_location": system.installation_location,
+                "disco_info": system.disco_info,
+                "bill_reference_number": system.bill_reference_number,
                 "solar_panel_capacity": system.solar_panel_capacity,
                 "inverter_capacity": system.inverter_capacity,
                 "inverter_serial_number": system.inverter_serial_number,
@@ -1863,6 +1874,14 @@ def update_solar_system(system_id):
         system.installation_location = _coerce_optional_str(
             data.get("installation_location")
         )
+    if "disco_info" in data:
+        system.disco_info = _coerce_optional_str(data.get("disco_info"))
+    if "bill_reference_number" in data:
+        system.bill_reference_number = _coerce_optional_str(
+            data.get("bill_reference_number")
+        )
+    if not _coerce_optional_str(system.bill_reference_number):
+        return jsonify({"message": "bill_reference_number is required"}), 400
     try:
         if "latitude" in data:
             system.latitude = _coerce_optional_float(data.get("latitude"))
@@ -1984,6 +2003,8 @@ def get_solar_system_config():
             "config": {
                 "id": str(system.id),
                 "installation_location": system.installation_location,
+                "disco_info": system.disco_info,
+                "bill_reference_number": system.bill_reference_number,
                 "solar_panel_capacity": system.solar_panel_capacity,
                 "inverter_capacity": system.inverter_capacity,
                 "inverter_serial_number": system.inverter_serial_number,
