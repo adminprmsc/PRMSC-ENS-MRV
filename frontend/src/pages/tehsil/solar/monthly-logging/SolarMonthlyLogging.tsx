@@ -263,12 +263,13 @@ export default function SolarMonthlyLogging() {
                         <TableHead>Settlement</TableHead>
                         <TableHead>Year</TableHead>
                         <TableHead>Month</TableHead>
-                        <TableHead className="text-right">Import off-peak</TableHead>
-                        <TableHead className="text-right">Import peak</TableHead>
-                        <TableHead className="text-right">Export off-peak</TableHead>
-                        <TableHead className="text-right">Export peak</TableHead>
-                        <TableHead className="text-right">Net off-peak</TableHead>
-                        <TableHead className="text-right">Net peak</TableHead>
+                        <TableHead>Mode</TableHead>
+                        <TableHead className="text-right">Import off-peak (kWh)</TableHead>
+                        <TableHead className="text-right">Import peak (kWh)</TableHead>
+                        <TableHead className="text-right">Export off-peak (kWh)</TableHead>
+                        <TableHead className="text-right">Export peak (kWh)</TableHead>
+                        <TableHead className="text-right">Net off-peak (kWh)</TableHead>
+                        <TableHead className="text-right">Net peak (kWh)</TableHead>
                         <TableHead className="min-w-[140px]">Remarks</TableHead>
                         <TableHead>Bill</TableHead>
                         <TableHead>Created</TableHead>
@@ -282,7 +283,7 @@ export default function SolarMonthlyLogging() {
                       {filtered.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={16}
+                            colSpan={17}
                             className="h-28 text-center text-muted-foreground"
                           >
                             No monthly logs for {year}. Use{" "}
@@ -306,23 +307,44 @@ export default function SolarMonthlyLogging() {
                             <TableCell>
                               {MONTH_NAMES[r.month] ?? r.month}
                             </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {formatNum(r.import_off_peak)}
+                            <TableCell>
+                              {r.tou_required === false
+                                ? "Total readings"
+                                : "Peak & off-peak"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatNum(r.import_peak)}
+                              {formatNum(
+                                r.tou_required === false
+                                  ? (r.import_total ?? r.import_off_peak)
+                                  : r.import_off_peak,
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatNum(r.export_off_peak)}
+                              {formatNum(
+                                r.tou_required === false ? null : r.import_peak,
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatNum(r.export_peak)}
+                              {formatNum(
+                                r.tou_required === false
+                                  ? (r.export_total ?? r.export_off_peak)
+                                  : r.export_off_peak,
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatNum(r.net_off_peak)}
+                              {formatNum(
+                                r.tou_required === false ? null : r.export_peak,
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatNum(r.net_peak)}
+                              {formatNum(
+                                r.tou_required === false
+                                  ? (r.net_total ?? r.net_off_peak)
+                                  : r.net_off_peak,
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatNum(r.tou_required === false ? null : r.net_peak)}
                             </TableCell>
                             <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground" title={r.remarks ?? ""}>
                               {r.remarks?.trim() ? r.remarks : "—"}

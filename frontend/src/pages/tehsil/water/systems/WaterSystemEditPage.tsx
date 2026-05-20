@@ -894,7 +894,7 @@ export default function WaterSystemEditPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
-                          Tank capacity (OHR)
+                          Tank capacity (m3)
                           <RequiredMark />
                         </Label>
                         <Input
@@ -907,7 +907,7 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Required to fill tank (OHR)
+                          Design time to fill tank (minutes)
                           <RequiredMark />
                         </Label>
                         <Input
@@ -933,7 +933,7 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Pump head
+                          Pump head (m)
                           <RequiredMark />
                         </Label>
                         <Input
@@ -946,7 +946,7 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Time to fill (minutes)
+                          Actual time to fill the tank (minutes)
                           <RequiredMark />
                         </Label>
                         <Input
