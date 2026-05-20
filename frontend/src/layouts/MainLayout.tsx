@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -41,6 +41,7 @@ import {
 } from "../constants/roles";
 import { useAuth } from "../contexts/AuthContext";
 import companyLogo from "../assets/company-logo.png";
+import { getActiveWaterSystemCalibrationCertificates } from "../services/tehsilManagerOperatorService";
 
 type MenuItem = {
   path?: string;
@@ -52,6 +53,7 @@ type MenuItem = {
 
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [certificateAlertCount, setCertificateAlertCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -96,7 +98,7 @@ const MainLayout = () => {
             {
               path: tehsilRoutes.calibrationCertificates,
               icon: <FileText className="size-4" />,
-              label: "Bulk meter certificates",
+              label: "Calibration Certificates",
             },
             {
               path: tehsilRoutes.waterSubmissions,
@@ -182,6 +184,63 @@ const MainLayout = () => {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 
+  useEffect(() => {
+    if (!tehsilMgr) {
+      setCertificateAlertCount(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    const startOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    const loadCertificateAlertCount = async () => {
+      try {
+        const rows =
+          (await getActiveWaterSystemCalibrationCertificates()) as Array<{
+            certificate?: { expiry_date?: string | null };
+          }>;
+        const list = Array.isArray(rows) ? rows : [];
+        const today = startOfDay(new Date());
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+
+        const count = list.filter((r) => {
+          const raw = r?.certificate?.expiry_date;
+          if (!raw) return false;
+          const d = startOfDay(new Date(raw));
+          if (Number.isNaN(d.getTime())) return false;
+          return d <= nextWeek;
+        }).length;
+
+        if (!cancelled) setCertificateAlertCount(count);
+      } catch {
+        if (!cancelled) setCertificateAlertCount(0);
+      }
+    };
+
+    void loadCertificateAlertCount();
+
+    const timer = window.setInterval(() => {
+      void loadCertificateAlertCount();
+    }, 60_000);
+
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      void loadCertificateAlertCount();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [tehsilMgr]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
       <AnimatePresence mode="wait">
@@ -241,6 +300,16 @@ const MainLayout = () => {
                           >
                             {child.icon}
                             <span className="truncate">{child.label}</span>
+                            {child.path ===
+                              tehsilRoutes.calibrationCertificates &&
+                            certificateAlertCount > 0 ? (
+                              <Badge
+                                variant="destructive"
+                                className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
+                              >
+                                {certificateAlertCount}
+                              </Badge>
+                            ) : null}
                           </NavLink>
                         ))}
                       </CollapsibleContent>

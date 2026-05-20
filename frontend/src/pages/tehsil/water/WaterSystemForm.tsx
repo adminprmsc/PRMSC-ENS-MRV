@@ -270,7 +270,7 @@ const WaterSystemForm = () => {
     Array<keyof typeof formData>
   > = {
     1: ["tehsil", "village"],
-    2: ["pump_model", "pump_flow_rate", "start_of_operation"],
+    2: ["pump_model", "pump_flow_rate", "pump_horse_power", "start_of_operation"],
     3: ["bulk_meter_installed"],
   };
 
@@ -291,7 +291,7 @@ const WaterSystemForm = () => {
     ohr_fill_required: "Required to fill tank (OHR)",
     pump_capacity: "Pump capacity (kW)",
     pump_head: "Pump head",
-    pump_horse_power: "Pump horse power (kVA/W)",
+    pump_horse_power: "Pump horse power (HP)",
     time_to_fill: "Time to fill",
     meter_model: "Meter Model",
     meter_serial_number: "Meter Serial Number",
@@ -315,7 +315,6 @@ const WaterSystemForm = () => {
               "ohr_fill_required",
               "pump_capacity",
               "pump_head",
-              "pump_horse_power",
               "time_to_fill",
             ] as Array<keyof typeof formData>)
         : [];
@@ -714,6 +713,22 @@ const WaterSystemForm = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>
+                      Pump horse power (HP)
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      name="pump_horse_power"
+                      value={formData.pump_horse_power}
+                      onChange={handleChange}
+                      className="h-11"
+                      placeholder="e.g. 7.5"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
                       Operation start
                       <RequiredMark />
                     </Label>
@@ -839,21 +854,6 @@ const WaterSystemForm = () => {
                           onChange={handleChange}
                           className="h-11"
                           placeholder="e.g. 40"
-                          disabled={loading}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          Pump horse power (kVA/W) <RequiredMark />
-                        </Label>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          name="pump_horse_power"
-                          value={formData.pump_horse_power}
-                          onChange={handleChange}
-                          className="h-11"
-                          placeholder="e.g. 7.5"
                           disabled={loading}
                         />
                       </div>

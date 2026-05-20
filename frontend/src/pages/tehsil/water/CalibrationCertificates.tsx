@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, RefreshCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileText,
+  RefreshCcw,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "../../../components/ui/button";
@@ -20,6 +26,12 @@ import {
   TableRow,
 } from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "../../../components/ui/alert";
+import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { getActiveWaterSystemCalibrationCertificates } from "../../../services/tehsilManagerOperatorService";
 
@@ -57,7 +69,37 @@ const fmtDate = (value?: string | null) => {
   return d.toLocaleDateString("en-GB");
 };
 
+type ExpiryState = "expired" | "expiring_7d" | "valid" | "unknown";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const startOfDay = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const getExpiryMeta = (
+  value?: string | null,
+): {
+  state: ExpiryState;
+  daysRemaining: number | null;
+} => {
+  if (!value) return { state: "unknown", daysRemaining: null };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()))
+    return { state: "unknown", daysRemaining: null };
+
+  const today = startOfDay(new Date());
+  const expiry = startOfDay(parsed);
+  const daysRemaining = Math.floor(
+    (expiry.getTime() - today.getTime()) / DAY_MS,
+  );
+
+  if (daysRemaining < 0) return { state: "expired", daysRemaining };
+  if (daysRemaining <= 7) return { state: "expiring_7d", daysRemaining };
+  return { state: "valid", daysRemaining };
+};
+
 export default function CalibrationCertificates() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<ActiveCertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,20 +123,65 @@ export default function CalibrationCertificates() {
 
   useEffect(() => {
     void load();
+
+    const timer = window.setInterval(() => {
+      void load(true);
+    }, 60_000);
+
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      void load(true);
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, []);
 
-  const expiringSoonCount = useMemo(() => {
-    const now = new Date();
-    const soon = new Date(now);
-    soon.setDate(soon.getDate() + 30);
-    return rows.filter((r) => {
-      const v = r.certificate.expiry_date;
-      if (!v) return false;
-      const d = new Date(v);
-      if (Number.isNaN(d.getTime())) return false;
-      return d <= soon;
-    }).length;
+  const rowsWithExpiry = useMemo(() => {
+    const priority = (s: ExpiryState) => {
+      if (s === "expired") return 0;
+      if (s === "expiring_7d") return 1;
+      if (s === "unknown") return 2;
+      return 3;
+    };
+
+    return rows
+      .map((r) => ({
+        row: r,
+        expiry: getExpiryMeta(r.certificate.expiry_date),
+      }))
+      .sort((a, b) => {
+        const prioDiff = priority(a.expiry.state) - priority(b.expiry.state);
+        if (prioDiff !== 0) return prioDiff;
+
+        const aDate = a.row.certificate.expiry_date
+          ? new Date(a.row.certificate.expiry_date).getTime()
+          : Number.POSITIVE_INFINITY;
+        const bDate = b.row.certificate.expiry_date
+          ? new Date(b.row.certificate.expiry_date).getTime()
+          : Number.POSITIVE_INFINITY;
+        return aDate - bDate;
+      });
   }, [rows]);
+
+  const expiredCount = useMemo(
+    () => rowsWithExpiry.filter((r) => r.expiry.state === "expired").length,
+    [rowsWithExpiry],
+  );
+  const expiringWeekCount = useMemo(
+    () => rowsWithExpiry.filter((r) => r.expiry.state === "expiring_7d").length,
+    [rowsWithExpiry],
+  );
+  const validCount = useMemo(
+    () => rowsWithExpiry.filter((r) => r.expiry.state === "valid").length,
+    [rowsWithExpiry],
+  );
+  const hasUrgent = expiredCount > 0 || expiringWeekCount > 0;
 
   return (
     <div className="min-h-screen bg-muted/30 p-4 md:p-6">
@@ -111,15 +198,19 @@ export default function CalibrationCertificates() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {expiringSoonCount > 0 ? (
-              <Badge variant="outline">
-                {expiringSoonCount} expiring in 30 days
+            {expiredCount > 0 ? (
+              <Badge variant="destructive">{expiredCount} expired</Badge>
+            ) : null}
+            {expiringWeekCount > 0 ? (
+              <Badge className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-50">
+                {expiringWeekCount} expiring in 7 days
               </Badge>
             ) : null}
             <Button
               variant="outline"
               onClick={() => void load(true)}
               disabled={refreshing}
+              className="gap-2"
             >
               <RefreshCcw
                 className={`size-4 ${refreshing ? "animate-spin" : ""}`}
@@ -128,6 +219,67 @@ export default function CalibrationCertificates() {
             </Button>
           </div>
         </div>
+
+        {hasUrgent ? (
+          <Alert
+            className={
+              expiredCount > 0
+                ? "border-red-300 bg-red-50/80 text-red-950"
+                : "border-amber-300 bg-amber-50/80 text-amber-950"
+            }
+          >
+            <AlertTriangle className="size-4" />
+
+            <AlertDescription>
+              {expiredCount > 0
+                ? `${expiredCount} certificate(s) already expired.`
+                : ""}
+              {expiredCount > 0 && expiringWeekCount > 0 ? " " : ""}
+              {expiringWeekCount > 0
+                ? `${expiringWeekCount} certificate(s) will expire within the next 7 days.`
+                : ""}{" "}
+              Please coordinate renewal promptly to avoid compliance gaps.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!loading ? (
+          <Card className="border-slate-200 bg-white/90">
+            <CardContent className="pt-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-red-700">
+                    Expired
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-red-900">
+                    {expiredCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                    Due in 7 days
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-amber-900">
+                    {expiringWeekCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
+                    Valid
+                  </p>
+                  <p className="mt-1 flex items-center gap-1 text-xl font-semibold text-emerald-900">
+                    <CheckCircle2 className="size-4" />
+                    {validCount}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Counts update automatically every minute and when you return to
+                this tab.
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -155,6 +307,7 @@ export default function CalibrationCertificates() {
                       <TableHead>UID</TableHead>
                       <TableHead>Uploaded</TableHead>
                       <TableHead>Expiry</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>File</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -163,15 +316,24 @@ export default function CalibrationCertificates() {
                     {rows.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={7}
+                          colSpan={8}
                           className="h-24 text-center text-muted-foreground"
                         >
                           No active bulk-meter certificates found.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      rows.map((r) => (
-                        <TableRow key={r.certificate.id}>
+                      rowsWithExpiry.map(({ row: r, expiry }) => (
+                        <TableRow
+                          key={r.certificate.id}
+                          className={
+                            expiry.state === "expired"
+                              ? "bg-red-50/60"
+                              : expiry.state === "expiring_7d"
+                                ? "bg-amber-50/60"
+                                : ""
+                          }
+                        >
                           <TableCell className="font-medium">
                             {r.water_system.tehsil || "—"}
                           </TableCell>
@@ -185,20 +347,50 @@ export default function CalibrationCertificates() {
                           <TableCell>
                             {fmtDate(r.certificate.expiry_date)}
                           </TableCell>
+                          <TableCell>
+                            {expiry.state === "expired" ? (
+                              <Badge variant="destructive">Expired</Badge>
+                            ) : expiry.state === "expiring_7d" ? (
+                              <Badge className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-50">
+                                {expiry.daysRemaining === 0
+                                  ? "Expires today"
+                                  : `Expires in ${expiry.daysRemaining} day(s)`}
+                              </Badge>
+                            ) : expiry.state === "valid" ? (
+                              <Badge variant="secondary">Valid</Badge>
+                            ) : (
+                              <Badge variant="outline">No expiry date</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="max-w-[280px] truncate">
                             {fileNameFromUrl(r.certificate.file_url)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                window.open(r.certificate.file_url, "_blank")
-                              }
-                            >
-                              <FileText className="size-4" />
-                              View
-                            </Button>
+                            <div className="inline-flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  window.open(r.certificate.file_url, "_blank")
+                                }
+                              >
+                                <FileText className="size-4" />
+                                View
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const key =
+                                    r.water_system.unique_identifier ||
+                                    r.water_system.id;
+                                  navigate(
+                                    `${tehsilRoutes.waterFormEdit(key)}#calibration-certificates-section`,
+                                  );
+                                }}
+                              >
+                                Update certificate
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

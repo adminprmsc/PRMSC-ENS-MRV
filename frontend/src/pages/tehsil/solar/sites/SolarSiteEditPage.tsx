@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Gauge, Loader2, Lock, Save, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Gauge,
+  Info,
+  Loader2,
+  Lock,
+  Save,
+  Trash2,
+} from "lucide-react";
 
 import Toast from "../../../../components/Toast";
 import { Button } from "../../../../components/ui/button";
@@ -566,6 +574,37 @@ export default function SolarSiteEditPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-full bg-white p-1.5 text-primary shadow-sm">
+                        <Info className="size-4" aria-hidden />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          Meter update guide
+                        </p>
+                        <div className="space-y-1.5 text-sm text-muted-foreground">
+                          <p>
+                            <span className="font-medium text-foreground">1. Update current:</span>{" "}
+                            Use this when the physical meter is the same and only details need
+                            correction (model, serial, or green meter connection date).
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">2. Switch new:</span>{" "}
+                            Use this when a replacement meter is installed. The previous meter
+                            remains in <span className="font-medium text-foreground">Meter history</span>{" "}
+                            as inactive.
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">3. Save:</span> Click{" "}
+                            <span className="font-medium text-foreground">Save</span> at the bottom
+                            of the page to apply changes.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>

@@ -188,12 +188,16 @@ export default function WaterSystemEditPage() {
         pump_head: String(detail.pump_head ?? ""),
         pump_horse_power: String(detail.pump_horse_power ?? ""),
         time_to_fill: String(detail.time_to_fill ?? ""),
-        meter_model: String(activeMeter?.meter_model ?? detail.meter_model ?? ""),
+        meter_model: String(
+          activeMeter?.meter_model ?? detail.meter_model ?? "",
+        ),
         meter_serial_number: String(
           activeMeter?.meter_serial_number ?? detail.meter_serial_number ?? "",
         ),
         meter_accuracy_class: String(
-          activeMeter?.meter_accuracy_class ?? detail.meter_accuracy_class ?? "",
+          activeMeter?.meter_accuracy_class ??
+            detail.meter_accuracy_class ??
+            "",
         ),
         installation_date: String(
           activeMeter?.installation_date ?? detail.installation_date ?? "",
@@ -234,6 +238,7 @@ export default function WaterSystemEditPage() {
     const baseOk =
       formData.pump_model.trim() &&
       formData.pump_flow_rate.trim() &&
+      formData.pump_horse_power.trim() &&
       formData.start_of_operation.trim();
     if (!baseOk) return false;
     if (formData.bulk_meter_installed) {
@@ -249,7 +254,6 @@ export default function WaterSystemEditPage() {
       formData.ohr_fill_required.trim() &&
       formData.pump_capacity.trim() &&
       formData.pump_head.trim() &&
-      formData.pump_horse_power.trim() &&
       formData.time_to_fill.trim()
     );
   }, [formData, isResolved]);
@@ -466,106 +470,121 @@ export default function WaterSystemEditPage() {
                     System Configuration
                   </p>
                 </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Latitude (Optional)</Label>
-                  <Input
-                    type="number"
-                    value={formData.latitude}
-                    onChange={onChange("latitude")}
-                    disabled={saving || !isResolved}
-                    inputMode="decimal"
-                    placeholder="e.g. 29.99812"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Longitude (Optional)</Label>
-                  <Input
-                    type="number"
-                    value={formData.longitude}
-                    onChange={onChange("longitude")}
-                    disabled={saving || !isResolved}
-                    inputMode="decimal"
-                    placeholder="e.g. 73.25291"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    Pump model
-                    <RequiredMark />
-                  </Label>
-                  <Input
-                    value={formData.pump_model}
-                    onChange={onChange("pump_model")}
-                    disabled={saving || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Pump serial number </Label>
-                  <Input
-                    value={formData.pump_serial_number}
-                    onChange={onChange("pump_serial_number")}
-                    disabled={saving || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label className="leading-none">Column Height (m)</Label>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                            aria-label="What is Column Height?"
-                          >
-                            <Info className="size-4" />
-                          </button>
-                        }
-                      />
-                      <TooltipContent>
-                        Vertical distance/height of the water column (formerly
-                        “Intake depth”).
-                      </TooltipContent>
-                    </Tooltip>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Latitude (Optional)</Label>
+                    <Input
+                      type="number"
+                      value={formData.latitude}
+                      onChange={onChange("latitude")}
+                      disabled={saving || !isResolved}
+                      inputMode="decimal"
+                      placeholder="e.g. 29.99812"
+                    />
                   </div>
-                  <Input
-                    type="number"
-                    value={formData.depth_of_water_intake}
-                    onChange={onChange("depth_of_water_intake")}
-                    disabled={saving || !isResolved}
-                  />
+                  <div className="space-y-2">
+                    <Label>Longitude (Optional)</Label>
+                    <Input
+                      type="number"
+                      value={formData.longitude}
+                      onChange={onChange("longitude")}
+                      disabled={saving || !isResolved}
+                      inputMode="decimal"
+                      placeholder="e.g. 73.25291"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Pump model
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      value={formData.pump_model}
+                      onChange={onChange("pump_model")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pump serial number </Label>
+                    <Input
+                      value={formData.pump_serial_number}
+                      onChange={onChange("pump_serial_number")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="leading-none">Column Height (m)</Label>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                              aria-label="What is Column Height?"
+                            >
+                              <Info className="size-4" />
+                            </button>
+                          }
+                        />
+                        <TooltipContent>
+                          Vertical distance/height of the water column (formerly
+                          “Intake depth”).
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Input
+                      type="number"
+                      value={formData.depth_of_water_intake}
+                      onChange={onChange("depth_of_water_intake")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Flow rate (m³/h)
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      type="number"
+                      value={formData.pump_flow_rate}
+                      onChange={onChange("pump_flow_rate")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Pump horse power (HP)
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      type="number"
+                      value={formData.pump_horse_power}
+                      onChange={onChange("pump_horse_power")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Operation start
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      type="date"
+                      value={formData.start_of_operation}
+                      onChange={onChange("start_of_operation")}
+                      disabled={saving || !isResolved}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>
-                    Flow rate (m³/h)
-                    <RequiredMark />
-                  </Label>
-                  <Input
-                    type="number"
-                    value={formData.pump_flow_rate}
-                    onChange={onChange("pump_flow_rate")}
-                    disabled={saving || !isResolved}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    Operation start
-                    <RequiredMark />
-                  </Label>
-                  <Input
-                    type="date"
-                    value={formData.start_of_operation}
-                    onChange={onChange("start_of_operation")}
-                    disabled={saving || !isResolved}
-                  />
-                </div>
-              </div>
               </div>
 
               <Separator />
 
-              <div className="space-y-3 rounded-xl border border-border/70 bg-card p-4">
+              <div
+                id="calibration-certificates-section"
+                className="space-y-3 rounded-xl border border-border/70 bg-card p-4"
+              >
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -708,25 +727,96 @@ export default function WaterSystemEditPage() {
 
               <Card className="border-slate-200 bg-white shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-base">Metering Information</CardTitle>
+                  <CardTitle className="text-base">
+                    Metering Information
+                  </CardTitle>
                   <CardDescription>
-                    Manage the active meter, switch to a new meter, and review meter history.
+                    Manage the active meter, switch to a new meter, and review
+                    meter history.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-full bg-white p-1.5 text-primary shadow-sm">
+                        <Info className="size-4" aria-hidden />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          Meter update guide
+                        </p>
+                        <div className="space-y-1.5 text-sm text-muted-foreground">
+                          <p>
+                            <span className="font-medium text-foreground">
+                              1. Set bulk meter status:
+                            </span>{" "}
+                            Meter model, serial, accuracy class, and
+                            installation date apply only when{" "}
+                            <span className="font-medium text-foreground">
+                              Bulk meter installed?
+                            </span>{" "}
+                            is{" "}
+                            <span className="font-medium text-foreground">
+                              Yes
+                            </span>
+                            . If there is no bulk meter, select{" "}
+                            <span className="font-medium text-foreground">
+                              No
+                            </span>{" "}
+                            and complete the OHR and pump fields instead.
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">
+                              2. Update current:
+                            </span>{" "}
+                            Use this to correct details for the currently active
+                            bulk meter.
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">
+                              3. Switch new:
+                            </span>{" "}
+                            Use this when a replacement bulk meter is installed.
+                            Previous meters remain in{" "}
+                            <span className="font-medium text-foreground">
+                              Meter history
+                            </span>{" "}
+                            as inactive.
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">
+                              4. Save:
+                            </span>{" "}
+                            Click{" "}
+                            <span className="font-medium text-foreground">
+                              Save
+                            </span>{" "}
+                            at the bottom of the page to apply changes.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <Label className="text-sm font-semibold">Meter update mode</Label>
+                        <Label className="text-sm font-semibold">
+                          Meter update mode
+                        </Label>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Update current meter edits the active record. Switch to new meter creates a new history entry and keeps old one inactive.
+                          Update current meter edits the active record. Switch
+                          to new meter creates a new history entry and keeps old
+                          one inactive.
                         </p>
                       </div>
                       <div className="inline-flex w-fit overflow-hidden rounded-xl border bg-white p-1">
                         <Button
                           type="button"
                           variant={
-                            meterUpdateMode === "update_current" ? "default" : "ghost"
+                            meterUpdateMode === "update_current"
+                              ? "default"
+                              : "ghost"
                           }
                           className="rounded-lg px-4"
                           onClick={() => setMeterUpdateMode("update_current")}
@@ -736,7 +826,11 @@ export default function WaterSystemEditPage() {
                         </Button>
                         <Button
                           type="button"
-                          variant={meterUpdateMode === "switch_new" ? "default" : "ghost"}
+                          variant={
+                            meterUpdateMode === "switch_new"
+                              ? "default"
+                              : "ghost"
+                          }
                           className="rounded-lg px-4"
                           onClick={() => setMeterUpdateMode("switch_new")}
                           disabled={saving || !isResolved}
@@ -852,19 +946,6 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Pump horse power (kVA/W)
-                          <RequiredMark />
-                        </Label>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          value={formData.pump_horse_power}
-                          onChange={onChange("pump_horse_power")}
-                          disabled={saving || !isResolved}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
                           Time to fill (minutes)
                           <RequiredMark />
                         </Label>
@@ -931,12 +1012,15 @@ export default function WaterSystemEditPage() {
                     <CardHeader>
                       <CardTitle className="text-sm">Meter history</CardTitle>
                       <CardDescription>
-                        Changing meter details creates a new active meter entry and keeps old meter records as inactive.
+                        Changing meter details creates a new active meter entry
+                        and keeps old meter records as inactive.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {meterHistory.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No meter history available.</p>
+                        <p className="text-sm text-muted-foreground">
+                          No meter history available.
+                        </p>
                       ) : (
                         meterHistory.map((meter) => (
                           <div
@@ -945,13 +1029,17 @@ export default function WaterSystemEditPage() {
                           >
                             <div className="min-w-0">
                               <p className="font-medium">
-                                {meter.meter_model || "Unknown model"} · {meter.meter_serial_number || "No serial"}
+                                {meter.meter_model || "Unknown model"} ·{" "}
+                                {meter.meter_serial_number || "No serial"}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Accuracy: {meter.meter_accuracy_class || "—"} · Installed: {meter.installation_date || "—"}
+                                Accuracy: {meter.meter_accuracy_class || "—"} ·
+                                Installed: {meter.installation_date || "—"}
                               </p>
                             </div>
-                            <Badge variant={meter.is_active ? "default" : "outline"}>
+                            <Badge
+                              variant={meter.is_active ? "default" : "outline"}
+                            >
                               {meter.is_active ? "Active" : "Inactive"}
                             </Badge>
                           </div>

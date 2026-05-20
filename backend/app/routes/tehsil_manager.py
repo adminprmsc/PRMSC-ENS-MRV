@@ -1221,6 +1221,10 @@ def _meter_update_mode(data: dict) -> str:
 
 def _validate_water_system_meter_logic(payload: dict) -> tuple[bool, str | None]:
     """Enforce conditional required fields based on `bulk_meter_installed`."""
+    base_missing = _require_fields(payload, ["pump_horse_power"])
+    if base_missing:
+        return False, f"Missing required equipment field(s): {', '.join(base_missing)}"
+
     bmi = _coerce_optional_bool(payload.get("bulk_meter_installed"))
     # If absent/null treat as not installed per requirement.
     bulk_installed = True if bmi is True else False if bmi is False else False
