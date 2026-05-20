@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from app.extensions import db
-from sqlalchemy import extract, or_
+from sqlalchemy import or_
 
 from app.constants.tehsils import canonical_tehsil
 from app.models.models import (
@@ -65,6 +65,15 @@ import calendar
 from datetime import date, datetime
 
 tubewell_operator_bp = Blueprint("tubewell_operator", __name__)
+
+
+def _apply_water_log_year_filter(query, year: int | None):
+    if year is None:
+        return query
+    return query.filter(
+        WaterEnergyLoggingDaily.log_date >= date(year, 1, 1),
+        WaterEnergyLoggingDaily.log_date < date(year + 1, 1, 1),
+    )
 
 
 def _signature_payload_ok(value: str) -> bool:
@@ -923,9 +932,10 @@ def get_water_supply_data():
     except TehsilAccessDenied:
         return jsonify({"message": "Access denied for this water system"}), 403
 
-    query = WaterEnergyLoggingDaily.query.filter_by(water_system_id=system.id)
-    if year is not None:
-        query = query.filter(extract("year", WaterEnergyLoggingDaily.log_date) == year)
+    query = _apply_water_log_year_filter(
+        WaterEnergyLoggingDaily.query.filter_by(water_system_id=system.id),
+        year,
+    )
 
     records = query.order_by(WaterEnergyLoggingDaily.log_date).all()
 
@@ -1207,9 +1217,11 @@ def save_water_supply_data():
             
             if row.get("remarks"):
                 first_record = (
-                    WaterEnergyLoggingDaily.query.filter(
-                        WaterEnergyLoggingDaily.water_system_id == system.id,
-                        extract("year", WaterEnergyLoggingDaily.log_date) == year,
+                    _apply_water_log_year_filter(
+                        WaterEnergyLoggingDaily.query.filter(
+                            WaterEnergyLoggingDaily.water_system_id == system.id,
+                        ),
+                        year,
                     )
                     .order_by(WaterEnergyLoggingDaily.log_date)
                     .first()

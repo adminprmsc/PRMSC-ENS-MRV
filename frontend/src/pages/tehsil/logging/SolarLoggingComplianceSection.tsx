@@ -118,14 +118,19 @@ export default function SolarLoggingComplianceSection({
               >
                 <SelectTrigger id="solar-site-pick" className="h-10 max-w-lg">
                   <SelectValue
-                    placeholder={sitesLoading ? "Loading…" : "Select site"}
+                    placeholder={sitesLoading ? "" : "Select site"}
                   />
                 </SelectTrigger>
                 <SelectContent>
                   {solarSites.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      <span className="font-mono text-sm">{s.unique_identifier}</span>
-                      <span className="text-muted-foreground"> — {s.village}</span>
+                      <span className="font-mono text-sm">
+                        {s.unique_identifier}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {s.village}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -148,7 +153,10 @@ export default function SolarLoggingComplianceSection({
                 }}
                 disabled={loading || !selectedSolarSystemId}
               >
-                <SelectTrigger id="solar-year-pick" className="h-10 w-full max-w-[200px]">
+                <SelectTrigger
+                  id="solar-year-pick"
+                  className="h-10 w-full max-w-[200px]"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -303,14 +311,19 @@ export default function SolarLoggingComplianceSection({
                     const isLogged = row.monthly_status === "logged";
                     return (
                       <TableRow key={row.month}>
-                        <TableCell className="pl-6 font-medium">{name}</TableCell>
+                        <TableCell className="pl-6 font-medium">
+                          {name}
+                        </TableCell>
                         <TableCell>
                           {isLogged ? (
                             <Badge variant="secondary" className="font-normal">
                               Logged
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="font-normal text-muted-foreground">
+                            <Badge
+                              variant="outline"
+                              className="font-normal text-muted-foreground"
+                            >
                               Missing
                             </Badge>
                           )}

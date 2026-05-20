@@ -101,6 +101,8 @@ const SolarSystemForm = () => {
     meter_serial_number: "",
     remarks: "",
   });
+  const [villageSearch, setVillageSearch] = useState("");
+  const [settlementSearch, setSettlementSearch] = useState("");
 
   const [systemExists, setSystemExists] = useState(false);
   const RequiredMark = () => (
@@ -116,6 +118,29 @@ const SolarSystemForm = () => {
       return { ...prev, tehsil: next, village: "", settlement: "" };
     });
   }, [hasResolvedProfileTehsils, tehsilSelectOptions]);
+
+  useEffect(() => {
+    setVillageSearch("");
+    setSettlementSearch("");
+  }, [formData.tehsil]);
+
+  useEffect(() => {
+    setSettlementSearch("");
+  }, [formData.village]);
+
+  const filteredVillages = useMemo(() => {
+    const villages = LOCATION_DATA[formData.tehsil] || [];
+    const query = villageSearch.trim().toLowerCase();
+    if (!query) return villages;
+    return villages.filter((v) => v.toLowerCase().includes(query));
+  }, [formData.tehsil, villageSearch]);
+
+  const filteredSettlements = useMemo(() => {
+    const settlements = SETTLEMENT_DATA[formData.village] || [];
+    const query = settlementSearch.trim().toLowerCase();
+    if (!query) return settlements;
+    return settlements.filter((s) => s.toLowerCase().includes(query));
+  }, [formData.village, settlementSearch]);
 
   const editMode = false;
 
@@ -420,7 +445,7 @@ const SolarSystemForm = () => {
                       <SelectTrigger className="h-11 w-full">
                         <SelectValue placeholder="Select Tehsil" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="h-72">
                         {!tehsilSelectLocked ? (
                           <SelectItem value="__empty__">
                             Select Tehsil
@@ -456,15 +481,45 @@ const SolarSystemForm = () => {
                       >
                         <SelectValue placeholder="Select Village" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="h-72">
+                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
+                          <Input
+                            value={villageSearch}
+                            onChange={(e) => setVillageSearch(e.target.value)}
+                            onKeyDownCapture={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (
+                                e.key === "ArrowDown" ||
+                                e.key === "ArrowUp" ||
+                                e.key === "Enter" ||
+                                e.key === "Tab"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onKeyUp={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.stopPropagation()}
+                            placeholder="Type to search village..."
+                            className="h-9"
+                            autoFocus
+                          />
+                        </div>
                         <SelectItem value="__empty__">
                           Select Village
                         </SelectItem>
-                        {(LOCATION_DATA[formData.tehsil] || []).map((v) => (
+                        {filteredVillages.map((v) => (
                           <SelectItem key={v} value={v}>
                             {v}
                           </SelectItem>
                         ))}
+                        {filteredVillages.length === 0 ? (
+                          <p className="px-2 py-2 text-xs text-muted-foreground">
+                            No villages match your search.
+                          </p>
+                        ) : null}
                       </SelectContent>
                     </Select>
                   </div>
@@ -487,15 +542,47 @@ const SolarSystemForm = () => {
                       >
                         <SelectValue placeholder="Select Settlement" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="h-72">
+                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
+                          <Input
+                            value={settlementSearch}
+                            onChange={(e) =>
+                              setSettlementSearch(e.target.value)
+                            }
+                            onKeyDownCapture={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (
+                                e.key === "ArrowDown" ||
+                                e.key === "ArrowUp" ||
+                                e.key === "Enter" ||
+                                e.key === "Tab"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onKeyUp={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.stopPropagation()}
+                            placeholder="Type to search settlement..."
+                            className="h-9"
+                            autoFocus
+                          />
+                        </div>
                         <SelectItem value="__empty__">
                           Select Settlement (Optional)
                         </SelectItem>
-                        {(SETTLEMENT_DATA[formData.village] || []).map((s) => (
+                        {filteredSettlements.map((s) => (
                           <SelectItem key={s} value={s}>
                             {s}
                           </SelectItem>
                         ))}
+                        {filteredSettlements.length === 0 ? (
+                          <p className="px-2 py-2 text-xs text-muted-foreground">
+                            No settlements match your search.
+                          </p>
+                        ) : null}
                       </SelectContent>
                     </Select>
                   </div>
@@ -565,7 +652,7 @@ const SolarSystemForm = () => {
                       <SelectTrigger className="h-11 w-full">
                         <SelectValue placeholder="Select installation type" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="h-72">
                         <SelectItem value="__empty__">
                           Select installation type
                         </SelectItem>

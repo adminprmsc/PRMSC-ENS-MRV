@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-import logo from "../../assets/prmsc-logo.png";
+import companyLogo from "../../assets/company-logo.png";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -43,10 +43,10 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-lg overflow-hidden shadow-lg">
         <CardHeader className="space-y-3 text-center">
           <div className="mx-auto flex items-center gap-3">
-            <img src={logo} alt="PRMSC logo" className="h-12 w-auto object-contain" />
+            <img src={companyLogo} alt="PRMSC logo" className="h-12 w-auto object-contain" />
             <div className="text-left">
               <CardTitle className="text-xl">Forgot password</CardTitle>
-              <CardDescription>We’ll send reset instructions if your email exists.</CardDescription>
+              <CardDescription>Enter your email to receive reset instructions.</CardDescription>
             </div>
           </div>
         </CardHeader>

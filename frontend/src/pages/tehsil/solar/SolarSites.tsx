@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  Eye,
-  Pencil,
-  Plus,
-  RefreshCcw,
-  Search,
-  Zap,
-} from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCcw, Search, Zap } from "lucide-react";
 
 import { Button } from "../../../components/ui/button";
 import {
@@ -144,7 +137,7 @@ export default function SolarSites() {
           <CardHeader>
             <CardTitle>All sites</CardTitle>
             <CardDescription>
-              {loading ? "Loading…" : `${filtered.length} site(s)`}
+              {loading ? "" : `${filtered.length} site(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

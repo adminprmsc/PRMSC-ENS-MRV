@@ -7,7 +7,6 @@ import {
   CalendarClock,
   ChevronDown,
   ClipboardList,
-  Database,
   Droplets,
   FileCheck,
   FileText,
@@ -41,6 +40,7 @@ import {
   roleDisplayLabel,
 } from "../constants/roles";
 import { useAuth } from "../contexts/AuthContext";
+import companyLogo from "../assets/company-logo.png";
 
 type MenuItem = {
   path?: string;
@@ -96,7 +96,7 @@ const MainLayout = () => {
             {
               path: tehsilRoutes.calibrationCertificates,
               icon: <FileText className="size-4" />,
-              label: "Calibration certificates",
+              label: "Bulk meter certificates",
             },
             {
               path: tehsilRoutes.waterSubmissions,
@@ -170,6 +170,11 @@ const MainLayout = () => {
   }, [exec, tehsilMgr, showOnboard]);
 
   const roleLabel = roleDisplayLabel(user?.role);
+  const roleTitle = tehsilMgr ? "Tehsil Manager Operator" : roleLabel;
+  const primaryTehsil = user?.tehsils?.[0] ?? "";
+  const tehsilLabel = primaryTehsil
+    ? primaryTehsil.toUpperCase()
+    : "UNASSIGNED";
   const userInitials = (user?.name ?? "User")
     .split(" ")
     .filter(Boolean)
@@ -188,8 +193,12 @@ const MainLayout = () => {
             className="hidden h-screen shrink-0 overflow-hidden border-r border-slate-200 bg-white md:flex md:flex-col"
           >
             <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-white shadow-sm">
-                <Database className="size-4" />
+              <div className="flex size-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+                <img
+                  src={companyLogo}
+                  alt="Company logo"
+                  className="h-8 w-8 object-contain"
+                />
               </div>
               <div>
                 <h2 className="text-base font-black tracking-tight text-slate-900">
@@ -294,7 +303,7 @@ const MainLayout = () => {
             <div className="flex items-center gap-2">
               <Card
                 size="sm"
-                className="hidden border-slate-200 bg-white/80 md:flex"
+                className="hidden rounded-xl border border-slate-200 bg-white shadow-sm md:flex"
               >
                 <CardContent className="flex items-center gap-3 px-3 py-2">
                   <Avatar size="sm" className="ring-1 ring-primary/20">
@@ -302,20 +311,17 @@ const MainLayout = () => {
                       {userInitials || <UserIcon className="size-3" />}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-semibold text-slate-900">
-                    {user?.name || "User"}
-                  </span>
-                  <Separator
-                    orientation="vertical"
-                    className="h-4 bg-slate-200"
-                  />
-                  <Badge
-                    variant="outline"
-                    className="max-w-[140px] truncate text-[10px] uppercase tracking-wide text-primary"
-                    title={roleLabel}
-                  >
-                    {roleLabel}
-                  </Badge>
+                  <div className="min-w-0 border-l border-slate-200 pl-3">
+                    <p className="max-w-[220px] truncate text-xs font-semibold leading-tight text-slate-900">
+                      {roleTitle}
+                    </p>
+                    <p
+                      className="mt-0.5 max-w-[220px] truncate text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
+                      title={tehsilLabel}
+                    >
+                      {tehsilLabel}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
               <Avatar size="lg" className="ring-2 ring-primary/20 md:hidden">

@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from datetime import date
 from app.extensions import db
 from app.models.models import (
     WaterSystem,
@@ -22,35 +23,66 @@ def _log_not_rejected():
     )
 
 
+def _apply_location_filters(query, tehsil, village, *, model):
+    if tehsil and tehsil != "All Tehsils":
+        query = query.filter(model.tehsil == tehsil)
+    if village and village != "All Villages":
+        query = query.filter(model.village == village)
+    return query
+
+
+def _apply_log_date_filters(query, month, year):
+    """Apply index-friendly date range filters instead of extract() predicates."""
+    if year and month:
+        start = date(year, month, 1)
+        end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        return query.filter(
+            WaterEnergyLoggingDaily.log_date >= start,
+            WaterEnergyLoggingDaily.log_date < end,
+        )
+    if year:
+        return query.filter(
+            WaterEnergyLoggingDaily.log_date >= date(year, 1, 1),
+            WaterEnergyLoggingDaily.log_date < date(year + 1, 1, 1),
+        )
+    if month:
+        return query.filter(extract("month", WaterEnergyLoggingDaily.log_date) == month)
+    return query
+
+
 @dashboard_bp.route('/program-summary', methods=['GET'])
 def get_program_summary():
     tehsil = request.args.get('tehsil')
     village = request.args.get('village')
     
-    ws_query = WaterSystem.query
-    ss_query = SolarSystem.query
-    
-    if tehsil and tehsil != 'All Tehsils':
-        ws_query = ws_query.filter_by(tehsil=tehsil)
-        ss_query = ss_query.filter_by(tehsil=tehsil)
-    
-    if village and village != 'All Villages':
-        ws_query = ws_query.filter_by(village=village)
-        ss_query = ss_query.filter_by(village=village)
-        
-    ohr_count = ws_query.count()
-    solar_facilities = ss_query.count()
-    
-    ws_subq = ws_query.with_entities(WaterSystem.id).subquery()
+    ws_query = _apply_location_filters(
+        db.session.query(func.count(WaterSystem.id)),
+        tehsil,
+        village,
+        model=WaterSystem,
+    )
+    ss_query = _apply_location_filters(
+        db.session.query(func.count(SolarSystem.id)),
+        tehsil,
+        village,
+        model=SolarSystem,
+    )
+
+    ohr_count = ws_query.scalar() or 0
+    solar_facilities = ss_query.scalar() or 0
+
     bulk_meters = (
-        db.session.query(SystemMeter)
-        .join(ws_subq, SystemMeter.water_system_id == ws_subq.c.id)
+        db.session.query(func.count(SystemMeter.id))
+        .join(WaterSystem, WaterSystem.id == SystemMeter.water_system_id)
         .filter(
             SystemMeter.meter_type == METER_TYPE_TUBEWELL,
             SystemMeter.is_active.is_(True),
         )
-        .count()
     )
+    bulk_meters = _apply_location_filters(
+        bulk_meters, tehsil, village, model=WaterSystem
+    )
+    bulk_meters = bulk_meters.scalar() or 0
     
     return jsonify({
         "ohr_count": ohr_count,
@@ -71,7 +103,6 @@ def get_water_supplied():
     year = request.args.get('year', type=int)
     
     w_m = extract("month", WaterEnergyLoggingDaily.log_date)
-    w_y = extract("year", WaterEnergyLoggingDaily.log_date)
     query = (
         db.session.query(
             w_m.label("month"),
@@ -79,18 +110,13 @@ def get_water_supplied():
                 func.coalesce(WaterEnergyLoggingDaily.total_water_pumped, 0.0)
             ).label("total"),
         )
-        .join(WaterSystem, WaterEnergyLoggingDaily.water_system_id == WaterSystem.id)
         .filter(_log_not_rejected())
     )
 
-    if tehsil and tehsil != "All Tehsils":
-        query = query.filter(WaterSystem.tehsil == tehsil)
-    if village and village != "All Villages":
-        query = query.filter(WaterSystem.village == village)
-    if month:
-        query = query.filter(w_m == month)
-    if year:
-        query = query.filter(w_y == year)
+    if (tehsil and tehsil != "All Tehsils") or (village and village != "All Villages"):
+        query = query.join(WaterSystem, WaterEnergyLoggingDaily.water_system_id == WaterSystem.id)
+        query = _apply_location_filters(query, tehsil, village, model=WaterSystem)
+    query = _apply_log_date_filters(query, month, year)
 
     query = query.group_by(w_m).order_by(w_m)
     results = query.all()
@@ -114,7 +140,6 @@ def get_pump_hours():
     year = request.args.get('year', type=int)
     
     w_m = extract("month", WaterEnergyLoggingDaily.log_date)
-    w_y = extract("year", WaterEnergyLoggingDaily.log_date)
     query = (
         db.session.query(
             w_m.label("month"),
@@ -122,18 +147,13 @@ def get_pump_hours():
                 func.coalesce(WaterEnergyLoggingDaily.pump_operating_hours, 0.0)
             ).label("total"),
         )
-        .join(WaterSystem, WaterEnergyLoggingDaily.water_system_id == WaterSystem.id)
         .filter(_log_not_rejected())
     )
 
-    if tehsil and tehsil != "All Tehsils":
-        query = query.filter(WaterSystem.tehsil == tehsil)
-    if village and village != "All Villages":
-        query = query.filter(WaterSystem.village == village)
-    if month:
-        query = query.filter(w_m == month)
-    if year:
-        query = query.filter(w_y == year)
+    if (tehsil and tehsil != "All Tehsils") or (village and village != "All Villages"):
+        query = query.join(WaterSystem, WaterEnergyLoggingDaily.water_system_id == WaterSystem.id)
+        query = _apply_location_filters(query, tehsil, village, model=WaterSystem)
+    query = _apply_log_date_filters(query, month, year)
 
     query = query.group_by(w_m).order_by(w_m)
     results = query.all()
@@ -153,12 +173,11 @@ def get_solar_generation():
     query = db.session.query(
         SolarEnergyLoggingMonthly.month,
         func.sum(SolarEnergyLoggingMonthly.energy_exported_to_grid).label("total"),
-    ).join(SolarSystem, SolarEnergyLoggingMonthly.solar_system_id == SolarSystem.id)
+    )
 
-    if tehsil and tehsil != "All Tehsils":
-        query = query.filter(SolarSystem.tehsil == tehsil)
-    if village and village != "All Villages":
-        query = query.filter(SolarSystem.village == village)
+    if (tehsil and tehsil != "All Tehsils") or (village and village != "All Villages"):
+        query = query.join(SolarSystem, SolarEnergyLoggingMonthly.solar_system_id == SolarSystem.id)
+        query = _apply_location_filters(query, tehsil, village, model=SolarSystem)
     if month:
         query = query.filter(SolarEnergyLoggingMonthly.month == month)
     if year:
@@ -184,12 +203,11 @@ def get_grid_import():
     query = db.session.query(
         SolarEnergyLoggingMonthly.month,
         func.sum(SolarEnergyLoggingMonthly.energy_consumed_from_grid).label("total"),
-    ).join(SolarSystem, SolarEnergyLoggingMonthly.solar_system_id == SolarSystem.id)
+    )
 
-    if tehsil and tehsil != "All Tehsils":
-        query = query.filter(SolarSystem.tehsil == tehsil)
-    if village and village != "All Villages":
-        query = query.filter(SolarSystem.village == village)
+    if (tehsil and tehsil != "All Tehsils") or (village and village != "All Villages"):
+        query = query.join(SolarSystem, SolarEnergyLoggingMonthly.solar_system_id == SolarSystem.id)
+        query = _apply_location_filters(query, tehsil, village, model=SolarSystem)
     if month:
         query = query.filter(SolarEnergyLoggingMonthly.month == month)
     if year:

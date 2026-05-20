@@ -159,7 +159,8 @@ export default function TubewellSubmissionsHub() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { getWaterVerificationQueue, getWaterSystems } = useTehsilManagerOperatorApi();
+  const { getWaterVerificationQueue, getWaterSystems } =
+    useTehsilManagerOperatorApi();
 
   const [rows, setRows] = useState<TubewellSubmissionRow[]>([]);
   const [waterSystems, setWaterSystems] = useState<
@@ -239,7 +240,12 @@ export default function TubewellSubmissionsHub() {
   const waterSystemOptions = useMemo(() => {
     const map = new Map<
       string,
-      { id: string; uid: string; village?: string | undefined; tehsil?: string | undefined }
+      {
+        id: string;
+        uid: string;
+        village?: string | undefined;
+        tehsil?: string | undefined;
+      }
     >();
 
     // Primary source: registered/assigned water systems API.
@@ -249,7 +255,8 @@ export default function TubewellSubmissionsHub() {
       const t = String((s as any).tehsil ?? "").trim();
       const v = String((s as any).village ?? "").trim();
       if (!id || !uid) continue;
-      if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase()) continue;
+      if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase())
+        continue;
       map.set(id, { id, uid, tehsil: t || undefined, village: v || undefined });
     }
 
@@ -260,7 +267,8 @@ export default function TubewellSubmissionsHub() {
       const uid = String(r.system_info?.uid ?? "").trim();
       const t = String(r.system_info?.tehsil ?? "").trim();
       if (!sysId || !uid) continue;
-      if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase()) continue;
+      if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase())
+        continue;
       if (!map.has(sysId)) {
         map.set(sysId, {
           id: sysId,
@@ -548,7 +556,7 @@ export default function TubewellSubmissionsHub() {
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-base">Submissions</CardTitle>
             <CardDescription>
-              {loading ? "Loading…" : `${filtered.length} row(s)`}
+              {loading ? "" : `${filtered.length} row(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">

@@ -581,9 +581,10 @@ export default function WaterSystemEditPage() {
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Upload a certificate (PDF/image) and set its expiry
-                        date. Uploading a new one automatically marks the
-                        previous as inactive.
+                        Bulk-meter only: upload a certificate (PDF/image) and
+                        set its expiry date. Systems without a bulk meter do not
+                        require a calibration certificate. Uploading a new one
+                        automatically marks the previous as inactive.
                       </p>
                     </div>
                   </div>
@@ -658,7 +659,8 @@ export default function WaterSystemEditPage() {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed bg-background/50 p-6 text-center text-sm text-muted-foreground">
-                    No certificates uploaded yet.
+                    No certificates uploaded yet. This is only required for
+                    bulk-meter systems.
                   </div>
                 )}
 

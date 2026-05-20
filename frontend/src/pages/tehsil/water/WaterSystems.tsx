@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  Eye,
-  Pencil,
-  Plus,
-  RefreshCcw,
-  Search,
-} from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCcw, Search } from "lucide-react";
 
 import { Button } from "../../../components/ui/button";
 import {
@@ -141,7 +135,7 @@ export default function WaterSystems() {
           <CardHeader>
             <CardTitle>All systems</CardTitle>
             <CardDescription>
-              {loading ? "Loading…" : `${filtered.length} system(s)`}
+              {loading ? "" : `${filtered.length} system(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -200,7 +194,11 @@ export default function WaterSystems() {
                           </TableCell>
                           <TableCell>
                             <Badge
-                              variant={s.bulk_meter_installed === true ? "default" : "outline"}
+                              variant={
+                                s.bulk_meter_installed === true
+                                  ? "default"
+                                  : "outline"
+                              }
                             >
                               {s.bulk_meter_installed === true ? "Yes" : "No"}
                             </Badge>

@@ -66,10 +66,13 @@ export default function CalibrationCertificates() {
     try {
       if (soft) setRefreshing(true);
       else setLoading(true);
-      const res = (await getActiveWaterSystemCalibrationCertificates()) as ActiveCertRow[];
+      const res =
+        (await getActiveWaterSystemCalibrationCertificates()) as ActiveCertRow[];
       setRows(Array.isArray(res) ? res : []);
     } catch (e: unknown) {
-      toast.error(getApiErrorMessage(e, "Could not load calibration certificates"));
+      toast.error(
+        getApiErrorMessage(e, "Could not load calibration certificates"),
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,7 +105,9 @@ export default function CalibrationCertificates() {
               Calibration certificates
             </h1>
             <p className="text-sm text-muted-foreground">
-              Active certificate per water system in your scope.
+              Active bulk-meter calibration certificate per water system in your
+              scope. Systems without a bulk meter do not require a calibration
+              certificate.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -116,7 +121,9 @@ export default function CalibrationCertificates() {
               onClick={() => void load(true)}
               disabled={refreshing}
             >
-              <RefreshCcw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCcw
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
@@ -126,7 +133,9 @@ export default function CalibrationCertificates() {
           <CardHeader>
             <CardTitle>Active certificates</CardTitle>
             <CardDescription>
-              {loading ? "Loading…" : `${rows.length} water system(s) with active certificate`}
+              {loading
+                ? ""
+                : `${rows.length} water system(s) with active bulk-meter certificate`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -153,8 +162,11 @@ export default function CalibrationCertificates() {
                   <TableBody>
                     {rows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                          No active certificates found.
+                        <TableCell
+                          colSpan={7}
+                          className="h-24 text-center text-muted-foreground"
+                        >
+                          No active bulk-meter certificates found.
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -167,8 +179,12 @@ export default function CalibrationCertificates() {
                           <TableCell className="font-mono text-xs">
                             {r.water_system.unique_identifier || "—"}
                           </TableCell>
-                          <TableCell>{fmtDate(r.certificate.uploaded_at)}</TableCell>
-                          <TableCell>{fmtDate(r.certificate.expiry_date)}</TableCell>
+                          <TableCell>
+                            {fmtDate(r.certificate.uploaded_at)}
+                          </TableCell>
+                          <TableCell>
+                            {fmtDate(r.certificate.expiry_date)}
+                          </TableCell>
                           <TableCell className="max-w-[280px] truncate">
                             {fileNameFromUrl(r.certificate.file_url)}
                           </TableCell>
@@ -176,7 +192,9 @@ export default function CalibrationCertificates() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(r.certificate.file_url, "_blank")}
+                              onClick={() =>
+                                window.open(r.certificate.file_url, "_blank")
+                              }
                             >
                               <FileText className="size-4" />
                               View
@@ -195,4 +213,3 @@ export default function CalibrationCertificates() {
     </div>
   );
 }
-

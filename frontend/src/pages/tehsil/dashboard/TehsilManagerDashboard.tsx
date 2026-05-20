@@ -44,10 +44,6 @@ type Filters = {
   year: number;
 };
 
-/**
- * Tehsil Manager Operator (ADMIN) — scoped to assigned tehsil(s);
- * register water/solar in tehsil; monthly solar energy logging only.
- */
 const TehsilManagerDashboard = () => {
   const { user } = useAuth();
   const showFacilityRegistration = canRegisterTehsilFacilities(user?.role);
@@ -153,10 +149,10 @@ const TehsilManagerDashboard = () => {
     solar_facilities: 0,
   };
 
-  const tehsilHint =
-    (user?.tehsils?.length ?? 0) > 0
-      ? `Your tehsil${(user?.tehsils?.length ?? 0) > 1 ? "s" : ""}: ${(user?.tehsils ?? []).join(", ")}`
-      : "Assign tehsils to your account in admin if filters look too broad.";
+  const tehsilScope =
+    scopedTehsils.length === 1
+      ? scopedTehsils[0]
+      : `${scopedTehsils.length} assigned tehsils`;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8">
@@ -164,19 +160,22 @@ const TehsilManagerDashboard = () => {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between"
         >
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 md:text-4xl">
-            Tehsil command center,{" "}
-            <span className="text-[#0b66c3]">{user?.name || "Manager"}</span>
-          </h1>
-          <p className="mt-2 text-sm text-slate-600 md:text-base">
-            Register infrastructure, enter monthly solar data (direct save),
-            review legacy submission rows if any, and onboard operators.
-            Tubewell operators use the{" "}
-            <span className="font-medium text-slate-800">mobile app</span> for
-            monthly water readings and drafts.
-          </p>
-          <p className="mt-1 text-xs text-slate-500">{tehsilHint}</p>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+              Tehsil Operations Dashboard
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Infrastructure, compliance, and anomaly monitoring.
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className="w-fit border-slate-300 bg-white text-xs font-medium uppercase tracking-wide text-slate-700"
+          >
+            Scope: {tehsilScope}
+          </Badge>
         </motion.div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -199,9 +198,7 @@ const TehsilManagerDashboard = () => {
         <Card className="rounded-2xl border-slate-200">
           <CardHeader>
             <CardTitle className="text-base">Scope filters</CardTitle>
-            <CardDescription>
-              KPIs respect tehsil (and village) — aligned with your assignment.
-            </CardDescription>
+            <CardDescription>Refine dashboard metrics by area and period.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-5">
             <FilterSelect
@@ -265,18 +262,15 @@ const TehsilManagerDashboard = () => {
         <Card className="rounded-2xl border-slate-200 bg-white">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base">Anomalies tracking</CardTitle>
-              <Badge variant="outline">Last 4 days</Badge>
+              <CardTitle className="text-base">Anomaly Monitoring</CardTitle>
+              <Badge variant="outline">4-day baseline</Badge>
             </div>
             <CardDescription>
-              Flags sudden changes in <span className="font-medium">total water pumped</span> compared to the previous
-              3‑day average.
+              Detect abnormal shifts in water volume against rolling averages.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-muted-foreground">
-              Review anomalies and see operator details for the latest log.
-            </div>
+            <div className="text-sm text-muted-foreground">Review flagged logs and operator-level details.</div>
             <Button
               type="button"
               onClick={() => navigate(tehsilRoutes.waterAlerts)}
@@ -288,17 +282,15 @@ const TehsilManagerDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Activity className="size-5 text-slate-700" />
-          <h2 className="text-lg font-bold text-slate-800">
-            Tehsil operations
-          </h2>
+          <h2 className="text-lg font-bold text-slate-800">Program Management</h2>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ManagementCard
             title="Water infrastructure"
-            description="Register tube wells and pump specifications for villages in your tehsil. Monthly water volumes and drafts are captured by tubewell operators in the mobile app—not in this portal."
+            description="Register and maintain tube well systems for assigned villages."
             tag="Water system"
             tagVariant="secondary"
             icon={<Droplet className="size-6 text-blue-600" />}
@@ -318,7 +310,7 @@ const TehsilManagerDashboard = () => {
           />
           <ManagementCard
             title="Solar generation"
-            description="Register PV sites, then log monthly import/export and net-metering evidence — saved directly for MRV (no draft or verification step on these screens)."
+            description="Manage solar assets and capture monthly energy records."
             tag="Solar"
             tagVariant="outline"
             icon={<Sun className="size-6 text-amber-600" />}
@@ -348,10 +340,7 @@ const TehsilManagerDashboard = () => {
         <Card className="rounded-2xl border-dashed border-slate-200 bg-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Logging compliance</CardTitle>
-            <CardDescription>
-              Track daily tubewell submissions and monthly solar grid logs across your tehsil — what is missing and
-              what is on track.
-            </CardDescription>
+            <CardDescription>Track completion across water and solar reporting.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
@@ -362,7 +351,7 @@ const TehsilManagerDashboard = () => {
               Open logging compliance
             </Button>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
     </div>
   );
@@ -379,10 +368,7 @@ type StatsCardProps = {
 const StatsCard = ({ title, value, icon, desc, loading }: StatsCardProps) => (
   <Card className="rounded-2xl border-slate-200">
     <CardHeader className="pb-2">
-      <div className="flex items-center justify-between">
-        <div className="rounded-xl bg-slate-100 p-2">{icon}</div>
-        <Badge variant="outline">Tehsil</Badge>
-      </div>
+      <div className="rounded-xl bg-slate-100 p-2 w-fit">{icon}</div>
       <CardTitle className="text-sm text-slate-700">{title}</CardTitle>
     </CardHeader>
     <CardContent className="pt-0">

@@ -3,10 +3,9 @@ const { withNativeWind } = require('nativewind/metro');
 const path = require('path');
 
 const workspaceRoot = path.resolve(__dirname, '..');
-const frontendSrc = path.resolve(workspaceRoot, 'frontend', 'src');
-
 const config = {
-  watchFolders: [frontendSrc],
+  // Allow importing shared source files from sibling apps/packages.
+  watchFolders: [workspaceRoot],
   resolver: {
     unstable_enableSymlinks: true,
   },

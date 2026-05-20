@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from flask import Blueprint, request, jsonify, current_app
 from app.extensions import db
-from sqlalchemy import extract
+from sqlalchemy import case, func
 
 from app.constants.tehsils import canonical_tehsil
 from app.models.models import (
@@ -1667,6 +1667,21 @@ def get_solar_systems():
         q = q.filter(SolarSystem.village == filter_village)
 
     systems = q.all()
+    system_ids = [s.id for s in systems]
+    monthly_counts = {}
+    if system_ids:
+        monthly_counts = {
+            str(system_id): int(total or 0)
+            for system_id, total in (
+                db.session.query(
+                    SolarEnergyLoggingMonthly.solar_system_id,
+                    func.count(SolarEnergyLoggingMonthly.id),
+                )
+                .filter(SolarEnergyLoggingMonthly.solar_system_id.in_(system_ids))
+                .group_by(SolarEnergyLoggingMonthly.solar_system_id)
+                .all()
+            )
+        }
     return jsonify(
         [
             {
@@ -1706,9 +1721,7 @@ def get_solar_systems():
                 "created_by": s.created_by,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None,
-                "monthly_log_count": SolarEnergyLoggingMonthly.query.filter_by(
-                    solar_system_id=s.id
-                ).count(),
+                "monthly_log_count": monthly_counts.get(str(s.id), 0),
             }
             for s in systems
         ]
@@ -2703,11 +2716,38 @@ def get_verification_stats():
         ]
     else:
         water = Submission.query.filter_by(submission_type="water_system")
-        total = water.count()
-        pending = water.filter_by(status=SUBMISSION_STATUS_SUBMITTED).count()
-        accepted = water.filter_by(status=SUBMISSION_STATUS_ACCEPTED).count()
-        rejected = water.filter_by(status=SUBMISSION_STATUS_REJECTED).count()
-        reverted = water.filter_by(status=SUBMISSION_STATUS_REVERTED_BACK).count()
+        totals = water.with_entities(
+            func.count(Submission.id).label("total"),
+            func.sum(
+                case(
+                    (Submission.status == SUBMISSION_STATUS_SUBMITTED, 1),
+                    else_=0,
+                )
+            ).label("pending"),
+            func.sum(
+                case(
+                    (Submission.status == SUBMISSION_STATUS_ACCEPTED, 1),
+                    else_=0,
+                )
+            ).label("accepted"),
+            func.sum(
+                case(
+                    (Submission.status == SUBMISSION_STATUS_REJECTED, 1),
+                    else_=0,
+                )
+            ).label("rejected"),
+            func.sum(
+                case(
+                    (Submission.status == SUBMISSION_STATUS_REVERTED_BACK, 1),
+                    else_=0,
+                )
+            ).label("reverted"),
+        ).one()
+        total = int(totals.total or 0)
+        pending = int(totals.pending or 0)
+        accepted = int(totals.accepted or 0)
+        rejected = int(totals.rejected or 0)
+        reverted = int(totals.reverted or 0)
         accepted_subs = water.filter(
             Submission.status == SUBMISSION_STATUS_ACCEPTED,
             Submission.submitted_at.isnot(None),

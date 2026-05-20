@@ -125,7 +125,9 @@ export default function WaterLoggingComplianceSection({
 
   const weekStats = useMemo(() => countStatuses(visibleDays), [visibleDays]);
 
-  const selectedSystem = waterSystems.find((s) => s.id === selectedWaterSystemId);
+  const selectedSystem = waterSystems.find(
+    (s) => s.id === selectedWaterSystemId,
+  );
   const operatorsForTable = rangeData?.assigned_operators;
   const opsText = formatAssignedOperators(operatorsForTable);
   const opsTitle = formatAssignedOperatorsTitle(operatorsForTable);
@@ -158,7 +160,10 @@ export default function WaterLoggingComplianceSection({
           <div className="flex gap-4">
             <StepIndex n={1} />
             <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="water-system-pick" className="text-sm font-medium">
+              <Label
+                htmlFor="water-system-pick"
+                className="text-sm font-medium"
+              >
                 Water system
               </Label>
               <Select
@@ -174,16 +179,19 @@ export default function WaterLoggingComplianceSection({
                   aria-describedby={`${baseId}-step1-hint`}
                 >
                   <SelectValue
-                    placeholder={
-                      systemsLoading ? "Loading…" : "Select system"
-                    }
+                    placeholder={systemsLoading ? "" : "Select system"}
                   />
                 </SelectTrigger>
                 <SelectContent>
                   {waterSystems.map((ws) => (
                     <SelectItem key={ws.id} value={ws.id}>
-                      <span className="font-mono text-sm">{ws.unique_identifier}</span>
-                      <span className="text-muted-foreground"> — {ws.village}</span>
+                      <span className="font-mono text-sm">
+                        {ws.unique_identifier}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {ws.village}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -224,7 +232,10 @@ export default function WaterLoggingComplianceSection({
               <div className="flex gap-4">
                 <StepIndex n={3} />
                 <div className="min-w-0 flex-1 space-y-2">
-                  <Label htmlFor="water-week-chunk" className="text-sm font-medium">
+                  <Label
+                    htmlFor="water-week-chunk"
+                    className="text-sm font-medium"
+                  >
                     Segment
                   </Label>
                   <p className="text-xs text-muted-foreground">
@@ -237,7 +248,10 @@ export default function WaterLoggingComplianceSection({
                     }}
                     disabled={loading || weekChunks.length === 0}
                   >
-                    <SelectTrigger id="water-week-chunk" className="h-10 max-w-lg">
+                    <SelectTrigger
+                      id="water-week-chunk"
+                      className="h-10 max-w-lg"
+                    >
                       <SelectValue placeholder="Select segment" />
                     </SelectTrigger>
                     <SelectContent>
@@ -262,9 +276,7 @@ export default function WaterLoggingComplianceSection({
         </div>
       ) : null}
 
-      {!systemsLoading &&
-      waterSystems.length > 0 &&
-      !selectedWaterSystemId ? (
+      {!systemsLoading && waterSystems.length > 0 && !selectedWaterSystemId ? (
         <Card className="border-dashed shadow-none">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <MapPin className="size-8 text-muted-foreground/60" />
@@ -367,7 +379,9 @@ export default function WaterLoggingComplianceSection({
             <CardHeader className="border-b border-border/80 pb-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <CardTitle className="text-base font-medium">Daily detail</CardTitle>
+                  <CardTitle className="text-base font-medium">
+                    Daily detail
+                  </CardTitle>
                   <CardDescription className="text-sm">
                     <button
                       type="button"
@@ -410,7 +424,9 @@ export default function WaterLoggingComplianceSection({
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="min-w-[200px] pl-6">Date</TableHead>
                     <TableHead className="min-w-[160px]">Status</TableHead>
-                    <TableHead className="min-w-[180px] pr-6">Operators</TableHead>
+                    <TableHead className="min-w-[180px] pr-6">
+                      Operators
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

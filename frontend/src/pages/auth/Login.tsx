@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-import logo from "../../assets/prmsc-logo.png";
+import companyLogo from "../../assets/company-logo.png";
+import govtPunjabLogo from "../../assets/govt-punjab-logo.png";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -73,54 +74,33 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
-      <Card className="w-full max-w-4xl overflow-hidden shadow-lg">
-        <div className="grid md:grid-cols-5">
-          {/* Branding panel */}
-          <div className="hidden flex-col items-center justify-center gap-6 bg-gradient-to-br from-primary to-primary/80 px-8 py-12 text-primary-foreground md:col-span-2 md:flex">
-            <img
-              src={logo}
-              alt="PRMSC logo"
-              className="h-28 w-auto object-contain drop-shadow-lg"
-            />
-            <div className="space-y-2 text-center">
-              <h2 className="text-xl font-bold tracking-tight">MRV Portal</h2>
-              <p className="text-sm leading-relaxed text-primary-foreground/80">
-                Monitoring, Reporting &amp; Verification System for Punjab Rural
-                Municipal Services Company
-              </p>
-            </div>
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {["Water Systems", "Solar Energy", "Carbon Offsets"].map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full border border-primary-foreground/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Form panel */}
-          <CardContent className="flex flex-col justify-center space-y-6 p-8 md:col-span-3 md:p-10">
-            {/* Mobile-only logo */}
-            <div className="flex flex-col items-center gap-2 md:hidden">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-slate-100 to-slate-200 px-4 py-10">
+      <Card className="w-full max-w-5xl overflow-hidden rounded-3xl border-slate-200/80 shadow-2xl">
+        <div className="grid md:grid-cols-[1.05fr_0.95fr]">
+          <CardContent className="flex flex-col justify-center space-y-6 p-8 md:p-10">
+            <div className="flex items-center gap-3 md:hidden">
               <img
-                src={logo}
-                alt="PRMSC logo"
-                className="h-20 w-auto object-contain"
+                src={companyLogo}
+                alt="Punjab Rural Municipal Services Company logo"
+                className="h-11 w-11 object-contain"
               />
-              <h1 className="text-lg font-bold text-primary">MRV Portal</h1>
-              <Separator className="mt-2" />
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Punjab Rural Municipal Services Company
+                </p>
+                <h1 className="text-lg font-bold text-slate-900">MRV System</h1>
+              </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+                Secure Portal
+              </p>
               <h1 className="text-2xl font-semibold tracking-tight">
                 Welcome back
               </h1>
               <p className="text-sm text-muted-foreground">
-                Tehsil Manager Operators, Manager Operations, and MRV COO only.
+                Sign in to continue to MRV System.
               </p>
             </div>
 
@@ -137,7 +117,7 @@ const Login = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="email"
-                    className="h-10 pl-9"
+                    className="h-11 rounded-xl border-slate-200 pl-9"
                   />
                 </div>
               </div>
@@ -154,13 +134,13 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    className="h-10 pl-9"
+                    className="h-11 rounded-xl border-slate-200 pl-9"
                   />
                 </div>
                 <div className="flex justify-end">
                   <Link
                     to="/forgot-password"
-                    className="text-xs font-medium text-primary hover:underline"
+                    className="text-xs font-medium text-primary hover:underline underline-offset-4"
                   >
                     Forgot password?
                   </Link>
@@ -173,7 +153,11 @@ const Login = () => {
                 </p>
               ) : null}
 
-              <Button type="submit" disabled={loading} className="h-10 w-full">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="h-11 w-full rounded-xl shadow-sm"
+              >
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="size-4 animate-spin" />
@@ -185,14 +169,41 @@ const Login = () => {
               </Button>
             </form>
 
-            <Separator />
+            <Separator className="bg-slate-200" />
 
-            <p className="text-center text-sm text-muted-foreground">
-              Tubewell operators are onboarded under{" "}
-              <span className="font-medium text-foreground">Tehsil dashboard</span>{" "}
-              → Onboard operator. Use credentials issued to your role.
+            <p className="text-center text-xs text-muted-foreground">
+              Authorized access only
             </p>
           </CardContent>
+
+          <div className="hidden border-l border-slate-200 bg-slate-50 p-9 md:flex md:items-center md:justify-center">
+            <div className="flex max-w-sm flex-col items-center justify-center gap-5 text-center">
+              <div className="flex items-center justify-center gap-5">
+                <img
+                  src={companyLogo}
+                  alt="Punjab Rural Municipal Services Company logo"
+                  className="h-36 w-36 object-contain"
+                />
+                <img
+                  src={govtPunjabLogo}
+                  alt="Government of Punjab emblem"
+                  className="h-24 w-24 object-contain"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                  MRV System
+                </h2>
+                <p className="text-sm font-semibold leading-tight text-slate-700">
+                  Punjab Rural Municipal Services Company
+                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  Government of Punjab Affiliated
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </Card>
     </div>

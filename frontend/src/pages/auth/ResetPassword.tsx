@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
-import logo from "../../assets/prmsc-logo.png";
+import companyLogo from "../../assets/company-logo.png";
+import govtPunjabLogo from "../../assets/govt-punjab-logo.png";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -50,11 +51,21 @@ export default function ResetPasswordPage() {
       <Card className="w-full max-w-lg overflow-hidden shadow-lg">
         <CardHeader className="space-y-3 text-center">
           <div className="mx-auto flex items-center gap-3">
-            <img src={logo} alt="PRMSC logo" className="h-12 w-auto object-contain" />
+            <img src={companyLogo} alt="PRMSC logo" className="h-12 w-auto object-contain" />
             <div className="text-left">
               <CardTitle className="text-xl">Reset password</CardTitle>
-              <CardDescription>Enter your reset token and choose a new password.</CardDescription>
+              <CardDescription>MRV System - Punjab Rural Municipal Services Company</CardDescription>
             </div>
+          </div>
+          <div className="mx-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <img
+              src={govtPunjabLogo}
+              alt="Government of Punjab emblem"
+              className="h-7 w-7 object-contain"
+            />
+            <p className="text-xs font-medium text-slate-600">
+              Government of Punjab affiliated initiative
+            </p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

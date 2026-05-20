@@ -1,16 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, RefreshCcw, Search, SendToBack, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  RefreshCcw,
+  Search,
+  SendToBack,
+  XCircle,
+} from "lucide-react";
 
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "../../components/ui/native-select";
 import { Skeleton } from "../../components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/table";
 import { useTehsilManagerOperatorApi } from "../../hooks";
 import { getApiErrorMessage } from "../../lib/api-error";
 import { useAuth } from "../../contexts/AuthContext";
@@ -98,7 +121,9 @@ export default function VerificationsPage() {
     try {
       if (soft) setRefreshing(true);
       else setLoading(true);
-      const data = (await getWaterVerificationQueue()) as { submissions?: QueueRow[] };
+      const data = (await getWaterVerificationQueue()) as {
+        submissions?: QueueRow[];
+      };
       setRows(Array.isArray(data?.submissions) ? data.submissions : []);
     } catch (e: unknown) {
       toast.error(getApiErrorMessage(e, "Could not load verifications"));
@@ -121,7 +146,11 @@ export default function VerificationsPage() {
       .filter((r) => {
         if (view === "all") return true;
         if (view === "pending") return r.status === "submitted";
-        return r.status === "accepted" || r.status === "rejected" || r.status === "reverted_back";
+        return (
+          r.status === "accepted" ||
+          r.status === "rejected" ||
+          r.status === "reverted_back"
+        );
       })
       .filter((r) => {
         if (!q) return true;
@@ -150,13 +179,23 @@ export default function VerificationsPage() {
       <div className="mx-auto w-full max-w-7xl space-y-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Verifications</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Verifications
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Monitor pending and reviewed water submissions in your tehsil scope.
+              Monitor pending and reviewed water submissions in your tehsil
+              scope.
             </p>
           </div>
-          <Button variant="outline" onClick={() => void load(true)} disabled={loading || refreshing} className="gap-2">
-            <RefreshCcw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+          <Button
+            variant="outline"
+            onClick={() => void load(true)}
+            disabled={loading || refreshing}
+            className="gap-2"
+          >
+            <RefreshCcw
+              className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
@@ -169,9 +208,17 @@ export default function VerificationsPage() {
           <CardContent className="grid gap-4 pt-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Show</Label>
-              <NativeSelect value={view} onChange={(e) => setView(e.target.value as any)} className="w-full">
-                <NativeSelectOption value="pending">Pending (submitted)</NativeSelectOption>
-                <NativeSelectOption value="reviewed">Reviewed (accepted / rejected / reverted)</NativeSelectOption>
+              <NativeSelect
+                value={view}
+                onChange={(e) => setView(e.target.value as any)}
+                className="w-full"
+              >
+                <NativeSelectOption value="pending">
+                  Pending (submitted)
+                </NativeSelectOption>
+                <NativeSelectOption value="reviewed">
+                  Reviewed (accepted / rejected / reverted)
+                </NativeSelectOption>
                 <NativeSelectOption value="all">All</NativeSelectOption>
               </NativeSelect>
             </div>
@@ -191,7 +238,9 @@ export default function VerificationsPage() {
         <Card className="border-border/80">
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-base">Results</CardTitle>
-            <CardDescription>{loading ? "Loading…" : `${filtered.length} row(s)`}</CardDescription>
+            <CardDescription>
+              {loading ? "" : `${filtered.length} row(s)`}
+            </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             {loading ? (
@@ -220,7 +269,9 @@ export default function VerificationsPage() {
                       <TableRow key={r.id}>
                         <TableCell>
                           <div className="min-w-[220px]">
-                            <p className="font-medium">{r.system_info?.uid || "—"}</p>
+                            <p className="font-medium">
+                              {r.system_info?.uid || "—"}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {(r.system_info?.village || "—") +
                                 " · " +
@@ -239,7 +290,9 @@ export default function VerificationsPage() {
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatDateTime(r.reviewed_at ?? null)}
                         </TableCell>
-                        <TableCell className="text-sm">{r.reviewed_by_name || "—"}</TableCell>
+                        <TableCell className="text-sm">
+                          {r.reviewed_by_name || "—"}
+                        </TableCell>
                         <TableCell>{statusBadge(r.status)}</TableCell>
                         <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
                           <span className="tabular-nums">
@@ -255,7 +308,10 @@ export default function VerificationsPage() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              if (tehsilMgr) navigate(tehsilRoutes.waterSubmissionDetails(r.id));
+                              if (tehsilMgr)
+                                navigate(
+                                  tehsilRoutes.waterSubmissionDetails(r.id),
+                                );
                               else navigate(`/submissions/review/${r.id}`);
                             }}
                           >

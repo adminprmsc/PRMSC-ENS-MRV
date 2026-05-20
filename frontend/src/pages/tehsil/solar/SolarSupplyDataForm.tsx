@@ -164,6 +164,7 @@ const SolarSupplyDataForm = () => {
     RegisteredSolarSystem[]
   >([]);
   const [selectedSystemId, setSelectedSystemId] = useState<string>("");
+  const [siteSearch, setSiteSearch] = useState("");
   const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState(currentMonth);
   const [exportOffPeak, setExportOffPeak] = useState("");
@@ -243,6 +244,16 @@ const SolarSupplyDataForm = () => {
     }
     return null;
   }, [scopedRegisteredSystems, selectedSystemId, pinnedSystemFromRecord]);
+
+  const filteredScopedSystems = useMemo(() => {
+    const query = siteSearch.trim().toLowerCase();
+    if (!query) return scopedRegisteredSystems;
+    return scopedRegisteredSystems.filter((s) => {
+      const label = formatSiteLabel(s).toLowerCase();
+      const tehsil = String(canonicalTehsil(s.tehsil) ?? s.tehsil).toLowerCase();
+      return label.includes(query) || tehsil.includes(query);
+    });
+  }, [scopedRegisteredSystems, siteSearch]);
 
   const noSitesInScope =
     !isDedicatedRecordEdit && scopedRegisteredSystems.length === 0;
@@ -1021,13 +1032,43 @@ const SolarSupplyDataForm = () => {
                       <SelectTrigger className="h-11 w-full">
                         <SelectValue placeholder="Choose a site" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="h-72">
+                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
+                          <Input
+                            value={siteSearch}
+                            onChange={(e) => setSiteSearch(e.target.value)}
+                            onKeyDownCapture={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (
+                                e.key === "ArrowDown" ||
+                                e.key === "ArrowUp" ||
+                                e.key === "Enter" ||
+                                e.key === "Tab"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onKeyUp={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.stopPropagation()}
+                            placeholder="Type to search village/settlement..."
+                            className="h-9"
+                            autoFocus
+                          />
+                        </div>
                         <SelectItem value="__none__">Choose a site…</SelectItem>
-                        {scopedRegisteredSystems.map((s) => (
+                        {filteredScopedSystems.map((s) => (
                           <SelectItem key={String(s.id)} value={String(s.id)}>
                             {formatSiteLabel(s)}
                           </SelectItem>
                         ))}
+                        {filteredScopedSystems.length === 0 ? (
+                          <p className="px-2 py-2 text-xs text-muted-foreground">
+                            No sites match your search.
+                          </p>
+                        ) : null}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1045,7 +1086,7 @@ const SolarSupplyDataForm = () => {
                         <SelectTrigger className="h-11 w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="h-72">
                           {[currentYear, currentYear - 1, currentYear - 2].map(
                             (y) => (
                               <SelectItem key={y} value={String(y)}>
@@ -1068,7 +1109,7 @@ const SolarSupplyDataForm = () => {
                         <SelectTrigger className="h-11 w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="h-72">
                           {MONTHS.map((m) => (
                             <SelectItem
                               key={m.num}
