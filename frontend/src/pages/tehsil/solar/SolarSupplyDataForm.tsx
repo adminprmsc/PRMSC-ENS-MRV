@@ -51,6 +51,12 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { TEHSIL_OPTIONS } from "../../../utils/locationData";
+import {
+  formatPakistanDateTime,
+  getPakistanMonth,
+  getPakistanYear,
+  nowIsoTimestamp,
+} from "../../../utils/pakistanTime";
 
 type RegisteredSolarSystem = {
   id: string | number;
@@ -113,24 +119,8 @@ const MONTHS = [
   { name: "December", num: 12 },
 ];
 
-const currentDate = new Date();
-const currentMonth = currentDate.getMonth() + 1;
-const currentYear = currentDate.getFullYear();
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const currentMonth = getPakistanMonth();
+const currentYear = getPakistanYear();
 
 const SolarSupplyDataForm = () => {
   const { user } = useAuth();
@@ -1240,7 +1230,7 @@ const SolarSupplyDataForm = () => {
                 <p className="text-xs text-slate-500">
                   Last updated:{" "}
                   <span className="font-medium text-slate-700">
-                    {formatDateTime(recordUpdatedAt)}
+                    {formatPakistanDateTime(recordUpdatedAt, "")}
                   </span>
                 </p>
               ) : null}

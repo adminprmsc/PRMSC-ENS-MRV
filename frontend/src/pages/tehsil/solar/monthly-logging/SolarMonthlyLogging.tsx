@@ -47,6 +47,7 @@ import { tehsilRoutes } from "../../../../constants/routes";
 import { useSolarMonthlyLogs, useTehsilManagerOperatorApi } from "../../../../hooks";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import type { SolarMonthlyLogTableRow } from "../../../../types/api";
+import { formatPakistanDateTime, getPakistanYear } from "../../../../utils/pakistanTime";
 
 const MONTH_NAMES = [
   "",
@@ -64,19 +65,6 @@ const MONTH_NAMES = [
   "December",
 ];
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function formatNum(v: unknown) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
@@ -84,7 +72,7 @@ function formatNum(v: unknown) {
   return n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
 }
 
-const currentYear = new Date().getFullYear();
+const currentYear = getPakistanYear();
 const YEAR_OPTIONS = Array.from({ length: 8 }, (_, i) => currentYear - 5 + i);
 
 export default function SolarMonthlyLogging() {
@@ -365,10 +353,10 @@ export default function SolarMonthlyLogging() {
                               )}
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                              {formatDateTime(r.created_at)}
+                              {formatPakistanDateTime(r.created_at)}
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                              {formatDateTime(r.updated_at)}
+                              {formatPakistanDateTime(r.updated_at)}
                             </TableCell>
                             <TableCell className="sticky right-0 z-10 min-w-[180px] bg-card text-right shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)]">
                               <div className="inline-flex flex-wrap justify-end gap-2">
