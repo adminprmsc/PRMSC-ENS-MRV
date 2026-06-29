@@ -1,0 +1,1 @@
+{"version":3,"file":"1730000000000-InitialSchema.js","sourceRoot":"","sources":["../../../../src/infrastructure/database/migrations/1730000000000-InitialSchema.ts"],"names":[],"mappings":";;;AAYA,MAAa,0BAA0B;IACrC,IAAI,GAAG,4BAA4B,CAAC;IAE7B,KAAK,CAAC,EAAE,CAAC,YAAyB;IAEzC,CAAC;IAEM,KAAK,CAAC,IAAI,CAAC,YAAyB;IAE3C,CAAC;CACF;AAVD,gEAUC"}
