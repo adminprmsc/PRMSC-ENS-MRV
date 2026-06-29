@@ -6,7 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import { ADMIN, ROLE_RANK, SUPER_ADMIN } from '../../domain/constants/roles';
 import {
-  SubmissionStatus,
+  toIsoDateString,
+  toIsoDateTimeString,
+} from '../../domain/utils/date.util';
+import {
+  SUBMISSION_STATUS_ACCEPTED,
+  SUBMISSION_STATUS_DRAFTED,
+  SUBMISSION_STATUS_REJECTED,
+  SUBMISSION_STATUS_REVERTED_BACK,
+  SUBMISSION_STATUS_SUBMITTED,
   MeterType,
 } from '../../domain/constants/submission.constants';
 import { WaterSystem } from '../../infrastructure/database/entities/water-system.entity';
@@ -150,9 +158,8 @@ export class TehsilManagerService {
     return out;
   }
 
-  private isoDate(d: Date | null | undefined): string | null {
-    if (!d) return null;
-    return d.toISOString().slice(0, 10);
+  private isoDate(d: unknown): string | null {
+    return toIsoDateString(d);
   }
 
   private parseIsoDate(s: string): Date | null {
@@ -170,9 +177,29 @@ export class TehsilManagerService {
     return (a - b) / b;
   }
 
+  private coerceString(value: unknown, fallback = ''): string {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    return fallback;
+  }
+
   private coerceOptionalBool(value: unknown): boolean | null {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'boolean') return value;
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      return null;
+    }
     const s = String(value).trim().toLowerCase();
     if (['1', 'true', 'yes', 'y', 'on'].includes(s)) return true;
     if (['0', 'false', 'no', 'n', 'off'].includes(s)) return false;
@@ -180,9 +207,16 @@ export class TehsilManagerService {
   }
 
   private coerceOptionalDate(value: unknown): Date | null {
-    if (value === null || value === '') return null;
-    if (value instanceof Date) return value;
-    return this.operatorHelpers.parseDate(String(value));
+    if (value === null || value === '') {
+      return null;
+    }
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return this.operatorHelpers.parseDate(String(value));
+    }
+    return null;
   }
 
   private requireFields(
@@ -355,7 +389,7 @@ export class TehsilManagerService {
     }
     let mode =
       raw !== null && raw !== undefined
-        ? String(raw).trim().toLowerCase()
+        ? this.coerceString(raw).trim().toLowerCase()
         : 'auto';
     if (!['auto', 'update_current', 'switch_new'].includes(mode)) mode = 'auto';
     return mode;
@@ -411,11 +445,11 @@ export class TehsilManagerService {
   ): [string, Record<string, unknown> | null] {
     if (!rec) return ['missing', null];
     let st: string;
-    if (rec.status === SubmissionStatus.DRAFTED) st = 'draft';
-    else if (rec.status === SubmissionStatus.SUBMITTED) st = 'submitted';
-    else if (rec.status === SubmissionStatus.ACCEPTED) st = 'accepted';
-    else if (rec.status === SubmissionStatus.REJECTED) st = 'rejected';
-    else if (rec.status === SubmissionStatus.REVERTED_BACK)
+    if (rec.status === SUBMISSION_STATUS_DRAFTED) st = 'draft';
+    else if (rec.status === SUBMISSION_STATUS_SUBMITTED) st = 'submitted';
+    else if (rec.status === SUBMISSION_STATUS_ACCEPTED) st = 'accepted';
+    else if (rec.status === SUBMISSION_STATUS_REJECTED) st = 'rejected';
+    else if (rec.status === SUBMISSION_STATUS_REVERTED_BACK)
       st = 'reverted_back';
     else st = rec.status || 'unknown';
     return [st, { record_id: String(rec.id), status: rec.status }];
@@ -554,7 +588,7 @@ export class TehsilManagerService {
     const items: Record<string, unknown>[] = [];
     for (const ws of systems) {
       try {
-        this.tehsilAccess.assertUserMayAccessTehsil(user, ws.tehsil);
+        await this.tehsilAccess.assertUserMayAccessTehsil(user, ws.tehsil);
       } catch (exc) {
         if (this.tehsilDenied(exc)) continue;
         throw exc;
@@ -591,7 +625,7 @@ export class TehsilManagerService {
           });
           continue;
         }
-        if (r.status === SubmissionStatus.DRAFTED) {
+        if (r.status === SUBMISSION_STATUS_DRAFTED) {
           anomalies.push({
             date: this.isoDate(d),
             code: 'draft_not_submitted',
@@ -786,11 +820,11 @@ export class TehsilManagerService {
       });
       let bucket: string;
       if (!rec) bucket = 'missing';
-      else if (rec.status === SubmissionStatus.DRAFTED) bucket = 'draft';
-      else if (rec.status === SubmissionStatus.SUBMITTED) bucket = 'submitted';
-      else if (rec.status === SubmissionStatus.ACCEPTED) bucket = 'accepted';
-      else if (rec.status === SubmissionStatus.REJECTED) bucket = 'rejected';
-      else if (rec.status === SubmissionStatus.REVERTED_BACK)
+      else if (rec.status === SUBMISSION_STATUS_DRAFTED) bucket = 'draft';
+      else if (rec.status === SUBMISSION_STATUS_SUBMITTED) bucket = 'submitted';
+      else if (rec.status === SUBMISSION_STATUS_ACCEPTED) bucket = 'accepted';
+      else if (rec.status === SUBMISSION_STATUS_REJECTED) bucket = 'rejected';
+      else if (rec.status === SUBMISSION_STATUS_REVERTED_BACK)
         bucket = 'reverted_back';
       else bucket = rec.status || 'unknown';
 
@@ -892,7 +926,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user, ws);
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user, ws);
     } catch (exc) {
       const d = this.tehsilDenied(exc);
       if (d) return d;
@@ -972,7 +1006,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Solar system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user, ss);
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user, ss);
     } catch (exc) {
       const d = this.tehsilDenied(exc);
       if (d) return d;
@@ -1043,7 +1077,7 @@ export class TehsilManagerService {
         await this.userService.replaceTubewellOperatorWaterAssignments(
           user,
           operatorId,
-          Array.isArray(ids) ? ids : [],
+          Array.isArray(ids) ? ids.map((id) => String(id)) : [],
         );
       return {
         statusCode: 200,
@@ -1074,7 +1108,7 @@ export class TehsilManagerService {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
 
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     if (!currentUser) {
       return { statusCode: 404, body: { error: 'User not found' } };
     }
@@ -1092,7 +1126,11 @@ export class TehsilManagerService {
       };
     }
     if (
-      !this.rbac.userCanViewSubmissionDetail(currentUser, submission, jwt.sub)
+      !(await this.rbac.userCanViewSubmissionDetail(
+        currentUser,
+        submission,
+        jwt.sub,
+      ))
     ) {
       return { statusCode: 403, body: { error: 'Access denied' } };
     }
@@ -1122,7 +1160,9 @@ export class TehsilManagerService {
       };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessTehsil(user, ct, { forWrite: true });
+      await this.tehsilAccess.assertUserMayAccessTehsil(user, ct, {
+        forWrite: true,
+      });
     } catch {
       return {
         statusCode: 403,
@@ -1141,7 +1181,7 @@ export class TehsilManagerService {
 
     if (existingSystem) {
       try {
-        this.tehsilAccess.assertUserMayAccessTehsil(
+        await this.tehsilAccess.assertUserMayAccessTehsil(
           user,
           existingSystem.tehsil,
           { forWrite: true },
@@ -1160,7 +1200,7 @@ export class TehsilManagerService {
         data.pump_serial_number,
       );
       existingSystem.startOfOperation = this.operatorHelpers.parseDate(
-        String(data.start_of_operation || ''),
+        this.coerceString(data.start_of_operation),
       );
       try {
         if ('latitude' in data) {
@@ -1231,9 +1271,7 @@ export class TehsilManagerService {
         meter_model: meterPayload.meter_model,
         meter_serial_number: meterPayload.meter_serial_number,
         meter_accuracy_class: meterPayload.meter_accuracy_class,
-        installation_date: meterPayload.installation_date
-          ? this.isoDate(meterPayload.installation_date as Date)
-          : null,
+        installation_date: this.isoDate(meterPayload.installation_date),
         ohr_tank_capacity: existingSystem.ohrTankCapacity,
         ohr_fill_required: existingSystem.ohrFillRequired,
         pump_capacity: existingSystem.pumpCapacity,
@@ -1298,7 +1336,7 @@ export class TehsilManagerService {
         data.pump_serial_number,
       ),
       startOfOperation: this.operatorHelpers.parseDate(
-        String(data.start_of_operation || ''),
+        this.coerceString(data.start_of_operation),
       ),
       depthOfWaterIntake: this.toFloatOrNone(data.depth_of_water_intake),
       heightToOhr: this.toFloatOrNone(data.height_to_ohr),
@@ -1320,9 +1358,7 @@ export class TehsilManagerService {
       meter_model: meterPayload.meter_model,
       meter_serial_number: meterPayload.meter_serial_number,
       meter_accuracy_class: meterPayload.meter_accuracy_class,
-      installation_date: meterPayload.installation_date
-        ? this.isoDate(meterPayload.installation_date as Date)
-        : null,
+      installation_date: this.isoDate(meterPayload.installation_date),
     });
     if (!validation.ok) {
       return { statusCode: 400, body: { message: validation.err } };
@@ -1375,7 +1411,9 @@ export class TehsilManagerService {
       };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessTehsil(user, ct, { forWrite: true });
+      await this.tehsilAccess.assertUserMayAccessTehsil(user, ct, {
+        forWrite: true,
+      });
     } catch {
       return {
         statusCode: 403,
@@ -1397,7 +1435,7 @@ export class TehsilManagerService {
       };
     }
 
-    const settlementRaw = String(data.settlement || '').trim();
+    const settlementRaw = this.coerceString(data.settlement).trim();
     const settlementDb = settlementRaw || null;
 
     const existingSystem = await this.operatorHelpers.findSolarSystemByLocation(
@@ -1408,20 +1446,20 @@ export class TehsilManagerService {
     );
 
     const solarConnectionDate = this.operatorHelpers.parseDate(
-      String(data.solar_connection_date || data.installation_date || ''),
+      this.coerceString(data.solar_connection_date || data.installation_date),
     );
     const electricityConnectionDate = this.operatorHelpers.parseDate(
-      String(data.electricity_connection_date || ''),
+      this.coerceString(data.electricity_connection_date),
     );
     const greenConnectionDate = this.operatorHelpers.parseDate(
-      String(
-        data.green_connection_date || data.green_meter_connection_date || '',
+      this.coerceString(
+        data.green_connection_date || data.green_meter_connection_date,
       ),
     );
 
     if (existingSystem) {
       try {
-        this.tehsilAccess.assertUserMayAccessTehsil(
+        await this.tehsilAccess.assertUserMayAccessTehsil(
           user,
           existingSystem.tehsil,
           { forWrite: true },
@@ -1566,7 +1604,7 @@ export class TehsilManagerService {
       where: { id: data.solar_system_id as string },
     });
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, ss, {
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, ss, {
         forWrite: true,
       });
     } catch {
@@ -1616,7 +1654,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -1637,7 +1675,8 @@ export class TehsilManagerService {
     }
     if (
       'village' in data &&
-      String(data.village || '').trim() !== String(system.village).trim()
+      this.coerceString(data.village).trim() !==
+        this.coerceString(system.village).trim()
     ) {
       return {
         statusCode: 400,
@@ -1645,8 +1684,8 @@ export class TehsilManagerService {
       };
     }
     if ('settlement' in data) {
-      const incoming = String(data.settlement || '').trim() || null;
-      const current = String(system.settlement || '').trim() || null;
+      const incoming = this.coerceString(data.settlement).trim() || null;
+      const current = this.coerceString(system.settlement).trim() || null;
       if (incoming !== current) {
         return {
           statusCode: 400,
@@ -1669,7 +1708,7 @@ export class TehsilManagerService {
     }
     if ('start_of_operation' in data) {
       system.startOfOperation = this.operatorHelpers.parseDate(
-        String(data.start_of_operation || ''),
+        this.coerceString(data.start_of_operation),
       );
     }
     try {
@@ -1761,9 +1800,7 @@ export class TehsilManagerService {
       meter_model: meterPayload.meter_model,
       meter_serial_number: meterPayload.meter_serial_number,
       meter_accuracy_class: meterPayload.meter_accuracy_class,
-      installation_date: meterPayload.installation_date
-        ? this.isoDate(meterPayload.installation_date as Date)
-        : null,
+      installation_date: this.isoDate(meterPayload.installation_date),
       ohr_tank_capacity: system.ohrTankCapacity,
       ohr_fill_required: system.ohrFillRequired,
       pump_capacity: system.pumpCapacity,
@@ -1827,7 +1864,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system);
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system);
     } catch {
       return {
         statusCode: 403,
@@ -1892,7 +1929,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system);
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system);
     } catch {
       return {
         statusCode: 403,
@@ -1935,7 +1972,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -1946,11 +1983,11 @@ export class TehsilManagerService {
     }
 
     const payload = data ?? {};
-    const fileUrl = String(payload.file_url || '').trim();
+    const fileUrl = this.coerceString(payload.file_url).trim();
     if (!fileUrl) {
       return { statusCode: 400, body: { message: 'file_url is required' } };
     }
-    const expiryRaw = String(payload.expiry_date || '').trim();
+    const expiryRaw = this.coerceString(payload.expiry_date).trim();
     if (!expiryRaw) {
       return {
         statusCode: 400,
@@ -2016,7 +2053,7 @@ export class TehsilManagerService {
       if (jwtScopeTehsils.length && !jwtScopeTehsils.includes(ws.tehsil))
         continue;
       try {
-        this.tehsilAccess.assertUserMayAccessWaterSystem(user, ws);
+        await this.tehsilAccess.assertUserMayAccessWaterSystem(user, ws);
       } catch {
         continue;
       }
@@ -2074,7 +2111,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Water system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessWaterSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -2135,7 +2172,7 @@ export class TehsilManagerService {
         .addSelect('COUNT(m.id)', 'total')
         .where('m.solar_system_id IN (:...ids)', { ids: systemIds })
         .groupBy('m.solar_system_id')
-        .getRawMany();
+        .getRawMany<{ systemId: string; total: string }>();
       for (const row of counts) {
         monthlyCounts[String(row.systemId)] = parseInt(row.total, 10) || 0;
       }
@@ -2180,8 +2217,8 @@ export class TehsilManagerService {
         meters,
         remarks: s.remarks,
         created_by: s.createdBy,
-        created_at: s.createdAt?.toISOString() ?? null,
-        updated_at: s.updatedAt?.toISOString() ?? null,
+        created_at: toIsoDateTimeString(s.createdAt),
+        updated_at: toIsoDateTimeString(s.updatedAt),
         monthly_log_count: monthlyCounts[String(s.id)] || 0,
       });
     }
@@ -2207,7 +2244,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Solar system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -2252,7 +2289,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Solar system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system);
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system);
     } catch {
       return {
         statusCode: 403,
@@ -2325,7 +2362,7 @@ export class TehsilManagerService {
       return { statusCode: 404, body: { message: 'Solar system not found' } };
     }
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -2346,7 +2383,8 @@ export class TehsilManagerService {
     }
     if (
       'village' in data &&
-      String(data.village || '').trim() !== String(system.village).trim()
+      this.coerceString(data.village).trim() !==
+        this.coerceString(system.village).trim()
     ) {
       return {
         statusCode: 400,
@@ -2354,8 +2392,8 @@ export class TehsilManagerService {
       };
     }
     if ('settlement' in data) {
-      const incoming = String(data.settlement || '').trim() || null;
-      const current = String(system.settlement || '').trim() || null;
+      const incoming = this.coerceString(data.settlement).trim() || null;
+      const current = this.coerceString(system.settlement).trim() || null;
       if (incoming !== current) {
         return {
           statusCode: 400,
@@ -2422,12 +2460,12 @@ export class TehsilManagerService {
     let solarConnectionDate: Date | null = null;
     if ('solar_connection_date' in data) {
       solarConnectionDate = this.operatorHelpers.parseDate(
-        String(data.solar_connection_date || ''),
+        this.coerceString(data.solar_connection_date),
       );
     }
     if (solarConnectionDate === null && 'installation_date' in data) {
       solarConnectionDate = this.operatorHelpers.parseDate(
-        String(data.installation_date || ''),
+        this.coerceString(data.installation_date),
       );
     }
     if (solarConnectionDate !== null) {
@@ -2436,18 +2474,18 @@ export class TehsilManagerService {
     }
     if ('electricity_connection_date' in data) {
       system.electricityConnectionDate = this.operatorHelpers.parseDate(
-        String(data.electricity_connection_date || ''),
+        this.coerceString(data.electricity_connection_date),
       );
     }
     let greenConnectionDate: Date | null = null;
     if ('green_connection_date' in data) {
       greenConnectionDate = this.operatorHelpers.parseDate(
-        String(data.green_connection_date || ''),
+        this.coerceString(data.green_connection_date),
       );
     }
     if (greenConnectionDate === null && 'green_meter_connection_date' in data) {
       greenConnectionDate = this.operatorHelpers.parseDate(
-        String(data.green_meter_connection_date || ''),
+        this.coerceString(data.green_meter_connection_date),
       );
     }
     if (greenConnectionDate !== null) {
@@ -2517,7 +2555,7 @@ export class TehsilManagerService {
     const ct = canonicalTehsil(tehsil);
     if (!ct) return { statusCode: 400, body: { message: 'Invalid tehsil' } };
     try {
-      this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
+      await this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
     } catch {
       return {
         statusCode: 403,
@@ -2609,7 +2647,7 @@ export class TehsilManagerService {
     const ct = canonicalTehsil(tehsil);
     if (!ct) return { statusCode: 400, body: { message: 'Invalid tehsil' } };
     try {
-      this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
+      await this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
     } catch {
       return {
         statusCode: 403,
@@ -2678,7 +2716,7 @@ export class TehsilManagerService {
       where: { id: record.solarSystemId },
     });
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system);
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system);
     } catch {
       return {
         statusCode: 403,
@@ -2736,7 +2774,7 @@ export class TehsilManagerService {
       where: { id: record.solarSystemId },
     });
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user, system, {
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user, system, {
         forWrite: true,
       });
     } catch {
@@ -2799,7 +2837,7 @@ export class TehsilManagerService {
       where: { id: record.solarSystemId },
     });
     try {
-      this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
+      await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system, {
         forWrite: true,
       });
     } catch {
@@ -2858,7 +2896,7 @@ export class TehsilManagerService {
           continue;
         }
         try {
-          this.tehsilAccess.assertUserMayAccessTehsil(opUser, ct, {
+          await this.tehsilAccess.assertUserMayAccessTehsil(opUser, ct, {
             forWrite: true,
           });
         } catch {
@@ -2888,7 +2926,9 @@ export class TehsilManagerService {
             monthRecord || {},
           );
           if (error) {
-            errors.push(`Row ${i + 1}, month ${monthRecord.month}: ${error}`);
+            errors.push(
+              `Row ${i + 1}, month ${this.coerceString(monthRecord.month)}: ${error}`,
+            );
             rowEnergyError = true;
             break;
           }
@@ -2960,12 +3000,12 @@ export class TehsilManagerService {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
 
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     const statuses = [
-      SubmissionStatus.SUBMITTED,
-      SubmissionStatus.REJECTED,
-      SubmissionStatus.ACCEPTED,
-      SubmissionStatus.REVERTED_BACK,
+      SUBMISSION_STATUS_SUBMITTED,
+      SUBMISSION_STATUS_REJECTED,
+      SUBMISSION_STATUS_ACCEPTED,
+      SUBMISSION_STATUS_REVERTED_BACK,
     ];
 
     let submissions = await this.submissionRepo.find({
@@ -3054,30 +3094,30 @@ export class TehsilManagerService {
     submissionId: string,
     data: Record<string, unknown>,
   ): Promise<ServiceResult> {
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     const submission = await this.submissionRepo.findOne({
       where: { id: submissionId },
     });
     if (!submission) {
       return { statusCode: 404, body: { error: 'Submission not found' } };
     }
-    if (!this.rbac.userCanVerifySubmission(currentUser!, submission)) {
+    if (!(await this.rbac.userCanVerifySubmission(currentUser!, submission))) {
       return {
         statusCode: 403,
         body: { error: 'Only tehsil managers can accept submissions' },
       };
     }
-    if (submission.status !== SubmissionStatus.SUBMITTED) {
+    if (submission.status !== SUBMISSION_STATUS_SUBMITTED) {
       return {
         statusCode: 400,
         body: {
-          error: `Can only accept submissions in '${SubmissionStatus.SUBMITTED}' status`,
+          error: `Can only accept submissions in '${SUBMISSION_STATUS_SUBMITTED}' status`,
         },
       };
     }
 
     const remarks = (data?.remarks as string) || '';
-    submission.status = SubmissionStatus.ACCEPTED;
+    submission.status = SUBMISSION_STATUS_ACCEPTED;
     submission.reviewedAt = new Date();
     submission.reviewedBy = jwt.sub;
     submission.remarks = remarks;
@@ -3086,7 +3126,7 @@ export class TehsilManagerService {
       const record = await this.waterDailyRepo.findOne({
         where: { id: submission.recordId },
       });
-      if (record) record.status = SubmissionStatus.ACCEPTED;
+      if (record) record.status = SUBMISSION_STATUS_ACCEPTED;
       if (record) await this.waterDailyRepo.save(record);
     }
 
@@ -3123,24 +3163,24 @@ export class TehsilManagerService {
     submissionId: string,
     data: Record<string, unknown>,
   ): Promise<ServiceResult> {
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     const submission = await this.submissionRepo.findOne({
       where: { id: submissionId },
     });
     if (!submission) {
       return { statusCode: 404, body: { error: 'Submission not found' } };
     }
-    if (!this.rbac.userCanVerifySubmission(currentUser!, submission)) {
+    if (!(await this.rbac.userCanVerifySubmission(currentUser!, submission))) {
       return {
         statusCode: 403,
         body: { error: 'Only tehsil managers can reject submissions' },
       };
     }
-    if (submission.status !== SubmissionStatus.SUBMITTED) {
+    if (submission.status !== SUBMISSION_STATUS_SUBMITTED) {
       return {
         statusCode: 400,
         body: {
-          error: `Can only reject submissions in '${SubmissionStatus.SUBMITTED}' status`,
+          error: `Can only reject submissions in '${SUBMISSION_STATUS_SUBMITTED}' status`,
         },
       };
     }
@@ -3153,7 +3193,7 @@ export class TehsilManagerService {
       };
     }
 
-    submission.status = SubmissionStatus.REJECTED;
+    submission.status = SUBMISSION_STATUS_REJECTED;
     submission.reviewedAt = new Date();
     submission.reviewedBy = jwt.sub;
     submission.remarks = remarks;
@@ -3163,7 +3203,7 @@ export class TehsilManagerService {
         where: { id: submission.recordId },
       });
       if (record) {
-        record.status = SubmissionStatus.REJECTED;
+        record.status = SUBMISSION_STATUS_REJECTED;
         await this.waterDailyRepo.save(record);
       }
     }
@@ -3201,20 +3241,20 @@ export class TehsilManagerService {
     submissionId: string,
     data: Record<string, unknown>,
   ): Promise<ServiceResult> {
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     const submission = await this.submissionRepo.findOne({
       where: { id: submissionId },
     });
     if (!submission) {
       return { statusCode: 404, body: { error: 'Submission not found' } };
     }
-    if (!this.rbac.userCanVerifySubmission(currentUser!, submission)) {
+    if (!(await this.rbac.userCanVerifySubmission(currentUser!, submission))) {
       return {
         statusCode: 403,
         body: { error: 'Only tehsil managers can revert submissions' },
       };
     }
-    if (submission.status !== SubmissionStatus.SUBMITTED) {
+    if (submission.status !== SUBMISSION_STATUS_SUBMITTED) {
       return {
         statusCode: 400,
         body: {
@@ -3228,7 +3268,7 @@ export class TehsilManagerService {
       const record = await this.waterDailyRepo.findOne({
         where: { id: submission.recordId },
       });
-      if (!record || record.status !== SubmissionStatus.SUBMITTED) {
+      if (!record || record.status !== SUBMISSION_STATUS_SUBMITTED) {
         return {
           statusCode: 400,
           body: { error: 'Water record is not in submitted state' },
@@ -3237,7 +3277,7 @@ export class TehsilManagerService {
     }
 
     const remarks = (data?.remarks as string) || '';
-    submission.status = SubmissionStatus.REVERTED_BACK;
+    submission.status = SUBMISSION_STATUS_REVERTED_BACK;
     submission.reviewedAt = new Date();
     submission.reviewedBy = jwt.sub;
     submission.remarks = remarks || null;
@@ -3247,7 +3287,7 @@ export class TehsilManagerService {
         where: { id: submission.recordId },
       });
       if (record) {
-        record.status = SubmissionStatus.REVERTED_BACK;
+        record.status = SUBMISSION_STATUS_REVERTED_BACK;
         await this.waterDailyRepo.save(record);
       }
     }
@@ -3292,7 +3332,7 @@ export class TehsilManagerService {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
 
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
     const qb = this.verificationLogRepo.createQueryBuilder('log');
 
     if (query.submission_id) {
@@ -3347,7 +3387,7 @@ export class TehsilManagerService {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
 
-    const currentUser = await this.userRepo.findOne({ where: { id: jwt.sub } });
+    const currentUser = await this.loadActor(jwt);
 
     let total: number;
     let pending: number;
@@ -3373,20 +3413,20 @@ export class TehsilManagerService {
       }
       total = scoped.length;
       pending = scoped.filter(
-        (s) => s.status === SubmissionStatus.SUBMITTED,
+        (s) => s.status === SUBMISSION_STATUS_SUBMITTED,
       ).length;
       accepted = scoped.filter(
-        (s) => s.status === SubmissionStatus.ACCEPTED,
+        (s) => s.status === SUBMISSION_STATUS_ACCEPTED,
       ).length;
       rejected = scoped.filter(
-        (s) => s.status === SubmissionStatus.REJECTED,
+        (s) => s.status === SUBMISSION_STATUS_REJECTED,
       ).length;
       reverted = scoped.filter(
-        (s) => s.status === SubmissionStatus.REVERTED_BACK,
+        (s) => s.status === SUBMISSION_STATUS_REVERTED_BACK,
       ).length;
       acceptedSubs = scoped.filter(
         (s) =>
-          s.status === SubmissionStatus.ACCEPTED &&
+          s.status === SUBMISSION_STATUS_ACCEPTED &&
           s.submittedAt &&
           s.reviewedAt,
       );
@@ -3396,20 +3436,20 @@ export class TehsilManagerService {
       });
       total = water.length;
       pending = water.filter(
-        (s) => s.status === SubmissionStatus.SUBMITTED,
+        (s) => s.status === SUBMISSION_STATUS_SUBMITTED,
       ).length;
       accepted = water.filter(
-        (s) => s.status === SubmissionStatus.ACCEPTED,
+        (s) => s.status === SUBMISSION_STATUS_ACCEPTED,
       ).length;
       rejected = water.filter(
-        (s) => s.status === SubmissionStatus.REJECTED,
+        (s) => s.status === SUBMISSION_STATUS_REJECTED,
       ).length;
       reverted = water.filter(
-        (s) => s.status === SubmissionStatus.REVERTED_BACK,
+        (s) => s.status === SUBMISSION_STATUS_REVERTED_BACK,
       ).length;
       acceptedSubs = water.filter(
         (s) =>
-          s.status === SubmissionStatus.ACCEPTED &&
+          s.status === SUBMISSION_STATUS_ACCEPTED &&
           s.submittedAt &&
           s.reviewedAt,
       );

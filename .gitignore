@@ -1,8 +1,10 @@
 # Secrets — never commit
 backend/.env
 backend/.env.local
+backend/.env.production
 .env
 .env.local
+.env.docker
 *.pem
 
 # Node

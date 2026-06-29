@@ -27,4 +27,4 @@ import { SolarEnergyLoggingMonthly } from './solar-energy-logging-monthly.entity
 import { Submission } from './submission.entity';
 import { VerificationLog } from './verification-log.entity';
 import { Notification } from './notification.entity';
-export declare const ALL_ENTITIES: (typeof Submission | typeof User | typeof VerificationLog | typeof Notification | typeof Role | typeof UserTehsil | typeof UserWaterSystem | typeof PasswordResetToken | typeof WaterSystem | typeof WaterSystemCalibrationCertificate | typeof WaterEnergyLoggingDaily | typeof SolarSystem | typeof SystemMeter | typeof SolarEnergyLoggingMonthly)[];
+export declare const ALL_ENTITIES: (typeof UserTehsil | typeof User | typeof SolarEnergyLoggingMonthly | typeof SolarSystem | typeof SystemMeter | typeof WaterSystem | typeof WaterEnergyLoggingDaily | typeof WaterSystemCalibrationCertificate | typeof UserWaterSystem | typeof Role | typeof PasswordResetToken | typeof Notification | typeof Submission | typeof VerificationLog)[];

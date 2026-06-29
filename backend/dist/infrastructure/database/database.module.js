@@ -11,7 +11,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const typeorm_1 = require("@nestjs/typeorm");
 const entities_1 = require("./entities");
-const supabase_database_util_1 = require("./supabase-database.util");
+const postgres_database_util_1 = require("./postgres-database.util");
 let DatabaseModule = class DatabaseModule {
 };
 exports.DatabaseModule = DatabaseModule;
@@ -23,8 +23,8 @@ exports.DatabaseModule = DatabaseModule = __decorate([
                 inject: [config_1.ConfigService],
                 useFactory: (config) => {
                     const rawUrl = config.get('database.url', '');
-                    const connection = (0, supabase_database_util_1.buildTypeOrmPostgresConnection)(rawUrl);
-                    console.info(`Database configured: ${(0, supabase_database_util_1.maskDatabaseUri)(connection.url)}`);
+                    const connection = (0, postgres_database_util_1.buildTypeOrmPostgresConnection)(rawUrl);
+                    console.info(`Database configured: ${(0, postgres_database_util_1.maskDatabaseUri)(connection.url)}`);
                     return {
                         type: 'postgres',
                         url: connection.url,

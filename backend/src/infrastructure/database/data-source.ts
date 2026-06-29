@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { config as loadEnv } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { ALL_ENTITIES } from './entities';
-import { buildTypeOrmPostgresConnection } from './supabase-database.util';
+import { buildTypeOrmPostgresConnection } from './postgres-database.util';
 
 loadEnv();
 

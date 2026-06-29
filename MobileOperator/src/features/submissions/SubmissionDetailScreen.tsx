@@ -43,6 +43,7 @@ import {
   normalizeTo24hWithSeconds,
 } from '../../components/AmPmTimePickerField';
 import { formatPakistanDateTimeMedium } from '../../utils/pakistanTime';
+import { SvgXml } from 'react-native-svg';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubmissionDetail'>;
 
@@ -83,11 +84,67 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function fmt2(v: unknown): string {
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return n.toFixed(2);
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-1 min-w-[46%] gap-1 rounded-xl border border-border/70 bg-card p-3">
+      <Text className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </Text>
+      <Text className="text-base font-semibold text-foreground">{value}</Text>
+    </View>
+  );
+}
+
+function SignatureStampBlock({
+  signed,
+  svg,
+}: {
+  signed: boolean;
+  svg: string | null;
+}) {
+  return (
+    <View className="gap-2 rounded-xl border border-border/70 bg-card p-3">
+      <View className="flex-row flex-wrap items-center justify-between gap-2">
+        <Text className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Operator signature
+        </Text>
+        <Badge variant={signed ? 'secondary' : 'outline'}>
+          {signed ? 'Signed' : 'Unsigned'}
+        </Badge>
+      </View>
+      {svg ? (
+        <View className="self-start overflow-hidden rounded-lg border border-border/60 bg-white px-3 py-2">
+          <SvgXml xml={svg} width={200} height={56} />
+        </View>
+      ) : (
+        <Text className="text-sm text-muted-foreground">
+          No signature snapshot on this log.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function isHttpUrl(s: string): boolean {
   return /^https?:\/\//i.test(s.trim());
 }
 
-function EvidenceImageBlock({ label, url }: { label: string; url: unknown }) {
+function EvidenceImageBlock({
+  label,
+  url,
+  compact = false,
+}: {
+  label: string;
+  url: unknown;
+  compact?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   const raw = typeof url === 'string' ? url.trim() : '';
 
@@ -130,7 +187,7 @@ function EvidenceImageBlock({ label, url }: { label: string; url: unknown }) {
       <Image
         accessibilityLabel={label}
         source={{ uri: raw }}
-        style={evidenceStyles.image}
+        style={compact ? evidenceStyles.imageCompact : evidenceStyles.image}
         resizeMode="contain"
         onError={() => setFailed(true)}
       />
@@ -150,9 +207,21 @@ function EvidenceImageBlock({ label, url }: { label: string; url: unknown }) {
 const evidenceStyles = StyleSheet.create({
   image: {
     width: '100%',
-    height: 260,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    height: 200,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  imageCompact: {
+    width: '100%',
+    maxWidth: 280,
+    height: 160,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignSelf: 'flex-start',
   },
 });
 
@@ -211,6 +280,13 @@ export function SubmissionDetailScreen({ route }: Props) {
 
   const statusStr = String(sub.status ?? '—');
   const canEditResubmit = statusStr.toLowerCase() === 'reverted_back';
+
+  const signatureSvg = useMemo(() => {
+    const raw = record.signature_svg_snapshot;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  }, [record.signature_svg_snapshot]);
+
+  const isSigned = Boolean(record.signed);
 
   const [meterReadingStart, setMeterReadingStart] = useState('');
   const [meterReadingEnd, setMeterReadingEnd] = useState('');
@@ -459,25 +535,12 @@ export function SubmissionDetailScreen({ route }: Props) {
           <CardHeader>
             <CardTitle className="text-base">Edit & resubmit</CardTitle>
             <CardDescription>
-              Update pump start/end time, meter readings and meter image, then
+              Update pump times, meter reading at pump stop, and meter image, then
               resubmit.
             </CardDescription>
           </CardHeader>
           <Separator />
           <CardContent className="gap-4 pt-4">
-            <View className="gap-2">
-              <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Initial meter reading (m³, if first log)
-              </Text>
-              <TextInput
-                value={meterReadingStart}
-                onChangeText={v => setMeterReadingStart(sanitizeDecimalInput(v))}
-                keyboardType="decimal-pad"
-                placeholder="Only for first log on system"
-                style={editStyles.input}
-              />
-            </View>
-
             <View className="gap-2">
               <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Meter reading at pump stop (m³)
@@ -598,32 +661,53 @@ export function SubmissionDetailScreen({ route }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Water readings</CardTitle>
+          <CardTitle className="text-base">Daily log</CardTitle>
+          <CardDescription>
+            {fmt(record.month)}/{fmt(record.year)}
+            {record.day != null && String(record.day) !== ''
+              ? ` · Day ${fmt(record.day)}`
+              : ''}{' '}
+            · Pump runtime and meter reading captured when the pump stopped.
+          </CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="gap-4 pt-4">
-          <>
-            <DetailRow
-              label="Previous meter reading (m³)"
-              value={fmt(record.previous_meter_reading_end)}
+          <View className="flex-row flex-wrap gap-3">
+            <StatBox label="Pump start" value={fmt(record.pump_start_time)} />
+            <StatBox label="Pump end" value={fmt(record.pump_end_time)} />
+            <StatBox
+              label="Operating hours"
+              value={
+                record.pump_operating_hours != null
+                  ? `${fmt2(record.pump_operating_hours)} hrs`
+                  : '—'
+              }
             />
-            <DetailRow
-              label="Initial / baseline reading (m³)"
-              value={fmt(record.meter_reading_start)}
+            <StatBox
+              label="Meter reading at pump stop"
+              value={
+                record.meter_reading_end != null
+                  ? `${fmt2(record.meter_reading_end)} m³`
+                  : '—'
+              }
             />
-            <DetailRow
-              label="Meter reading at pump stop (m³)"
-              value={fmt(record.meter_reading_end)}
+            <StatBox
+              label="Water pumped this interval"
+              value={
+                record.total_water_pumped != null
+                  ? `${fmt2(record.total_water_pumped)} m³`
+                  : '—'
+              }
             />
-            <DetailRow
-              label="Water pumped this interval (m³)"
-              value={fmt(record.total_water_pumped)}
-            />
-            <EvidenceImageBlock
-              label="Meter / evidence"
-              url={record.bulk_meter_image_url}
-            />
-          </>
+          </View>
+
+          <EvidenceImageBlock
+            label="Meter evidence"
+            url={record.bulk_meter_image_url}
+            compact
+          />
+
+          <SignatureStampBlock signed={isSigned} svg={signatureSvg} />
         </CardContent>
       </Card>
 

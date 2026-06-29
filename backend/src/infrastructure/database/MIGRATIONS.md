@@ -1,20 +1,30 @@
 # Database migrations (NestJS / TypeORM)
 
-## Existing production databases
+## Docker / self-hosted PostgreSQL
 
-If the database was created with the Flask backend, schema history is in the `alembic_version` table. Alembic revision files are kept only in `backend-legacy/migrations/` for reference.
+See [DOCKER.md](./DOCKER.md) for running Postgres in Docker.
 
-**Do not re-run Alembic** on an already-migrated database. The TypeORM baseline migration `1730000000000-InitialSchema` is a **no-op** for that case.
-
-Fresh database from legacy Flask (optional):
+Fresh database:
 
 ```bash
-cd backend-legacy
-pip install -r requirements.txt
-flask --app app:create_app db upgrade
+cd backend
+npm run migration:run
 ```
 
-## TypeORM (current backend)
+The backend Docker image runs migrations automatically on startup.
+
+## Migrating from Supabase
+
+1. `pg_dump` from Supabase and `pg_restore` into your Docker Postgres (see DOCKER.md).
+2. If tables already exist from the dump, ensure the TypeORM `migrations` table records the baseline migration.
+
+## Existing production databases (legacy Flask/Alembic)
+
+If the database was created with the Flask backend, schema history is in the `alembic_version` table.
+
+The TypeORM baseline migration `1730000000000-InitialSchema` is a **no-op** for databases that already have the schema.
+
+## TypeORM commands
 
 Configuration: `src/infrastructure/database/data-source.ts`
 
@@ -31,10 +41,16 @@ npm run migration:revert
 
 Set `DATABASE_URL` in `.env` before running commands.
 
+Example local URL:
+
+```
+postgresql://prmsc:prmsc@127.0.0.1:5432/prmsc_mrv?sslmode=disable
+```
+
 ## Schema source of truth
 
 | What | Where |
 |------|--------|
 | Entities | `src/infrastructure/database/entities/` |
-| New migrations | `src/infrastructure/database/migrations/` |
-| Legacy Alembic history | `backend-legacy/migrations/` (reference only) |
+| Migrations | `src/infrastructure/database/migrations/` |
+| Connection helper | `src/infrastructure/database/postgres-database.util.ts` |

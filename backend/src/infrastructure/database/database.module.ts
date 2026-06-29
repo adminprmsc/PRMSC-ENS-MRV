@@ -5,7 +5,7 @@ import { ALL_ENTITIES } from './entities';
 import {
   buildTypeOrmPostgresConnection,
   maskDatabaseUri,
-} from './supabase-database.util';
+} from './postgres-database.util';
 
 @Module({
   imports: [
