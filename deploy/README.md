@@ -1,5 +1,7 @@
 # PRMSC-MRV deployment
 
+> **Regular server use** (SSH, deploy, logs, DB checks): see **[VM-OPS.md](./VM-OPS.md)**.
+
 Single Docker stack: **PostgreSQL + NestJS + React + Nginx**. Database is self-hosted in Docker; **Supabase is used only for file storage** (S3-compatible API). One env file (`.env.docker`), one compose file (`docker-compose.yml`).
 
 ```
@@ -152,6 +154,7 @@ Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
 | `docker-compose.yml`                      | Full stack (VM)                           |
 | `docker-compose.dev.yml`                  | Local dev ports + skip nginx/frontend     |
 | `deploy/setup.sh`                         | VM bootstrap                              |
+| `deploy/VM-OPS.md`                        | **Day-to-day VM ops** (SSH, deploy, logs) |
 | `deploy/scripts/migrate-from-supabase.sh` | Dump from Supabase + restore locally (VM) |
 | `deploy/scripts/dump-from-supabase.sh`    | Dump only (optional laptop backup)        |
 | `deploy/scripts/restore-from-supabase.sh` | Restore existing `.dump` file             |
