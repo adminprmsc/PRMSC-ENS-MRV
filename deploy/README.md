@@ -1,11 +1,12 @@
 # PRMSC-MRV deployment
 
-Single Docker stack: **PostgreSQL + NestJS + React + Nginx**. One env file (`.env.docker`), one compose file (`docker-compose.yml`).
+Single Docker stack: **PostgreSQL + NestJS + React + Nginx**. Database is self-hosted in Docker; **Supabase is used only for file storage** (S3-compatible API). One env file (`.env.docker`), one compose file (`docker-compose.yml`).
 
 ```
 Internet → Nginx (:80)
             ├─ /      → frontend (SPA)
-            └─ /api/* → backend → postgres (internal)
+            └─ /api/* → backend → postgres (Docker, internal)
+                              └→ Supabase Storage (uploads/images only)
 ```
 
 ## VM setup (one command)
@@ -16,8 +17,11 @@ cd ~/prmsc-mrv
 
 chmod +x deploy/setup.sh deploy/scripts/*.sh
 
-# Migrate from Supabase (recommended — no scp):
+# Migrate from Supabase (one-time only — if moving off Supabase Postgres):
 export SUPABASE_DATABASE_URL='postgresql://postgres.[ref]:[password]@...pooler.supabase.com:5432/postgres'
+PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
+
+# Or without migration (empty DB, migrations on first boot):
 PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
 ```
 
@@ -25,7 +29,7 @@ PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
 
 1. Check Docker is installed
 2. Create `.env.docker` from `.env.docker.example` (auto-fill `PUBLIC_ORIGIN`, passwords, secrets)
-3. Pull data from Supabase if `SUPABASE_DATABASE_URL` is set (or restore `prmsc_backup.dump` if present)
+3. One-time import from legacy Supabase Postgres if `SUPABASE_DATABASE_URL` is set (or restore `prmsc_backup.dump` if present)
 4. Build and start all containers
 5. Print the URL to open in the browser
 
@@ -59,10 +63,13 @@ cp .env.docker.example .env.docker
 | `POSTGRES_PASSWORD`             | Database password                                          |
 | `SECRET_KEY` / `JWT_SECRET_KEY` | App crypto — changing JWT forces re-login                  |
 | `NGINX_HTTP_PORT`               | Usually `80`                                               |
+| `SUPABASE_*`                    | **Storage only** — S3 keys for uploads (not the database)  |
 
-Optional: Supabase S3 vars for existing uploaded images, SMTP for password reset — see comments in `.env.docker.example`.
+Optional: SMTP for password reset — see comments in `.env.docker.example`.
 
-## Migrate data from Supabase
+## One-time: import data from legacy Supabase Postgres
+
+Use this only when cutting over from an old Supabase-hosted database. Ongoing production uses Docker Postgres; Supabase remains for **file storage** only.
 
 ### On the VM (recommended)
 

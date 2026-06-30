@@ -67,7 +67,7 @@ export function resolveCorsAllowlist(nodeEnv: string): string[] {
 export default registerAs('app', () => {
   const nodeEnv = (process.env.NODE_ENV ?? 'development').trim().toLowerCase();
   const isProduction = nodeEnv === 'production';
-  const supabaseUrl = (process.env.SUPABASE_URL ?? '').replace(/\/+$/, '');
+  const supabaseUrl = (process.env.SUPABASE_URL ?? '').replace(/\/+$/, ''); // storage public URLs only
   const passwordResetDevReturnToken = ['1', 'true', 'yes'].includes(
     (process.env.PASSWORD_RESET_DEV_RETURN_TOKEN ?? '').toLowerCase(),
   );
@@ -100,10 +100,8 @@ export default registerAs('app', () => {
     mailPassword: process.env.MAIL_PASSWORD ?? '',
     mailDefaultSender: process.env.MAIL_DEFAULT_SENDER ?? '',
     supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'mrv-public',
-    supabaseS3Endpoint:
-      process.env.SUPABASE_S3_ENDPOINT ??
-      'https://roqrkkzaayrzarpdnuvx.storage.supabase.co/storage/v1/s3',
-    supabaseS3Region: process.env.SUPABASE_S3_REGION ?? 'ap-southeast-1',
+    supabaseS3Endpoint: process.env.SUPABASE_S3_ENDPOINT ?? '',
+    supabaseS3Region: process.env.SUPABASE_S3_REGION ?? 'ap-northeast-1',
     supabaseS3AccessKeyId: process.env.SUPABASE_S3_ACCESS_KEY_ID ?? '',
     supabaseS3SecretAccessKey: process.env.SUPABASE_S3_SECRET_ACCESS_KEY ?? '',
     supabaseUrl,
