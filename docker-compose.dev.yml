@@ -1,0 +1,25 @@
+# Local laptop dev — Postgres on :5433 + API on :5001 (no nginx/frontend containers)
+#
+#   cp .env.docker.example .env.docker
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d postgres backend
+#   cd frontend && npm run dev
+
+services:
+  postgres:
+    ports:
+      - '5433:5432'
+
+  backend:
+    ports:
+      - '5001:5001'
+    environment:
+      NODE_ENV: development
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+
+  frontend:
+    profiles:
+      - never
+
+  nginx:
+    profiles:
+      - never

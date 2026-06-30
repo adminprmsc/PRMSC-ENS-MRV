@@ -23,4 +23,4 @@ docker run --rm \
   pg_dump "$SUPABASE_DATABASE_URL" --no-owner --no-acl -Fc -f "/backup/$(basename "$OUT")"
 
 ls -lh "$OUT"
-echo "Copy to VM: scp $OUT user@<vm-ip>:/opt/prmsc-mrv/"
+echo "Copy to VM: scp $OUT adminprms98@<vm-ip>:~/prmsc-mrv/"

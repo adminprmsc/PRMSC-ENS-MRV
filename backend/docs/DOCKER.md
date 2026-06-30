@@ -9,13 +9,14 @@ Run the API and database on your own server with Docker Compose.
 ```bash
 # From repo root
 cp .env.docker.example .env.docker
-# Edit secrets in .env.docker (SECRET_KEY, JWT_SECRET_KEY, POSTGRES_PASSWORD)
 
-docker compose --env-file .env.docker up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d postgres backend
 ```
 
 API: `http://localhost:5001`  
 Health: `http://localhost:5001/api/health`
+
+For the full stack locally (same as VM): `docker compose --env-file .env.docker up -d --build`
 
 The backend container waits for PostgreSQL, runs TypeORM migrations on startup, then starts the API.
 
@@ -31,12 +32,12 @@ Data is persisted in the `postgres_data` Docker volume.
 ## Local development (Postgres in Docker, API on host)
 
 ```bash
-# Start only Postgres
-docker compose --env-file .env.docker up -d postgres
+# Start only Postgres (or postgres + backend via dev compose)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d postgres
 
 # In backend/
 cp .env.example .env
-# DATABASE_URL=postgresql://prmsc:prmsc@127.0.0.1:5432/prmsc_mrv?sslmode=disable
+# DATABASE_URL=postgresql://prmsc:YOUR_PASSWORD@127.0.0.1:5433/prmsc_mrv?sslmode=disable
 
 npm install
 npm run migration:run

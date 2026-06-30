@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# Restore a pg_dump (from Supabase) into the production Postgres container.
+# Restore a pg_dump (from Supabase) into the Postgres container.
 #
-# Prerequisites:
-#   - docker compose -f docker-compose.prod.yml --env-file .env.docker up -d postgres
-#   - prmsc_backup.dump in repo root (or pass path as 1st argument)
-#
-# Usage:
+# Usually run via ./deploy/setup.sh — or manually:
 #   ./deploy/scripts/restore-from-supabase.sh
 #   ./deploy/scripts/restore-from-supabase.sh /path/to/prmsc_backup.dump
 
@@ -14,13 +10,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-ENV_FILE="${ENV_FILE:-.env.docker}"
+# shellcheck source=deploy/lib/compose.sh
+source "$ROOT_DIR/deploy/lib/compose.sh"
+
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.docker}"
 DUMP_FILE="${1:-$ROOT_DIR/prmsc_backup.dump}"
-COMPOSE=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+
+DC="$(compose_cmd)"
+COMPOSE=($DC $(compose_args "$ROOT_DIR"))
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Missing $ENV_FILE — copy .env.docker.production.example to .env.docker" >&2
+  echo "Missing $ENV_FILE — run ./deploy/setup.sh or cp .env.docker.example .env.docker" >&2
   exit 1
 fi
 
@@ -81,5 +81,5 @@ echo "Row counts:"
 "${COMPOSE[@]}" exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) AS users FROM users;"
 "${COMPOSE[@]}" exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) AS submissions FROM submissions;"
 
-echo "Restore complete. Start the full stack:"
-echo "  docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d --build"
+echo "Restore complete. Start (or refresh) the stack:"
+echo "  docker compose --env-file .env.docker up -d --build"

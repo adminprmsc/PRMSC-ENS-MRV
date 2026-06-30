@@ -1,3 +1,12 @@
+# PRMSC-MRV — PostgreSQL + API + frontend + nginx (single stack).
+#
+# VM / production:
+#   ./deploy/setup.sh
+#
+# Local laptop (database + API only, frontend via npm run dev):
+#   cp .env.docker.example .env.docker
+#   docker compose --env-file .env.docker up -d postgres backend
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,10 +14,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-prmsc}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prmsc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.docker}
       POSTGRES_DB: ${POSTGRES_DB:-prmsc_mrv}
-    ports:
-      - '${POSTGRES_PORT:-5433}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +28,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - prmsc
 
   backend:
     build:
@@ -31,24 +40,64 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - '${BACKEND_PORT:-5001}:5001'
     env_file:
       - path: .env.docker
-        required: false
+        required: true
     environment:
       NODE_ENV: production
       PORT: 5001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-prmsc}:${POSTGRES_PASSWORD:-prmsc}@postgres:5432/${POSTGRES_DB:-prmsc_mrv}?sslmode=disable
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prmsc}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-prmsc_mrv}?sslmode=disable
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.docker}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env.docker}
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env.docker}
+      PASSWORD_RESET_FRONTEND_URL: ${PASSWORD_RESET_FRONTEND_URL:-}
+      MAIL_SERVER: ${MAIL_SERVER:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USE_TLS: ${MAIL_USE_TLS:-true}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER:-}
       SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-}
       SUPABASE_S3_ENDPOINT: ${SUPABASE_S3_ENDPOINT:-}
       SUPABASE_S3_REGION: ${SUPABASE_S3_REGION:-}
       SUPABASE_S3_ACCESS_KEY_ID: ${SUPABASE_S3_ACCESS_KEY_ID:-}
       SUPABASE_S3_SECRET_ACCESS_KEY: ${SUPABASE_S3_SECRET_ACCESS_KEY:-}
       SUPABASE_STORAGE_PUBLIC_BASE_URL: ${SUPABASE_STORAGE_PUBLIC_BASE_URL:-}
+    networks:
+      - prmsc
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_ENV: PROD
+    container_name: prmsc-frontend
+    restart: unless-stopped
+    expose:
+      - '80'
+    networks:
+      - prmsc
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: prmsc-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - '${NGINX_HTTP_PORT:-80}:80'
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
+    networks:
+      - prmsc
 
 volumes:
   postgres_data:
+
+networks:
+  prmsc:
+    driver: bridge
