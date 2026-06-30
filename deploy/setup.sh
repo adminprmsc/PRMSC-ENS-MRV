@@ -7,6 +7,7 @@
 #
 # Optional:
 #   PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
+#   SUPABASE_DATABASE_URL='postgresql://...' ./deploy/setup.sh   # migrate from Supabase
 #   SKIP_RESTORE=1 ./deploy/setup.sh
 
 set -euo pipefail
@@ -116,7 +117,10 @@ restore_if_needed() {
     return
   fi
 
-  if [[ -f "$DUMP_FILE" && -s "$DUMP_FILE" ]]; then
+  if [[ -n "${SUPABASE_DATABASE_URL:-}" ]]; then
+    echo "SUPABASE_DATABASE_URL set — migrating from Supabase..."
+    ENV_FILE="$ENV_FILE" "$ROOT_DIR/deploy/scripts/migrate-from-supabase.sh"
+  elif [[ -f "$DUMP_FILE" && -s "$DUMP_FILE" ]]; then
     echo "Found $(basename "$DUMP_FILE") — restoring Supabase data..."
     ENV_FILE="$ENV_FILE" COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yml}" \
       "$ROOT_DIR/deploy/scripts/restore-from-supabase.sh" "$DUMP_FILE"

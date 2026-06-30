@@ -14,18 +14,18 @@ Internet → Nginx (:80)
 git clone <repo-url> ~/prmsc-mrv   # or /opt/prmsc-mrv
 cd ~/prmsc-mrv
 
-# Copy Supabase dump here if you have it (optional but recommended):
-# scp prmsc_backup.dump adminprms98@101.50.86.169:~/prmsc-mrv/
-
 chmod +x deploy/setup.sh deploy/scripts/*.sh
-./deploy/setup.sh
+
+# Migrate from Supabase (recommended — no scp):
+export SUPABASE_DATABASE_URL='postgresql://postgres.[ref]:[password]@...pooler.supabase.com:5432/postgres'
+PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
 ```
 
 `setup.sh` will:
 
 1. Check Docker is installed
 2. Create `.env.docker` from `.env.docker.example` (auto-fill `PUBLIC_ORIGIN`, passwords, secrets)
-3. Restore `prmsc_backup.dump` if present
+3. Pull data from Supabase if `SUPABASE_DATABASE_URL` is set (or restore `prmsc_backup.dump` if present)
 4. Build and start all containers
 5. Print the URL to open in the browser
 
@@ -53,33 +53,41 @@ Copy once (setup does this automatically):
 cp .env.docker.example .env.docker
 ```
 
-| Variable | Purpose |
-|----------|---------|
-| `PUBLIC_ORIGIN` | URL users open (e.g. `http://101.50.86.169`) — drives CORS |
-| `POSTGRES_PASSWORD` | Database password |
-| `SECRET_KEY` / `JWT_SECRET_KEY` | App crypto — changing JWT forces re-login |
-| `NGINX_HTTP_PORT` | Usually `80` |
+| Variable                        | Purpose                                                    |
+| ------------------------------- | ---------------------------------------------------------- |
+| `PUBLIC_ORIGIN`                 | URL users open (e.g. `http://101.50.86.169`) — drives CORS |
+| `POSTGRES_PASSWORD`             | Database password                                          |
+| `SECRET_KEY` / `JWT_SECRET_KEY` | App crypto — changing JWT forces re-login                  |
+| `NGINX_HTTP_PORT`               | Usually `80`                                               |
 
 Optional: Supabase S3 vars for existing uploaded images, SMTP for password reset — see comments in `.env.docker.example`.
 
 ## Migrate data from Supabase
 
-### On your laptop
+### On the VM (recommended)
 
-```bash
-export SUPABASE_DATABASE_URL='postgresql://postgres.[ref]:[password]@...pooler.supabase.com:5432/postgres'
-./deploy/scripts/dump-from-supabase.sh
-scp prmsc_backup.dump adminprms98@<vm-ip>:~/prmsc-mrv/
-```
-
-### On the VM
+Get the connection string from **Supabase Dashboard → Project Settings → Database → URI** (use the pooler or direct connection).
 
 ```bash
 cd ~/prmsc-mrv
-./deploy/setup.sh
+export SUPABASE_DATABASE_URL='postgresql://postgres.[ref]:[password]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
+./deploy/scripts/migrate-from-supabase.sh
 ```
 
-A few `pg_restore` extension warnings are normal.
+Or combine with full setup:
+
+```bash
+SUPABASE_DATABASE_URL='postgresql://...' PUBLIC_ORIGIN=http://101.50.86.169 ./deploy/setup.sh
+```
+
+The script dumps from Supabase, saves `prmsc_backup.dump` locally as a backup, and restores into Docker Postgres. A few `pg_restore` extension warnings are normal.
+
+### Optional: dump on laptop only
+
+```bash
+./deploy/scripts/dump-from-supabase.sh
+# then on VM: place prmsc_backup.dump in repo root and ./deploy/setup.sh
+```
 
 ## Local laptop dev
 
@@ -122,21 +130,22 @@ Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| `CORS_ORIGINS is required` | Set `PUBLIC_ORIGIN` in `.env.docker` |
-| Empty data / 401 | Re-login after new `JWT_SECRET_KEY` |
-| `502` on `/api` | `docker compose logs backend` — wait for migrations |
-| Restore fails | `ls -lh prmsc_backup.dump` — must be non-zero |
+| Issue                      | Fix                                                 |
+| -------------------------- | --------------------------------------------------- |
+| `CORS_ORIGINS is required` | Set `PUBLIC_ORIGIN` in `.env.docker`                |
+| Empty data / 401           | Re-login after new `JWT_SECRET_KEY`                 |
+| `502` on `/api`            | `docker compose logs backend` — wait for migrations |
+| Restore fails              | `ls -lh prmsc_backup.dump` — must be non-zero       |
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `.env.docker.example` | Single env template |
-| `docker-compose.yml` | Full stack (VM) |
-| `docker-compose.dev.yml` | Local dev ports + skip nginx/frontend |
-| `deploy/setup.sh` | VM bootstrap |
-| `deploy/scripts/dump-from-supabase.sh` | Dump from Supabase (laptop) |
-| `deploy/scripts/restore-from-supabase.sh` | Restore on VM |
-| `deploy/scripts/backup-postgres.sh` | Postgres backup |
+| File                                      | Purpose                                   |
+| ----------------------------------------- | ----------------------------------------- |
+| `.env.docker.example`                     | Single env template                       |
+| `docker-compose.yml`                      | Full stack (VM)                           |
+| `docker-compose.dev.yml`                  | Local dev ports + skip nginx/frontend     |
+| `deploy/setup.sh`                         | VM bootstrap                              |
+| `deploy/scripts/migrate-from-supabase.sh` | Dump from Supabase + restore locally (VM) |
+| `deploy/scripts/dump-from-supabase.sh`    | Dump only (optional laptop backup)        |
+| `deploy/scripts/restore-from-supabase.sh` | Restore existing `.dump` file             |
+| `deploy/scripts/backup-postgres.sh`       | Postgres backup                           |

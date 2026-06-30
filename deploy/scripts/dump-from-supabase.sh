@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Create a pg_dump from Supabase PostgreSQL 17+ (run from your laptop).
+# Create a pg_dump from Supabase PostgreSQL 17+ (optional — laptop backup only).
 #
-# Usage:
+# On the VM, prefer migrate-from-supabase.sh (dump + restore in one step, no scp):
+#   SUPABASE_DATABASE_URL='postgresql://...' ./deploy/scripts/migrate-from-supabase.sh
+#
+# Usage (laptop):
 #   export SUPABASE_DATABASE_URL='postgresql://postgres.[ref]:[pass]@...pooler.supabase.com:5432/postgres'
 #   ./deploy/scripts/dump-from-supabase.sh
 #   ./deploy/scripts/dump-from-supabase.sh /path/to/output.dump
