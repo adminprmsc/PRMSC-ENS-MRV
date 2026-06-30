@@ -14,6 +14,7 @@ import type { AuthUser, LoginResponse } from '../types/auth';
 import { login as loginApi } from '../api/auth';
 import { isJwtExpired } from './jwtExpiry';
 import { setSessionExpiredHandler } from './sessionExpired';
+import { getLoginErrorMessage } from '../lib/login-error';
 
 type AuthState = {
   user: AuthUser | null;
@@ -85,10 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setJson(STORAGE_KEYS.user, data.user);
         setState({ token: data.token, user: data.user, loading: false });
         return { ok: true };
-      } catch {
+      } catch (error: unknown) {
         return {
           ok: false,
-          message: 'Login failed. Check credentials and connection.',
+          message: getLoginErrorMessage(error),
         };
       }
     },

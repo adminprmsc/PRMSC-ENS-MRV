@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Production VM uses plain HTTP until TLS is configured. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">101.50.86.169</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

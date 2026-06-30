@@ -13,6 +13,7 @@ function isAuthLoginRequest(config: InternalAxiosRequestConfig | undefined): boo
 
 export const apiClient = axios.create({
   baseURL: API_URL,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
