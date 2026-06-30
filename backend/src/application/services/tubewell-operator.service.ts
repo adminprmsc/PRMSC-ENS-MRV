@@ -1267,6 +1267,15 @@ export class TubewellOperatorService {
     const savedRecordIds: string[] = [];
     const savedIds: string[] = [];
     const errors: string[] = [];
+    const postSubmitWorkflows: Array<{
+      submissionId: string;
+      userId: string;
+      role: string;
+      comment: string;
+      notifyTitle: string;
+      notifyDetails: string;
+      tehsil: string;
+    }> = [];
 
     const opUser = await this.userService.getUserById(userId);
 
@@ -1572,14 +1581,6 @@ export class TubewellOperatorService {
                   }),
                 );
 
-                await this.workflowService.logVerificationAction(
-                  submission.id,
-                  'submit',
-                  userId,
-                  this.rbac.userRoleCode(currentUser!),
-                  `Water data for ${mi}/${yi} submitted via form`,
-                );
-
                 const details =
                   `New Monthly Water Report (${mi}/${yi}) submitted by ${currentUser!.name}.\n` +
                   `Location: ${system.tehsil}, ${system.village} ${system.settlement || ''}\n` +
@@ -1587,12 +1588,15 @@ export class TubewellOperatorService {
                   `Meter reading (stop): ${rec.meterReadingEnd ?? 'N/A'}\n` +
                   `Water pumped this interval: ${rec.totalWaterPumped ?? 'N/A'} m³`;
 
-                await this.workflowService.notifyAnalysts(
-                  'New Detailed Water Submission',
-                  details,
-                  submission.id,
-                  system.tehsil,
-                );
+                postSubmitWorkflows.push({
+                  submissionId: submission.id,
+                  userId,
+                  role: this.rbac.userRoleCode(currentUser!),
+                  comment: `Water data for ${mi}/${yi} submitted via form`,
+                  notifyTitle: 'New Detailed Water Submission',
+                  notifyDetails: details,
+                  tehsil: system.tehsil,
+                });
               } else if (
                 [
                   SUBMISSION_STATUS_REJECTED,
@@ -1637,6 +1641,22 @@ export class TubewellOperatorService {
         });
       }
     });
+
+    for (const workflow of postSubmitWorkflows) {
+      await this.workflowService.logVerificationAction(
+        workflow.submissionId,
+        'submit',
+        workflow.userId,
+        workflow.role,
+        workflow.comment,
+      );
+      await this.workflowService.notifyAnalysts(
+        workflow.notifyTitle,
+        workflow.notifyDetails,
+        workflow.submissionId,
+        workflow.tehsil,
+      );
+    }
 
     return {
       message: `Saved data for ${savedIds.length} location(s) as ${status}`,

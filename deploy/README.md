@@ -112,6 +112,24 @@ cd backend && npm run start:dev    # or use Docker backend on :5001
 cd frontend && npm run dev
 ```
 
+### Load Supabase data locally (`prmsc_backup.dump`)
+
+Place `prmsc_backup.dump` in the repo root (same file used on the VM), then:
+
+```bash
+COMPOSE_OVERRIDE=docker-compose.dev.yml ./deploy/scripts/restore-from-supabase.sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d backend
+```
+
+Verify:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker exec -T postgres \
+  psql -U prmsc -d prmsc_mrv -c "SELECT COUNT(*) AS users FROM users;"
+```
+
+A few `supabase_vault` extension warnings during restore are normal and can be ignored.
+
 ## Updates
 
 ```bash

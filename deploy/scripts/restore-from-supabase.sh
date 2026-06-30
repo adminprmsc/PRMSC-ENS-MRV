@@ -56,18 +56,21 @@ echo "Recreating database $POSTGRES_DB..."
 
 echo "Restoring from $DUMP_FILE (this may take a few minutes)..."
 # Supabase dumps use PG17 pg_dump format — must restore with PG17+ client.
+# Mount the dump directory (not the file) — Docker Desktop on macOS treats file mounts as dirs.
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in $ENV_FILE}"
-COMPOSE_NETWORK="$("${COMPOSE[@]}" ps -q postgres | xargs -r docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' | head -1)"
+DUMP_DIR="$(cd "$(dirname "$DUMP_FILE")" && pwd)"
+DUMP_NAME="$(basename "$DUMP_FILE")"
+COMPOSE_NETWORK="$("${COMPOSE[@]}" ps -q postgres | xargs docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null | head -1)"
 docker run --rm \
   --network "$COMPOSE_NETWORK" \
-  -v "$DUMP_FILE:/dump:ro" \
+  -v "${DUMP_DIR}:/backup:ro" \
   -e PGPASSWORD="$POSTGRES_PASSWORD" \
   postgres:17-alpine \
   pg_restore \
   -h prmsc-postgres \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" \
-  --no-owner --no-acl /dump \
+  --no-owner --no-acl "/backup/${DUMP_NAME}" \
   || true
 
 echo "Seeding TypeORM migrations baseline..."

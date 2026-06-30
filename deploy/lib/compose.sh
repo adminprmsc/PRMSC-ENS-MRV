@@ -16,5 +16,10 @@ compose_args() {
   local root="${1:?root dir required}"
   local env_file="${ENV_FILE:-$root/.env.docker}"
   local compose_file="${COMPOSE_FILE:-$root/docker-compose.yml}"
-  echo -f "$compose_file" --env-file "$env_file"
+  local override="${COMPOSE_OVERRIDE:-}"
+  if [[ -n "$override" && -f "$override" ]]; then
+    echo -f "$compose_file" -f "$override" --env-file "$env_file"
+  else
+    echo -f "$compose_file" --env-file "$env_file"
+  fi
 }

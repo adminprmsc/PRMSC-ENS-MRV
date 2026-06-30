@@ -1,4 +1,18 @@
-import { resolveCorsAllowlist } from './configuration';
+import { envOrFallback, resolveCorsAllowlist } from './configuration';
+
+describe('envOrFallback', () => {
+  it('treats empty string as missing (Docker Compose optional vars)', () => {
+    expect(
+      envOrFallback('', 'https://proj.supabase.co/storage/v1/object/public'),
+    ).toBe('https://proj.supabase.co/storage/v1/object/public');
+  });
+
+  it('uses explicit value when set', () => {
+    expect(envOrFallback('https://custom.example/public', 'fallback')).toBe(
+      'https://custom.example/public',
+    );
+  });
+});
 
 describe('resolveCorsAllowlist', () => {
   it('merges dev fallbacks when CORS_ORIGINS is partial in development', () => {

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
-import { METER_TYPE_SOLAR, METER_TYPE_TUBEWELL } from '../../domain/constants/submission.constants';
+import {
+  METER_TYPE_SOLAR,
+  METER_TYPE_TUBEWELL,
+} from '../../domain/constants/submission.constants';
 import {
   toIsoDateString,
   toIsoDateTimeString,
@@ -71,9 +74,12 @@ export class OperatorHelpersService {
     if (typeof val === 'number') {
       return val;
     }
-    const parsed = parseFloat(String(val).trim());
+    if (typeof val !== 'string') {
+      throw new Error(`Invalid numeric value: ${JSON.stringify(val)}`);
+    }
+    const parsed = parseFloat(val.trim());
     if (Number.isNaN(parsed)) {
-      throw new Error(`Invalid numeric value: ${String(val)}`);
+      throw new Error(`Invalid numeric value: ${val}`);
     }
     return parsed;
   }
@@ -82,8 +88,19 @@ export class OperatorHelpersService {
     if (value == null) {
       return null;
     }
-    const s = String(value).trim();
-    return s || null;
+    if (typeof value === 'string') {
+      const s = value.trim();
+      return s || null;
+    }
+    if (
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      typeof value === 'bigint'
+    ) {
+      const s = String(value).trim();
+      return s || null;
+    }
+    return null;
   }
 
   meterToDict(
@@ -178,12 +195,9 @@ export class OperatorHelpersService {
     );
 
     const current = await repo.findOne({
-      where: {
-        meterType,
-        waterSystemId: waterSystemId ?? undefined,
-        solarSystemId: solarSystemId ?? undefined,
-        isActive: true,
-      },
+      where: waterSystemId
+        ? { meterType, waterSystemId, isActive: true }
+        : { meterType, solarSystemId: solarSystemId!, isActive: true },
       order: { createdAt: 'DESC' },
     });
 

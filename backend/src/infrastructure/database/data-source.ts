@@ -3,6 +3,7 @@ import { config as loadEnv } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { ALL_ENTITIES } from './entities';
 import { buildTypeOrmPostgresConnection } from './postgres-database.util';
+import { UuidPrimarySubscriber } from './uuid-primary.subscriber';
 
 loadEnv();
 
@@ -16,6 +17,7 @@ export default new DataSource({
   ssl: connection.ssl,
   extra: connection.extra,
   entities: ALL_ENTITIES,
+  subscribers: [UuidPrimarySubscriber],
   migrations: [__dirname + '/migrations/*.{ts,js}'],
   synchronize: false,
 });

@@ -6,8 +6,11 @@
     "android": "react-native run-android",
     "android:release": "react-native build-android --tasks assembleRelease",
     "ios": "react-native run-ios",
+    "ios:release": "ENVFILE=.env.production react-native run-ios --mode Release",
+    "ios:clean": "watchman watch-del-all 2>/dev/null || true && rm -rf ios/build && cd ios && pod install && cd ..",
     "lint": "eslint .",
     "start": "react-native start",
+    "start:reset": "react-native start --reset-cache",
     "test": "jest"
   },
   "dependencies": {

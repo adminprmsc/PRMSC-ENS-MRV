@@ -6,6 +6,7 @@ import {
   buildTypeOrmPostgresConnection,
   maskDatabaseUri,
 } from './postgres-database.util';
+import { UuidPrimarySubscriber } from './uuid-primary.subscriber';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import {
           url: connection.url,
           ssl: connection.ssl,
           entities: ALL_ENTITIES,
+          subscribers: [UuidPrimarySubscriber],
           synchronize: false,
           migrations: [__dirname + '/migrations/*.{ts,js}'],
           migrationsRun: false,

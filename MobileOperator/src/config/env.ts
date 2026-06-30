@@ -13,14 +13,14 @@ const ENV = String((Config as unknown as { ENV?: unknown }).ENV ?? '')
 const isProdEnv = ENV === 'PROD' || ENV === 'PRODUCTION';
 const isDevEnv = ENV === 'DEV' || ENV === 'DEVELOPMENT' || ENV === 'LOCAL';
 
-const PROD_API_ORIGIN = 'https://prmsc-mrv-api.vercel.app';
-const DEV_API_ORIGIN = 'http://127.0.0.1:5001';
+const PROD_API_URL = 'http://101.50.86.169/api';
+const DEV_API_URL = 'http://127.0.0.1:5001/api';
 
 /**
  * Priority order:
- * 1) Explicit `API_URL` from `.env` (most reliable; overrides ENV)
- * 2) `ENV=PROD|DEV` default origins
- * 3) Fallback to dev origin
+ * 1) Explicit `API_URL` from env file (release: `.env.production`)
+ * 2) `ENV=PROD|DEV` defaults below
+ * 3) Dev fallback
  */
 const EXPLICIT = normalizeApiUrl(
   String((Config as unknown as { API_URL?: unknown }).API_URL ?? ''),
@@ -29,7 +29,7 @@ const EXPLICIT = normalizeApiUrl(
 export const API_URL = EXPLICIT
   ? EXPLICIT
   : isProdEnv
-  ? normalizeApiUrl(PROD_API_ORIGIN)
+  ? PROD_API_URL
   : isDevEnv
-  ? normalizeApiUrl(DEV_API_ORIGIN)
-  : normalizeApiUrl(DEV_API_ORIGIN);
+  ? DEV_API_URL
+  : DEV_API_URL;

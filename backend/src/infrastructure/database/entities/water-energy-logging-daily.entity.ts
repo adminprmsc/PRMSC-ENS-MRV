@@ -30,7 +30,11 @@ export class WaterEnergyLoggingDaily {
   @Column({ name: 'water_system_id', type: 'varchar', length: 36 })
   waterSystemId!: string;
 
-  @Column({ name: 'log_date', type: 'date', transformer: dateColumnTransformer })
+  @Column({
+    name: 'log_date',
+    type: 'date',
+    transformer: dateColumnTransformer,
+  })
   logDate!: Date;
 
   @Column({ name: 'pump_start_time', type: 'time', nullable: true })

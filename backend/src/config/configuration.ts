@@ -43,6 +43,15 @@ function dedupePreserveOrder(items: string[]): string[] {
   return out;
 }
 
+/** Docker Compose injects unset optional vars as "" — treat those like missing. */
+export function envOrFallback(
+  value: string | undefined,
+  fallback: string,
+): string {
+  const trimmed = (value ?? '').trim();
+  return trimmed || fallback;
+}
+
 export function resolveCorsAllowlist(nodeEnv: string): string[] {
   const explicit = dedupePreserveOrder(originsFromCorsEnv());
   const isDev = (nodeEnv || '').trim().toLowerCase() === 'development';
@@ -105,9 +114,10 @@ export default registerAs('app', () => {
     supabaseS3AccessKeyId: process.env.SUPABASE_S3_ACCESS_KEY_ID ?? '',
     supabaseS3SecretAccessKey: process.env.SUPABASE_S3_SECRET_ACCESS_KEY ?? '',
     supabaseUrl,
-    supabaseStoragePublicBaseUrl:
-      process.env.SUPABASE_STORAGE_PUBLIC_BASE_URL ??
-      (supabaseUrl ? `${supabaseUrl}/storage/v1/object/public` : ''),
+    supabaseStoragePublicBaseUrl: envOrFallback(
+      process.env.SUPABASE_STORAGE_PUBLIC_BASE_URL,
+      supabaseUrl ? `${supabaseUrl}/storage/v1/object/public` : '',
+    ),
   };
 });
 
