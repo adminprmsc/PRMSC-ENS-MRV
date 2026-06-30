@@ -55,13 +55,20 @@ echo "Recreating database $POSTGRES_DB..."
 "${COMPOSE[@]}" exec -T postgres psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE ${POSTGRES_DB};"
 
 echo "Restoring from $DUMP_FILE (this may take a few minutes)..."
-docker cp "$DUMP_FILE" prmsc-postgres:/tmp/prmsc_restore.dump
-"${COMPOSE[@]}" exec -T postgres pg_restore \
+# Supabase dumps use PG17 pg_dump format — must restore with PG17+ client.
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in $ENV_FILE}"
+COMPOSE_NETWORK="$("${COMPOSE[@]}" ps -q postgres | xargs -r docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' | head -1)"
+docker run --rm \
+  --network "$COMPOSE_NETWORK" \
+  -v "$DUMP_FILE:/dump:ro" \
+  -e PGPASSWORD="$POSTGRES_PASSWORD" \
+  postgres:17-alpine \
+  pg_restore \
+  -h prmsc-postgres \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" \
-  --no-owner --no-acl /tmp/prmsc_restore.dump \
+  --no-owner --no-acl /dump \
   || true
-"${COMPOSE[@]}" exec -T postgres rm -f /tmp/prmsc_restore.dump
 
 echo "Seeding TypeORM migrations baseline..."
 "${COMPOSE[@]}" exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
