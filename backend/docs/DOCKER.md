@@ -2,7 +2,9 @@
 
 Run the API and database on your own server with Docker Compose.
 
-## Quick start
+**Production (Nayatel VM — full stack with frontend + nginx):** see [deploy/README.md](../deploy/README.md).
+
+## Quick start (local)
 
 ```bash
 # From repo root

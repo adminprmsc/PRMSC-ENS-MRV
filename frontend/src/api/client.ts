@@ -13,14 +13,12 @@ const ENV = String(import.meta.env.VITE_ENV || "")
   .toUpperCase();
 
 const DEFAULT_API_ORIGIN =
-  ENV === "PROD"
-    ? "https://prmsc-mrv-api.vercel.app/"
-    : "http://127.0.0.1:5001";
+  ENV === "PROD" ? "/api" : "http://127.0.0.1:5001";
 
 const API_URL =
   normalizeApiUrl(import.meta.env.VITE_API_URL) ||
   normalizeApiUrl(DEFAULT_API_ORIGIN) ||
-  "http://127.0.0.1:5001/api";
+  (ENV === "PROD" ? "/api" : "http://127.0.0.1:5001/api");
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,

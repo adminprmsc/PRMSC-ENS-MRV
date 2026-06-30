@@ -1,0 +1,3 @@
+# TLS certificates (Let's Encrypt or Nayatel-provided). Not committed to git.
+# Place fullchain.pem and privkey.pem here, then uncomment the HTTPS server block
+# in deploy/nginx/default.conf.

@@ -5,7 +5,14 @@ backend/.env.production
 .env
 .env.local
 .env.docker
-*.pem
+.env.docker.production
+*.dump
+prmsc_backup.dump
+backups/
+deploy/certs/*.pem
+deploy/certs/*.crt
+deploy/certs/*.key
+!deploy/certs/.gitkeep
 
 # Node
 node_modules/
