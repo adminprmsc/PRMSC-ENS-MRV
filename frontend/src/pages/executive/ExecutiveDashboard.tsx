@@ -8,10 +8,11 @@ import { useAuth } from "../../contexts/AuthContext";
 const ExecutiveDashboard = () => {
   const { user } = useAuth();
   const subtitle = roleDisplayLabel(user?.role);
+  const tehsilCount = user?.tehsils?.length ?? 0;
   const scope =
-    user?.tehsils?.length ?
-      `Assigned tehsils: ${user.tehsils.join(", ")}.`
-    : "No review tehsils assigned yet — contact your platform administrator.";
+    tehsilCount > 0
+      ? `${tehsilCount} assigned tehsil${tehsilCount === 1 ? "" : "s"}.`
+      : "No review tehsils assigned yet — contact your platform administrator.";
 
   return (
     <ProgramDashboard

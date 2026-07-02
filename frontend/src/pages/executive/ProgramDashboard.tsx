@@ -37,6 +37,8 @@ import OrganizationKpiPanel, {
   type ScopeFilters,
 } from "./OrganizationKpiPanel";
 import { PageHeader, PageShell } from "@/components/layout";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
+import { fetchScopedProgramDashboard } from "./fetchScopedProgramDashboard";
 
 type SummaryData = {
   ohr_count: number;
@@ -148,11 +150,12 @@ const ProgramDashboard = ({
     return t.length ? t : [...TEHSIL_OPTIONS];
   }, [user?.tehsils]);
   const restrictTehsils = (user?.tehsils ?? []).length > 0;
-  const initialTehsil = restrictTehsils
-    ? String(user?.tehsils?.[0] ?? "").trim() ||
-      allowedTehsils[0] ||
-      "All Tehsils"
-    : "All Tehsils";
+  const initialTehsil =
+    restrictTehsils && allowedTehsils.length > 1
+      ? ALL_ASSIGNED_TEHSILS
+      : restrictTehsils
+        ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
+        : ALL_ASSIGNED_TEHSILS;
   const {
     getDashboardProgramSummary,
     getDashboardWaterSupplied,
@@ -182,28 +185,24 @@ const ProgramDashboard = ({
   const [error, setError] = useState("");
 
   const villageOptions = useMemo(() => {
-    if (activeFilters.tehsil === "All Tehsils") return ["All Villages"];
+    if (activeFilters.tehsil === ALL_ASSIGNED_TEHSILS) {
+      if (restrictTehsils && allowedTehsils.length) {
+        const villages = new Set<string>();
+        for (const tehsil of allowedTehsils) {
+          for (const village of (LOCATION_DATA[tehsil.toUpperCase()] ||
+            []) as string[]) {
+            villages.add(village);
+          }
+        }
+        return ["All Villages", ...[...villages].sort()];
+      }
+      return ["All Villages"];
+    }
     return [
       "All Villages",
       ...((LOCATION_DATA[activeFilters.tehsil.toUpperCase()] || []) as string[]),
     ];
-  }, [activeFilters.tehsil]);
-
-  // Manager-ops scoped users: lock filters to their allowed tehsils (no "All Tehsils").
-  useEffect(() => {
-    if (!restrictTehsils) return;
-    const first = allowedTehsils[0];
-    if (!first) return;
-    setActiveFilters((prev) => {
-      if (
-        prev.tehsil !== "All Tehsils" &&
-        allowedTehsils.includes(prev.tehsil)
-      ) {
-        return prev;
-      }
-      return { ...prev, tehsil: first, village: "All Villages" };
-    });
-  }, [allowedTehsils, restrictTehsils]);
+  }, [activeFilters.tehsil, restrictTehsils, allowedTehsils]);
 
   useEffect(() => {
     const load = async () => {
@@ -218,18 +217,24 @@ const ProgramDashboard = ({
             ? { month: Number(activeFilters.month) }
             : {}),
         };
-        const [sum, water, pump, solar, grid] = await Promise.all([
-          getDashboardProgramSummary(apiFilters),
-          getDashboardWaterSupplied(apiFilters),
-          getDashboardPumpHours(apiFilters),
-          getDashboardSolarGeneration(apiFilters),
-          getDashboardGridImport(apiFilters),
-        ]);
-        setSummary((sum || {}) as SummaryData);
-        setWaterSupplied((water || []) as RowData[]);
-        setPumpHours((pump || []) as RowData[]);
-        setSolarGeneration((solar || []) as RowData[]);
-        setGridImport((grid || []) as RowData[]);
+        const { summary: sum, water, pump, solar, grid } =
+          await fetchScopedProgramDashboard(apiFilters, allowedTehsils, {
+            summary: (f) =>
+              getDashboardProgramSummary(f) as Promise<SummaryData | undefined>,
+            water: (f) =>
+              getDashboardWaterSupplied(f) as Promise<RowData[] | undefined>,
+            pump: (f) =>
+              getDashboardPumpHours(f) as Promise<RowData[] | undefined>,
+            solar: (f) =>
+              getDashboardSolarGeneration(f) as Promise<RowData[] | undefined>,
+            grid: (f) =>
+              getDashboardGridImport(f) as Promise<RowData[] | undefined>,
+          });
+        setSummary(sum);
+        setWaterSupplied(water);
+        setPumpHours(pump);
+        setSolarGeneration(solar);
+        setGridImport(grid);
 
         if (showAnomalies) {
           try {
@@ -252,12 +257,14 @@ const ProgramDashboard = ({
       }
     };
     void load();
-  }, [activeFilters, showAnomalies]);
+  }, [activeFilters, showAnomalies, allowedTehsils]);
 
   const activeScopeLabel = useMemo(() => {
     const tehsil =
-      activeFilters.tehsil === "All Tehsils"
-        ? "All tehsils"
+      activeFilters.tehsil === ALL_ASSIGNED_TEHSILS
+        ? restrictTehsils
+          ? `All assigned tehsils (${allowedTehsils.length})`
+          : "All tehsils"
         : activeFilters.tehsil;
     const village =
       activeFilters.village === "All Villages"
@@ -268,20 +275,22 @@ const ProgramDashboard = ({
         ? "All months"
         : MONTHS[Number(activeFilters.month) - 1];
     return `${tehsil} · ${village} · ${activeFilters.year} · ${month}`;
-  }, [activeFilters]);
+  }, [activeFilters, allowedTehsils.length, restrictTehsils]);
 
   const activeScopeTooltip = useMemo(() => {
     const tehsilPart =
-      activeFilters.tehsil === "All Tehsils"
-        ? "All tehsils"
+      activeFilters.tehsil === ALL_ASSIGNED_TEHSILS
+        ? restrictTehsils
+          ? `All assigned tehsils (${allowedTehsils.length})`
+          : "All tehsils"
         : activeFilters.tehsil;
     if (activeFilters.village === "All Villages") {
-      return activeFilters.tehsil === "All Tehsils"
+      return activeFilters.tehsil === ALL_ASSIGNED_TEHSILS
         ? "All villages"
         : `All villages · ${tehsilPart}`;
     }
     return `${activeFilters.village} · ${tehsilPart}`;
-  }, [activeFilters.tehsil, activeFilters.village]);
+  }, [activeFilters.tehsil, activeFilters.village, allowedTehsils.length, restrictTehsils]);
 
   const waterByMonth = useMemo(
     () =>
@@ -424,6 +433,7 @@ const ProgramDashboard = ({
                 compact
                 scopeLabel={activeScopeLabel}
                 dataSyncing={loading}
+                allowedTehsils={allowedTehsils}
                 mapFilters={{
                   tehsil: activeFilters.tehsil,
                   village: activeFilters.village,
@@ -439,6 +449,7 @@ const ProgramDashboard = ({
 
         {showSystemsMap && mapPosition === "inline" ? (
           <SystemsMapCard
+            allowedTehsils={allowedTehsils}
             mapFilters={{
               tehsil: activeFilters.tehsil,
               village: activeFilters.village,
