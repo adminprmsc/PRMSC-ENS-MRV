@@ -28,6 +28,9 @@ export const EXECUTIVE_ROLES: readonly UserRole[] = [ROLE.SUPER_ADMIN];
 /** Platform administrator — user accounts and access only. */
 export const USER_ADMIN_ROLES: readonly UserRole[] = [ROLE.SYSTEM_ADMIN];
 
+/** Training videos — viewable by all web portal roles when published. */
+export const TRAINING_VIDEO_ROLES: readonly UserRole[] = [...PORTAL_ROLES];
+
 /** Roles that can open the tehsil submissions / verification queue UI. */
 export const STAFF_ROLES: readonly UserRole[] = [ROLE.ADMIN];
 
@@ -105,6 +108,15 @@ export function canRegisterTehsilFacilities(role: string | undefined | null): bo
 export function canApproveSubmissions(role: string | undefined | null): boolean {
   const n = normalizeRole(role);
   return n !== undefined && APPROVER_ROLES.includes(n);
+}
+
+export function canAccessTrainingVideos(role: string | undefined | null): boolean {
+  const n = normalizeRole(role);
+  return n !== undefined && TRAINING_VIDEO_ROLES.includes(n);
+}
+
+export function canPublishTrainingVideos(role: string | undefined | null): boolean {
+  return normalizeRole(role) === ROLE.SYSTEM_ADMIN;
 }
 
 /** @deprecated Use isPortalRole / isTehsilManager / isExecutiveRole */

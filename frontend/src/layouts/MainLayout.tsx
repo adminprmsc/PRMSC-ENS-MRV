@@ -9,6 +9,7 @@ import {
   Droplets,
   FileCheck,
   FileText,
+  GraduationCap,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -24,7 +25,7 @@ import {
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { HQ_DASHBOARD, adminRoutes, hqRoutes, tehsilRoutes } from "../constants/routes";
+import { HQ_DASHBOARD, adminRoutes, hqRoutes, tehsilRoutes, trainingRoutes } from "../constants/routes";
 import { accountRoutes } from "../constants/routes";
 import {
   canOnboardOperators,
@@ -268,6 +269,17 @@ const MainLayout = () => {
         ],
       });
     }
+
+    sections.push({
+      title: "Help",
+      items: [
+        {
+          path: trainingRoutes.hub,
+          icon: <GraduationCap className="size-4 shrink-0 opacity-90" />,
+          label: "Training Center",
+        },
+      ],
+    });
 
     sections.push({
       title: "Account",

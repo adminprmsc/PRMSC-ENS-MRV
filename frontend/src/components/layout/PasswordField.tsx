@@ -75,6 +75,7 @@ export function PasswordFieldWithIcon({
   autoComplete,
   required,
   className,
+  inputClassName,
 }: PasswordFieldProps & { icon: React.ReactNode }) {
   const [visible, setVisible] = useState(false);
 
@@ -82,7 +83,7 @@ export function PasswordFieldWithIcon({
     <div className={cn("space-y-1.5", className)}>
       <Label htmlFor={id}>{label}</Label>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground [&_svg]:size-4">
+        <span className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-muted-foreground [&_svg]:size-4">
           {icon}
         </span>
         <Input
@@ -93,12 +94,15 @@ export function PasswordFieldWithIcon({
           placeholder={placeholder}
           autoComplete={autoComplete}
           required={required}
-          className="h-10 pr-10 pl-9"
+          className={cn(
+            "h-11 rounded-lg border-border/70 bg-background pr-10 pl-9 text-[15px] shadow-sm placeholder:text-muted-foreground/50",
+            inputClassName,
+          )}
         />
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:bg-muted"
+          className="absolute top-1/2 right-2 z-[1] -translate-y-1/2 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/80"
           aria-label={visible ? "Hide password" : "Show password"}
         >
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

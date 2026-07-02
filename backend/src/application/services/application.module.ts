@@ -10,6 +10,7 @@ import { RbacService } from './rbac.service';
 import { StorageService } from './storage.service';
 import { TehsilAccessService } from './tehsil-access.service';
 import { TehsilManagerService } from './tehsil-manager.service';
+import { TrainingService } from './training.service';
 import { TubewellOperatorService } from './tubewell-operator.service';
 import { UserService } from './user.service';
 import { WaterMeterBackfillService } from './water-meter-backfill.service';
@@ -28,6 +29,7 @@ const SERVICES = [
   StorageService,
   TehsilAccessService,
   TehsilManagerService,
+  TrainingService,
   TubewellOperatorService,
   UserService,
   WaterMeterBackfillService,
