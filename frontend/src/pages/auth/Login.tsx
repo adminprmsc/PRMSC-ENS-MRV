@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
-import { Loader2, Lock, Mail } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  AuthLayout,
-} from "../../components/layout";
-import { Alert, AlertDescription } from "../../components/ui/alert";
+import { AuthLayout, PasswordFieldWithIcon } from "../../components/layout";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import {
   InputGroup,
@@ -14,7 +12,6 @@ import {
   InputGroupInput,
 } from "../../components/ui/input-group";
 import { Label } from "../../components/ui/label";
-import { Separator } from "../../components/ui/separator";
 import { defaultPathForRole } from "../../constants/roles";
 import { useAuth } from "../../contexts/AuthContext";
 import { getApiErrorMessage } from "../../lib/api-error";
@@ -34,6 +31,12 @@ const getRedirectPathFromStorage = () => {
     return "/login";
   }
 };
+
+const fieldLabelClass =
+  "text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+
+const inputGroupClass =
+  "h-11 rounded-lg border-border/70 bg-background shadow-sm transition-shadow focus-within:shadow-md";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -87,70 +90,82 @@ const Login = () => {
 
   return (
     <AuthLayout>
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
-          Secure Portal
-        </p>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+      <header className="space-y-2 pb-1">
+        <p className={fieldLabelClass}>Secure portal</p>
+        <h1 className="font-heading text-[1.65rem] font-semibold leading-tight tracking-tight text-foreground">
           Welcome back
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           Sign in to continue to the MRV monitoring portal.
         </p>
-      </div>
+      </header>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email address</Label>
-          <InputGroup className="h-10">
+      <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="email" className={fieldLabelClass}>
+            Email address
+          </Label>
+          <InputGroup className={inputGroupClass}>
             <InputGroupAddon align="inline-start">
-              <Mail className="size-4 text-muted-foreground" />
+              <Mail className="size-4 text-muted-foreground/80" />
             </InputGroupAddon>
             <InputGroupInput
               id="email"
               type="email"
-              placeholder="name@prmsc.org.pk"
+              placeholder="name@prmsc.gov.pk"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errorMessage) setErrorMessage("");
+              }}
               required
               autoComplete="email"
+              className="text-[15px] placeholder:text-muted-foreground/50"
             />
           </InputGroup>
         </div>
 
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className={fieldLabelClass}>
+              Password
+            </Label>
             <Link
               to="/forgot-password"
-              className="text-xs font-medium text-primary hover:underline underline-offset-4"
+              className="text-xs font-medium text-primary/90 underline-offset-4 transition-colors hover:text-primary hover:underline"
             >
               Forgot password?
             </Link>
           </div>
-          <InputGroup className="h-10">
-            <InputGroupAddon align="inline-start">
-              <Lock className="size-4 text-muted-foreground" />
-            </InputGroupAddon>
-            <InputGroupInput
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </InputGroup>
+          <PasswordFieldWithIcon
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(value) => {
+              setPassword(value);
+              if (errorMessage) setErrorMessage("");
+            }}
+            icon={<Lock className="size-4 text-muted-foreground/80" />}
+            autoComplete="current-password"
+            required
+            className="space-y-2 [&_label]:sr-only"
+            inputClassName={inputGroupClass}
+          />
         </div>
 
         {errorMessage ? (
-          <Alert variant="destructive">
-            <AlertDescription>{errorMessage}</AlertDescription>
+          <Alert variant="destructive" className="border-destructive/25 bg-destructive/5">
+            <AlertCircle className="size-4" />
+            <AlertTitle className="text-sm">Could not sign in</AlertTitle>
+            <AlertDescription className="text-sm">{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
 
-        <Button type="submit" disabled={loading} className="h-10 w-full">
+        <Button
+          type="submit"
+          disabled={loading}
+          className="h-11 w-full rounded-lg text-[15px] font-semibold shadow-sm"
+        >
           {loading ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="size-4 animate-spin" />
@@ -162,9 +177,7 @@ const Login = () => {
         </Button>
       </form>
 
-      <Separator />
-
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="mt-8 text-center text-[11px] leading-relaxed text-muted-foreground/80">
         Authorized personnel only · Punjab Rural Municipal Services Company
       </p>
     </AuthLayout>

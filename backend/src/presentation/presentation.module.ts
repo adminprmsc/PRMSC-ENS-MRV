@@ -5,6 +5,7 @@ import { AuthController } from './controllers/auth.controller';
 import { DashboardController } from './controllers/dashboard.controller';
 import { HealthController } from './controllers/health.controller';
 import { TehsilManagerController } from './controllers/tehsil-manager.controller';
+import { TrainingController } from './controllers/training.controller';
 import { TubewellOperatorController } from './controllers/tubewell-operator.controller';
 import { UsersController } from './controllers/users.controller';
 
@@ -16,6 +17,7 @@ import { UsersController } from './controllers/users.controller';
     UsersController,
     DashboardController,
     TehsilManagerController,
+    TrainingController,
     TubewellOperatorController,
   ],
 })

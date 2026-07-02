@@ -77,3 +77,13 @@ export const accountRoutes = {
 export const adminRoutes = {
   users: "/admin/users",
 } as const;
+
+/** Training center — guides for all portal roles; videos restricted on page. */
+export const TRAINING_BASE = "/training" as const;
+
+export const trainingRoutes = {
+  hub: TRAINING_BASE,
+  guide: (slug: string) =>
+    `${TRAINING_BASE}/guides/${encodeURIComponent(slug)}`,
+  videos: `${TRAINING_BASE}/videos`,
+} as const;

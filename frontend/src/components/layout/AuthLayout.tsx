@@ -144,32 +144,33 @@ export function AuthLayout({ children, className }: AuthLayoutProps) {
       </div>
 
       {/* Right — credentials */}
-      <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-muted/60 to-muted/30 px-4 py-10 sm:px-8">
-        <div className="w-full max-w-[440px]">
-          <div className="mb-8 flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm lg:hidden">
-            <img
-              src={companyLogo}
-              alt="PRMSC"
-              className="size-10 object-contain"
-            />
+      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-12 sm:px-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--muted))_0%,transparent_55%)]"
+        />
+
+        <div className="relative w-full max-w-[400px]">
+          <div className="mb-6 flex items-center gap-3 lg:hidden">
+            <div className="flex size-10 items-center justify-center rounded-lg border border-border/60 bg-card shadow-sm">
+              <img
+                src={companyLogo}
+                alt="PRMSC"
+                className="size-7 object-contain"
+              />
+            </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-foreground">
+              <p className="truncate text-sm font-semibold text-foreground">
                 MRV System
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 PRMSC secure portal
               </p>
             </div>
-            <img
-              src={govtPunjabLogo}
-              alt="Government of Punjab"
-              className="size-9 object-contain"
-            />
           </div>
 
-          <div className="enterprise-card-shadow overflow-hidden rounded-2xl border border-border/80 bg-card shadow-lg shadow-slate-900/5">
-            <div className="h-1 bg-gradient-to-r from-primary via-primary/80 to-secondary" />
-            <div className="p-8 sm:p-10">{children}</div>
+          <div className="rounded-2xl border border-border/60 bg-card/95 p-8 shadow-[0_8px_30px_rgb(15_23_42/0.06)] backdrop-blur-sm sm:p-9">
+            {children}
           </div>
         </div>
       </div>

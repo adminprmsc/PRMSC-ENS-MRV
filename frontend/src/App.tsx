@@ -13,6 +13,7 @@ import {
   EXECUTIVE_ROLES,
   PORTAL_ROLES,
   TEHSIL_MANAGER_ROLES,
+  TRAINING_VIDEO_ROLES,
   USER_ADMIN_ROLES,
   isExecutiveRole,
   isTehsilManager,
@@ -57,7 +58,11 @@ import WaterOperatorAssignments from "./pages/tehsil/operators/WaterOperatorAssi
 import SubmissionsAudit from "./pages/verification/VerificationDashboard";
 import SubmissionReview from "./pages/verification/SubmissionReview";
 import UsersAdminPage from "./pages/admin/UsersAdminPage";
-import { adminRoutes, tehsilRoutes } from "./constants/routes";
+import TrainingLayout from "./pages/training/TrainingLayout";
+import { TrainingHub } from "./pages/training/TrainingHub";
+import TrainingGuidePage from "./pages/training/TrainingGuidePage";
+import TrainingVideosPage from "./pages/training/TrainingVideosPage";
+import { adminRoutes, tehsilRoutes, trainingRoutes } from "./constants/routes";
 
 const VerificationsRedirect = () => {
   const { user } = useAuth();
@@ -134,6 +139,26 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+              path={trainingRoutes.hub}
+              element={
+                <ProtectedRoute allowedRoles={[...PORTAL_ROLES]}>
+                  <TrainingLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<TrainingHub />} />
+              <Route path="guides/:slug" element={<TrainingGuidePage />} />
+              <Route
+                path="videos"
+                element={
+                  <ProtectedRoute allowedRoles={[...TRAINING_VIDEO_ROLES]}>
+                    <TrainingVideosPage />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
 
             <Route
               path={adminRoutes.users}
