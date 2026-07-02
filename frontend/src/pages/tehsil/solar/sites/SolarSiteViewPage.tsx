@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Building2, Gauge, Pencil } from "lucide-react";
+import { ArrowLeft, Building2, Gauge, Pencil, Sun } from "lucide-react";
 
+import { kv, PageHeader, PageShell } from "../../../../components/layout";
 import { Button } from "../../../../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
 import { Badge } from "../../../../components/ui/badge";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import { tehsilRoutes } from "../../../../constants/routes";
@@ -19,9 +14,13 @@ import type { SolarSystemRow } from "../../../../types/api";
 import Toast from "../../../../components/Toast";
 import { formatPakistanDateTime } from "../../../../utils/pakistanTime";
 
-function kv(v: unknown) {
-  if (v === null || v === undefined || v === "") return "—";
-  return String(v);
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="break-all text-right font-medium">{value}</span>
+    </div>
+  );
 }
 
 export default function SolarSiteViewPage() {
@@ -47,7 +46,7 @@ export default function SolarSiteViewPage() {
         setSite(res);
       } catch (e: unknown) {
         setToast({
-          message: getApiErrorMessage(e, "Failed to load solar site details"),
+          message: getApiErrorMessage(e, "Failed to load solar site"),
           type: "error",
         });
       } finally {
@@ -57,151 +56,115 @@ export default function SolarSiteViewPage() {
     void run();
   }, [id]);
 
+  const title = site?.unique_identifier ? kv(site.unique_identifier) : "Solar site";
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 md:p-6">
+    <PageShell>
       <Toast
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ message: "", type: "success" })}
       />
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={() => navigate(tehsilRoutes.solarSites)}>
-            <ArrowLeft className="size-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Solar Site Details
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              View complete site registration and technical information.
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="space-y-3 pt-6">
-              {Array.from({ length: 8 }).map((_, idx) => (
-                <Skeleton key={idx} className="h-6 w-full" />
-              ))}
-            </CardContent>
-          </Card>
-        ) : site ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge className="bg-slate-900 text-white hover:bg-slate-900">
-                {kv(site.unique_identifier)}
-              </Badge>
-              <Badge variant="outline">{kv(site.tehsil)}</Badge>
-              <Badge variant="outline">{kv(site.village)}</Badge>
-              {site.settlement ? <Badge variant="outline">{kv(site.settlement)}</Badge> : null}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-slate-200 bg-white/90 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
-                    <Building2 className="size-4" />
-                    Identity
-                  </CardTitle>
-                  <CardDescription>Site metadata</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">System ID</span>
-                    <span className="font-mono text-xs">{site.id}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">UID</span>
-                    <span className="font-mono text-xs">{kv(site.unique_identifier)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Created</span>
-                    <span>{formatPakistanDateTime(site.created_at)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Updated</span>
-                    <span>{formatPakistanDateTime(site.updated_at)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-slate-200 bg-white/90 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
-                    <Gauge className="size-4" />
-                    Technical Overview
-                  </CardTitle>
-                  <CardDescription>Generation, inverter and meter details</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Installation location</span>
-                    <span>{kv(site.installation_location)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">DISCO / Electricity provider</span>
-                    <span>{kv(site.disco_info)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="shrink-0 text-muted-foreground">
-                      Bill reference number
-                    </span>
-                    <span className="break-all text-right font-mono text-xs">
-                      {kv(site.bill_reference_number)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Panel capacity (kW)</span>
-                    <span>{kv(site.solar_panel_capacity)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Inverter capacity</span>
-                    <span>{kv(site.inverter_capacity)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Inverter serial</span>
-                    <span>{kv(site.inverter_serial_number)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Solar connection date</span>
-                    <span>{kv(site.solar_connection_date ?? site.installation_date)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Meter model</span>
-                    <span>{kv(site.meter_model)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Meter serial</span>
-                    <span>{kv(site.meter_serial_number)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-slate-50/60 px-3 py-2">
-                    <span className="text-muted-foreground">Monthly logs</span>
-                    <span>{kv(site.monthly_log_count)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
-              <Button variant="outline" onClick={() => navigate(tehsilRoutes.solarSites)}>
-                Back
-              </Button>
-              <Button onClick={() => navigate(tehsilRoutes.solarSiteEdit(site.id))} className="gap-2">
+      <PageHeader
+        icon={<Sun />}
+        title={loading ? "Solar site" : title}
+        description={
+          site
+            ? [site.tehsil, site.village, site.settlement].filter(Boolean).join(" · ")
+            : "Site details"
+        }
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate(tehsilRoutes.solarSites)}
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+            {site ? (
+              <Button size="sm" onClick={() => navigate(tehsilRoutes.solarSiteEdit(site.id))}>
                 <Pencil className="size-4" />
                 Edit
               </Button>
-            </div>
+            ) : null}
           </div>
-        ) : (
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="pt-6 text-sm text-muted-foreground">
-              No solar site found for this route.
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
+        }
+      />
+
+      {loading ? (
+        <Card>
+          <CardContent className="space-y-3 pt-4">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <Skeleton key={idx} className="h-8 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      ) : site ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge>{kv(site.unique_identifier)}</Badge>
+            <Badge variant="outline">{kv(site.tehsil)}</Badge>
+            <Badge variant="outline">{kv(site.village)}</Badge>
+            {site.settlement ? (
+              <Badge variant="outline">{kv(site.settlement)}</Badge>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader className="border-b border-border/60 pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Building2 className="size-4 text-muted-foreground" />
+                  Identity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-4">
+                <DetailRow label="System ID" value={site.id} />
+                <DetailRow label="UID" value={kv(site.unique_identifier)} />
+                <DetailRow
+                  label="Created"
+                  value={formatPakistanDateTime(site.created_at)}
+                />
+                <DetailRow
+                  label="Updated"
+                  value={formatPakistanDateTime(site.updated_at)}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b border-border/60 pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Gauge className="size-4 text-muted-foreground" />
+                  Technical
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-4">
+                <DetailRow label="Location" value={kv(site.installation_location)} />
+                <DetailRow label="DISCO" value={kv(site.disco_info)} />
+                <DetailRow label="Bill ref" value={kv(site.bill_reference_number)} />
+                <DetailRow label="Panel (kW)" value={kv(site.solar_panel_capacity)} />
+                <DetailRow label="Inverter" value={kv(site.inverter_capacity)} />
+                <DetailRow label="Inverter serial" value={kv(site.inverter_serial_number)} />
+                <DetailRow
+                  label="Connected"
+                  value={kv(site.solar_connection_date ?? site.installation_date)}
+                />
+                <DetailRow label="Meter model" value={kv(site.meter_model)} />
+                <DetailRow label="Meter serial" value={kv(site.meter_serial_number)} />
+                <DetailRow label="Monthly logs" value={kv(site.monthly_log_count)} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Site not found.
+          </CardContent>
+        </Card>
+      )}
+    </PageShell>
   );
 }

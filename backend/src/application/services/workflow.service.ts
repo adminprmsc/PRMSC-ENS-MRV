@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
-import { ADMIN, SUPER_ADMIN, SYSTEM_ADMIN } from '../../domain/constants/roles';
+import { SUPER_ADMIN, ADMIN } from '../../domain/constants/roles';
 import { Notification } from '../../infrastructure/database/entities/notification.entity';
 import { Role } from '../../infrastructure/database/entities/role.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
@@ -67,7 +67,7 @@ export class WorkflowService {
     const globalAdmins = await this.userRepo
       .createQueryBuilder('u')
       .innerJoin(Role, 'r', 'r.id = u.role_id')
-      .where('r.code IN (:...codes)', { codes: [SYSTEM_ADMIN, SUPER_ADMIN] })
+      .where('r.code IN (:...codes)', { codes: [SUPER_ADMIN] })
       .getMany();
 
     for (const u of globalAdmins) {

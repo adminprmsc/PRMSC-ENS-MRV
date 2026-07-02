@@ -65,8 +65,7 @@ function canonicalTehsil(raw: string): string | null {
 
 function EditPageSkeleton() {
   return (
-    <div className="min-h-screen bg-muted/30 p-4 pb-16 md:p-6">
-      <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-10 w-full max-w-md" />
         <Card>
@@ -87,7 +86,6 @@ function EditPageSkeleton() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
@@ -377,7 +375,7 @@ export default function SolarMonthlyLogEditPage() {
 
   if (loading) {
     return (
-      <div className="relative min-h-screen bg-muted/30">
+      <div className="relative">
         <div className="pointer-events-none absolute inset-0 flex items-start justify-center bg-background/40 pt-24 backdrop-blur-[1px]">
           <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-sm">
             <Loader2 className="size-4 animate-spin text-primary" />
@@ -391,8 +389,7 @@ export default function SolarMonthlyLogEditPage() {
 
   if (loadError || !record) {
     return (
-      <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-        <div className="mx-auto w-full max-w-lg">
+      <div className="mx-auto w-full max-w-lg">
           <Button
             variant="outline"
             size="sm"
@@ -411,14 +408,12 @@ export default function SolarMonthlyLogEditPage() {
               <p className="text-sm text-slate-600">{loadError}</p>
             </CardContent>
           </Card>
-        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 pb-16 md:p-6">
-      <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl pb-8">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <Button
@@ -709,7 +704,6 @@ export default function SolarMonthlyLogEditPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

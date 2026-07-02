@@ -1,18 +1,47 @@
-import { useMemo } from "react";
-import { Download, Loader2, MapPin } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  MapPin,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  DataListCard,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeader,
+  DataTableWrap,
+  StatCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "../../../components/layout";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
-import { Label } from "../../../components/ui/label";
-import { Separator } from "../../../components/ui/separator";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "../../../components/ui/empty";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "../../../components/ui/field";
 import {
   Select,
   SelectContent,
@@ -20,16 +49,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
+import { Skeleton } from "../../../components/ui/skeleton";
 import { tehsilRoutes } from "../../../constants/routes";
-import { downloadSolarComplianceExcel } from "./exportComplianceExcel";
 import {
   MONTH_NAMES,
   type SolarMonthlyYearPayload,
@@ -50,17 +71,6 @@ type SolarLoggingComplianceSectionProps = {
   yearData: SolarMonthlyYearPayload | null;
 };
 
-function StepIndex({ n }: { n: number }) {
-  return (
-    <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold tabular-nums text-muted-foreground"
-      aria-hidden
-    >
-      {n}
-    </span>
-  );
-}
-
 export default function SolarLoggingComplianceSection({
   baseId,
   panelId,
@@ -75,6 +85,10 @@ export default function SolarLoggingComplianceSection({
   yearData,
 }: SolarLoggingComplianceSectionProps) {
   const navigate = useNavigate();
+  const [tableSearch, setTableSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "logged" | "missing">(
+    "all",
+  );
 
   const selectedSite = solarSites.find((s) => s.id === selectedSolarSystemId);
 
@@ -87,28 +101,39 @@ export default function SolarLoggingComplianceSection({
     return { logged, missing: 12 - logged };
   }, [yearData?.months]);
 
+  const filteredMonths = useMemo(() => {
+    const months = yearData?.months ?? [];
+    const q = tableSearch.trim().toLowerCase();
+    return months.filter((row) => {
+      const name = (MONTH_NAMES[row.month] ?? "").toLowerCase();
+      const isLogged = row.monthly_status === "logged";
+      if (statusFilter === "logged" && !isLogged) return false;
+      if (statusFilter === "missing" && isLogged) return false;
+      if (!q) return true;
+      return name.includes(q) || row.month.toString().includes(q);
+    });
+  }, [yearData?.months, tableSearch, statusFilter]);
+
+  const showEmptyPick =
+    !sitesLoading && solarSites.length > 0 && !selectedSolarSystemId;
+  const showNoSites = !sitesLoading && solarSites.length === 0;
+  const showData = Boolean(yearData && selectedSolarSystemId);
+
   return (
     <div
       id={panelId}
       role="tabpanel"
       aria-labelledby={`${baseId}-tab-solar`}
-      className="w-full space-y-6"
+      className="space-y-5"
     >
-      <Card className="border-border shadow-none">
-        <CardHeader className="pb-2 pt-6">
-          <CardTitle className="text-base font-medium">Selection</CardTitle>
-          <CardDescription className="text-sm">
-            Select a solar site first, then a year. The table lists every month
-            in that year.
-          </CardDescription>
+      <Card>
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="text-base font-semibold">Filters</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-0 pb-6">
-          <div className="flex gap-4">
-            <StepIndex n={1} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="solar-site-pick" className="text-sm font-medium">
-                Solar site
-              </Label>
+        <CardContent className="pt-5">
+          <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-12">
+            <Field className="lg:col-span-8">
+              <FieldLabel htmlFor="solar-site-pick">Solar site</FieldLabel>
               <Select
                 value={selectedSolarSystemId || undefined}
                 onValueChange={(v) => {
@@ -116,36 +141,32 @@ export default function SolarLoggingComplianceSection({
                 }}
                 disabled={sitesLoading || solarSites.length === 0}
               >
-                <SelectTrigger id="solar-site-pick" className="h-10 max-w-lg">
+                <SelectTrigger id="solar-site-pick" className="h-10 w-full">
                   <SelectValue
-                    placeholder={sitesLoading ? "" : "Select site"}
+                    placeholder={sitesLoading ? "Loading…" : "Select site"}
                   />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72">
                   {solarSites.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      <span className="font-mono text-sm">
+                      <span className="font-mono text-xs">
                         {s.unique_identifier}
                       </span>
                       <span className="text-muted-foreground">
                         {" "}
-                        — {s.village}
+                        · {s.village}
                       </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
+              <FieldDescription>
+                Monthly status for every month in the selected year.
+              </FieldDescription>
+            </Field>
 
-          <Separator className="my-6" />
-
-          <div className="flex gap-4">
-            <StepIndex n={2} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="solar-year-pick" className="text-sm font-medium">
-                Year
-              </Label>
+            <Field className="lg:col-span-4">
+              <FieldLabel htmlFor="solar-year-pick">Year</FieldLabel>
               <Select
                 value={String(solarYear)}
                 onValueChange={(v) => {
@@ -153,10 +174,7 @@ export default function SolarLoggingComplianceSection({
                 }}
                 disabled={loading || !selectedSolarSystemId}
               >
-                <SelectTrigger
-                  id="solar-year-pick"
-                  className="h-10 w-full max-w-[200px]"
-                >
+                <SelectTrigger id="solar-year-pick" className="h-10 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -167,205 +185,218 @@ export default function SolarLoggingComplianceSection({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
         </CardContent>
       </Card>
 
       {sitesLoading ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading sites…
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
         </div>
       ) : null}
 
-      {!sitesLoading && solarSites.length > 0 && !selectedSolarSystemId ? (
-        <Card className="border-dashed shadow-none">
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <MapPin className="size-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium text-foreground">
-              Select a solar site
-            </p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Pick a site above to load monthly logging and show the table.
-            </p>
-          </CardContent>
-        </Card>
+      {showEmptyPick ? (
+        <Empty className="border border-dashed bg-muted/20 py-14">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MapPin />
+            </EmptyMedia>
+            <EmptyTitle>Select a solar site</EmptyTitle>
+            <EmptyDescription>
+              Choose a site above to load monthly logging for the year.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
 
-      {!sitesLoading && solarSites.length === 0 ? (
-        <Card className="border-dashed shadow-none">
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <MapPin className="size-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium text-foreground">
-              No solar sites in scope
-            </p>
-            <p className="max-w-sm text-sm text-muted-foreground">
+      {showNoSites ? (
+        <Empty className="border border-dashed bg-muted/20 py-14">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MapPin />
+            </EmptyMedia>
+            <EmptyTitle>No solar sites in scope</EmptyTitle>
+            <EmptyDescription>
               Register sites under Solar systems, then return here.
-            </p>
-          </CardContent>
-        </Card>
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
 
       {loading && !yearData && selectedSolarSystemId ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          Loading…
+          Loading monthly logs…
         </div>
       ) : null}
 
-      {yearData && selectedSolarSystemId ? (
+      {showData && yearData ? (
         <>
-          <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="font-mono font-medium text-foreground">
-                {yearData.unique_identifier}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">
-                {selectedSite?.settlement
-                  ? `${selectedSite.village}, ${selectedSite.settlement}`
-                  : yearData.village}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">{yearData.year}</span>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/25 px-4 py-3 text-sm">
+            <span className="font-mono text-xs font-semibold">
+              {yearData.unique_identifier}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">
+              {selectedSite?.settlement
+                ? `${selectedSite.village}, ${selectedSite.settlement}`
+                : yearData.village}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-xs font-medium">{yearData.year}</span>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Card className="border-border shadow-none">
-              <CardHeader className="pb-1 pt-4">
-                <CardDescription className="text-xs font-normal text-muted-foreground">
-                  Months with a saved log
-                </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard
+              label="Logged"
+              value={
+                <>
                   {counts.logged}
-                  <span className="text-base font-normal text-muted-foreground">
+                  <span className="text-lg font-normal text-muted-foreground">
                     {" "}
                     / 12
                   </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 text-xs text-muted-foreground">
-                Complete for the selected year
-              </CardContent>
-            </Card>
-            <Card className="border-border shadow-none">
-              <CardHeader className="pb-1 pt-4">
-                <CardDescription className="text-xs font-normal text-muted-foreground">
-                  Months missing
-                </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums text-destructive">
-                  {counts.missing}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 text-xs text-muted-foreground">
-                No monthly entry on file
-              </CardContent>
-            </Card>
+                </>
+              }
+              description="Months with a saved log"
+              accent="green"
+              icon={<CheckCircle2 className="size-5" />}
+              loading={loading}
+            />
+            <StatCard
+              label="Missing"
+              value={counts.missing}
+              description="No monthly entry on file"
+              accent="amber"
+              icon={<AlertCircle className="size-5" />}
+              valueClassName="text-destructive"
+              loading={loading}
+            />
+            <StatCard
+              label="Completion"
+              value={`${Math.round((counts.logged / 12) * 100)}%`}
+              description="Share of months logged"
+              accent="blue"
+              loading={loading}
+            />
           </div>
 
-          <Card className="border-border shadow-none">
-            <CardHeader className="border-b border-border/80 pb-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <CardTitle className="text-base font-medium">
-                    Monthly status — {yearData.year}
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    <button
-                      type="button"
-                      className="text-foreground underline-offset-4 hover:underline"
-                      onClick={() => navigate(tehsilRoutes.solarMonthlyLogging)}
-                    >
-                      Monthly logging
-                    </button>{" "}
-                    to add or edit entries. Export matches the table (month and
-                    status).
-                  </CardDescription>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-2"
-                  onClick={() => downloadSolarComplianceExcel(yearData)}
-                >
-                  <Download className="size-4" />
-                  Export Excel
-                </Button>
+          <DataListCard
+            title={`Monthly status — ${yearData.year}`}
+            count={filteredMonths.length}
+            search={tableSearch}
+            onSearchChange={setTableSearch}
+            searchPlaceholder="Search month…"
+            loading={loading && (yearData.months?.length ?? 0) === 0}
+            toolbar={
+              <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
+                {(
+                  [
+                    { id: "all", label: "All" },
+                    { id: "logged", label: "Logged" },
+                    { id: "missing", label: "Missing" },
+                  ] as const
+                ).map(({ id, label }) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    size="sm"
+                    variant={statusFilter === id ? "default" : "ghost"}
+                    className="rounded-md px-3"
+                    onClick={() => setStatusFilter(id)}
+                  >
+                    {label}
+                  </Button>
+                ))}
               </div>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0 sm:p-0">
+            }
+          >
+            <DataTableWrap>
               <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="min-w-[160px] pl-6">Month</TableHead>
-                    <TableHead className="min-w-[120px]">Status</TableHead>
-                    <TableHead className="min-w-[140px] pr-6">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <DataTableHeader>
+                  <DataTableHead className="min-w-[140px]">Month</DataTableHead>
+                  <DataTableHead className="min-w-[120px]">Status</DataTableHead>
+                  <DataTableHead align="right" className="min-w-[160px]">
+                    Actions
+                  </DataTableHead>
+                </DataTableHeader>
                 <TableBody>
-                  {yearData.months.map((row) => {
-                    const name = MONTH_NAMES[row.month] ?? `Month ${row.month}`;
-                    const isLogged = row.monthly_status === "logged";
-                    return (
-                      <TableRow key={row.month}>
-                        <TableCell className="pl-6 font-medium">
-                          {name}
-                        </TableCell>
-                        <TableCell>
-                          {isLogged ? (
-                            <Badge variant="secondary" className="font-normal">
-                              Logged
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="font-normal text-muted-foreground"
-                            >
-                              Missing
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="pr-6">
-                          {row.monthly_log?.record_id ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8"
-                              onClick={() =>
-                                navigate(
-                                  tehsilRoutes.solarMonthlyLogEdit(
-                                    row.monthly_log!.record_id,
-                                  ),
-                                )
-                              }
-                            >
-                              Open
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              className="h-8"
-                              onClick={() =>
-                                navigate(tehsilRoutes.solarMonthlyLogging)
-                              }
-                            >
-                              Add log
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {filteredMonths.length === 0 ? (
+                    <DataTableEmpty
+                      colSpan={3}
+                      message={
+                        tableSearch.trim() || statusFilter !== "all"
+                          ? "No months match your filters."
+                          : "No months in range."
+                      }
+                    />
+                  ) : (
+                    filteredMonths.map((row) => {
+                      const name =
+                        MONTH_NAMES[row.month] ?? `Month ${row.month}`;
+                      const isLogged = row.monthly_status === "logged";
+                      return (
+                        <TableRow key={row.month}>
+                          <TableCell className="font-medium">{name}</TableCell>
+                          <TableCell>
+                            {isLogged ? (
+                              <Badge variant="secondary" className="font-normal">
+                                Logged
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="font-normal text-destructive"
+                              >
+                                Missing
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex justify-end gap-1.5">
+                              {row.monthly_log?.record_id ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 gap-1.5"
+                                  onClick={() =>
+                                    navigate(
+                                      tehsilRoutes.solarMonthlyLogEdit(
+                                        row.monthly_log!.record_id,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <Pencil className="size-3.5" />
+                                  Edit
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8 gap-1.5"
+                                  onClick={() =>
+                                    navigate(tehsilRoutes.solarMonthlyLogging)
+                                  }
+                                >
+                                  <Plus className="size-3.5" />
+                                  Add log
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </DataTableWrap>
+          </DataListCard>
         </>
       ) : null}
     </div>

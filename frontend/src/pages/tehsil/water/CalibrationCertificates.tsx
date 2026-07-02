@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
+  DataListCard,
+  DataTableHead,
+  DataTableHeader,
+  DataTableWrap,
+  PageHeader,
+  PageShell,
+  StatCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "../../../components/layout";
+import {
+  ExternalLink,
   FileText,
   RefreshCcw,
 } from "lucide-react";
@@ -9,28 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "../../../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
-import { Skeleton } from "../../../components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "../../../components/ui/alert";
 import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { getActiveWaterSystemCalibrationCertificates } from "../../../services/tehsilManagerOperatorService";
@@ -179,33 +170,23 @@ export default function CalibrationCertificates() {
   const hasUrgent = expiredCount > 0 || expiringWeekCount > 0;
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Calibration certificates
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Active bulk-meter calibration certificate per water system in your
-              scope. Systems without a bulk meter do not require a calibration
-              certificate.
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        icon={<FileText />}
+        title="Calibration certificates"
+        description={`${rows.length} active · bulk-meter systems only`}
+        actions={
           <div className="flex items-center gap-2">
-            {expiredCount > 0 ? (
-              <Badge variant="destructive">{expiredCount} expired</Badge>
-            ) : null}
-            {expiringWeekCount > 0 ? (
-              <Badge className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-50">
-                {expiringWeekCount} expiring in 7 days
+            {hasUrgent ? (
+              <Badge variant="destructive" className="hidden sm:inline-flex">
+                {expiredCount + expiringWeekCount} need attention
               </Badge>
             ) : null}
             <Button
               variant="outline"
+              size="sm"
               onClick={() => void load(true)}
-              disabled={refreshing}
-              className="gap-2"
+              disabled={refreshing || loading}
             >
               <RefreshCcw
                 className={`size-4 ${refreshing ? "animate-spin" : ""}`}
@@ -213,190 +194,123 @@ export default function CalibrationCertificates() {
               Refresh
             </Button>
           </div>
+        }
+      />
+
+      {!loading ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label="Expired" value={expiredCount} accent="amber" />
+          <StatCard label="Due in 7d" value={expiringWeekCount} accent="amber" />
+          <StatCard label="Valid" value={validCount} accent="green" />
         </div>
+      ) : null}
 
-        {hasUrgent ? (
-          <Alert
-            className={
-              expiredCount > 0
-                ? "border-red-300 bg-red-50/80 text-red-950"
-                : "border-amber-300 bg-amber-50/80 text-amber-950"
-            }
-          >
-            <AlertTriangle className="size-4" />
-
-            <AlertDescription>
-              {expiredCount > 0
-                ? `${expiredCount} certificate(s) already expired.`
-                : ""}
-              {expiredCount > 0 && expiringWeekCount > 0 ? " " : ""}
-              {expiringWeekCount > 0
-                ? `${expiringWeekCount} certificate(s) will expire within the next 7 days.`
-                : ""}{" "}
-              Please coordinate renewal promptly to avoid compliance gaps.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {!loading ? (
-          <Card className="border-slate-200 bg-white/90">
-            <CardContent className="pt-5">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-red-700">
-                    Expired
-                  </p>
-                  <p className="mt-1 text-xl font-semibold text-red-900">
-                    {expiredCount}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700">
-                    Due in 7 days
-                  </p>
-                  <p className="mt-1 text-xl font-semibold text-amber-900">
-                    {expiringWeekCount}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
-                    Valid
-                  </p>
-                  <p className="mt-1 flex items-center gap-1 text-xl font-semibold text-emerald-900">
-                    <CheckCircle2 className="size-4" />
-                    {validCount}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Counts update automatically every minute and when you return to
-                this tab.
-              </p>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Active certificates</CardTitle>
-            <CardDescription>
-              {loading
-                ? ""
-                : `${rows.length} water system(s) with active bulk-meter certificate`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 8 }).map((_, idx) => (
-                  <Skeleton key={idx} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tehsil</TableHead>
-                      <TableHead>Village</TableHead>
-                      <TableHead>UID</TableHead>
-                      <TableHead>Uploaded</TableHead>
-                      <TableHead>Expiry</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>File</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={8}
-                          className="h-24 text-center text-muted-foreground"
-                        >
-                          No active bulk-meter certificates found.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      rowsWithExpiry.map(({ row: r, expiry }) => (
-                        <TableRow
-                          key={r.certificate.id}
-                          className={
-                            expiry.state === "expired"
-                              ? "bg-red-50/60"
-                              : expiry.state === "expiring_7d"
-                                ? "bg-amber-50/60"
-                                : ""
+      <DataListCard
+        title="Certificates"
+        count={rows.length}
+        loading={loading}
+      >
+        <DataTableWrap>
+          <Table>
+            <DataTableHeader>
+              <DataTableHead>Tehsil</DataTableHead>
+              <DataTableHead>Village</DataTableHead>
+              <DataTableHead>UID</DataTableHead>
+              <DataTableHead>Uploaded</DataTableHead>
+              <DataTableHead>Expiry</DataTableHead>
+              <DataTableHead>Status</DataTableHead>
+              <DataTableHead>File</DataTableHead>
+              <DataTableHead align="right">Actions</DataTableHead>
+            </DataTableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="h-20 text-center text-sm text-muted-foreground"
+                  >
+                    No active certificates.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rowsWithExpiry.map(({ row: r, expiry }) => (
+                  <TableRow
+                    key={r.certificate.id}
+                    className={
+                      expiry.state === "expired"
+                        ? "bg-red-50/40"
+                        : expiry.state === "expiring_7d"
+                          ? "bg-amber-50/40"
+                          : ""
+                    }
+                  >
+                    <TableCell className="font-medium">
+                      {r.water_system.tehsil || "—"}
+                    </TableCell>
+                    <TableCell>{r.water_system.village || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {r.water_system.unique_identifier || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {fmtDate(r.certificate.uploaded_at)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {fmtDate(r.certificate.expiry_date)}
+                    </TableCell>
+                    <TableCell>
+                      {expiry.state === "expired" ? (
+                        <Badge variant="destructive">Expired</Badge>
+                      ) : expiry.state === "expiring_7d" ? (
+                        <Badge className="border-amber-300 bg-amber-50 text-amber-900">
+                          {expiry.daysRemaining === 0
+                            ? "Today"
+                            : `${expiry.daysRemaining}d`}
+                        </Badge>
+                      ) : expiry.state === "valid" ? (
+                        <Badge variant="secondary">Valid</Badge>
+                      ) : (
+                        <Badge variant="outline">No date</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate text-sm">
+                      {fileNameFromUrl(r.certificate.file_url)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8"
+                          onClick={() =>
+                            window.open(r.certificate.file_url, "_blank")
                           }
+                          title="View file"
                         >
-                          <TableCell className="font-medium">
-                            {r.water_system.tehsil || "—"}
-                          </TableCell>
-                          <TableCell>{r.water_system.village || "—"}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {r.water_system.unique_identifier || "—"}
-                          </TableCell>
-                          <TableCell>
-                            {fmtDate(r.certificate.uploaded_at)}
-                          </TableCell>
-                          <TableCell>
-                            {fmtDate(r.certificate.expiry_date)}
-                          </TableCell>
-                          <TableCell>
-                            {expiry.state === "expired" ? (
-                              <Badge variant="destructive">Expired</Badge>
-                            ) : expiry.state === "expiring_7d" ? (
-                              <Badge className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-50">
-                                {expiry.daysRemaining === 0
-                                  ? "Expires today"
-                                  : `Expires in ${expiry.daysRemaining} day(s)`}
-                              </Badge>
-                            ) : expiry.state === "valid" ? (
-                              <Badge variant="secondary">Valid</Badge>
-                            ) : (
-                              <Badge variant="outline">No expiry date</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-[280px] truncate">
-                            {fileNameFromUrl(r.certificate.file_url)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="inline-flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  window.open(r.certificate.file_url, "_blank")
-                                }
-                              >
-                                <FileText className="size-4" />
-                                View
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  const key =
-                                    r.water_system.unique_identifier ||
-                                    r.water_system.id;
-                                  navigate(
-                                    `${tehsilRoutes.waterFormEdit(key)}#calibration-certificates-section`,
-                                  );
-                                }}
-                              >
-                                Update certificate
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+                          <ExternalLink className="size-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const key =
+                              r.water_system.unique_identifier ||
+                              r.water_system.id;
+                            navigate(
+                              `${tehsilRoutes.waterFormEdit(key)}#calibration-certificates-section`,
+                            );
+                          }}
+                        >
+                          Update
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </DataTableWrap>
+      </DataListCard>
+    </PageShell>
   );
 }

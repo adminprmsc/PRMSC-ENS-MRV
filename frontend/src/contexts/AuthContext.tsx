@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -7,11 +8,7 @@ import React, {
 } from "react";
 
 import api from "../api/api";
-import {
-  isPortalRole,
-  normalizeRole,
-  type UserRole,
-} from "../constants/roles";
+import { isPortalRole, normalizeRole, type UserRole } from "../constants/roles";
 import { getApiErrorMessage } from "../lib/api-error";
 import type { AuthUser, LoginResponse } from "../types/auth";
 
@@ -86,54 +83,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   }, []);
 
-  const login = async (
-    email: string,
-    password: string,
-  ): Promise<LoginResult> => {
-    try {
-      const response = await api.post<LoginResponse>("/auth/login", {
-        email,
-        password,
-      });
-      const { token, user: userData } = response.data;
-      const user = coerceAuthUser({
-        id: String(userData.id),
-        name: userData.name,
-        role: userData.role,
-        tehsils: userData.tehsils,
-        water_system_ids: userData.water_system_ids,
-      });
+  const login = useCallback(
+    async (email: string, password: string): Promise<LoginResult> => {
+      try {
+        const response = await api.post<LoginResponse>("/auth/login", {
+          email,
+          password,
+        });
+        const { token, user: userData } = response.data;
+        const user = coerceAuthUser({
+          id: String(userData.id),
+          name: userData.name,
+          role: userData.role,
+          ...(userData.tehsils != null ? { tehsils: userData.tehsils } : {}),
+          ...(userData.water_system_ids != null
+            ? { water_system_ids: userData.water_system_ids }
+            : {}),
+        });
 
-      if (!isPortalRole(user.role)) {
+        if (!isPortalRole(user.role)) {
+          return {
+            success: false,
+            message:
+              "This portal is for Tehsil Managers, Manager Operations reviewers, and Platform Administrators.",
+          };
+        }
+
+        localStorage.setItem("mrv_token", token);
+        localStorage.setItem("mrv_user", JSON.stringify(user));
+        setUser(user);
+
+        return { success: true };
+      } catch (error: unknown) {
         return {
           success: false,
-          message:
-            "This portal is for Tehsil Manager Operators, Manager Operations, and MRV COO only.",
+          message: getApiErrorMessage(error, "Login failed"),
         };
       }
+    },
+    [],
+  );
 
-      localStorage.setItem("mrv_token", token);
-      localStorage.setItem("mrv_user", JSON.stringify(user));
-      setUser(user);
-
-      return { success: true };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        message: getApiErrorMessage(error, "Login failed"),
-      };
-    }
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("mrv_token");
     localStorage.removeItem("mrv_user");
     setUser(null);
-  };
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, login, logout, loading }),
-    [user, loading],
+    [user, loading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,10 +3,14 @@ import { Link } from "react-router-dom";
 import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-import companyLogo from "../../assets/company-logo.png";
+import { AuthLayout, AuthMobileBrand } from "../../components/layout";
+import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Input } from "../../components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "../../components/ui/input-group";
 import { Label } from "../../components/ui/label";
 import { Separator } from "../../components/ui/separator";
 import { forgotPassword } from "../../services";
@@ -39,72 +43,81 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
-      <Card className="w-full max-w-lg overflow-hidden shadow-lg">
-        <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex items-center gap-3">
-            <img src={companyLogo} alt="PRMSC logo" className="h-12 w-auto object-contain" />
-            <div className="text-left">
-              <CardTitle className="text-xl">Forgot password</CardTitle>
-              <CardDescription>Enter your email to receive reset instructions.</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email address</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@prmsc.org.pk"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  className="h-10 pl-9"
-                />
+    <AuthLayout>
+      <AuthMobileBrand />
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+          Account recovery
+        </p>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          Forgot password
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Enter your work email and we&apos;ll send reset instructions if the
+          account exists.
+        </p>
+      </div>
+
+      <form className="space-y-4" onSubmit={submit}>
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email address</Label>
+          <InputGroup className="h-10">
+            <InputGroupAddon align="inline-start">
+              <Mail className="size-4 text-muted-foreground" />
+            </InputGroupAddon>
+            <InputGroupInput
+              id="email"
+              type="email"
+              placeholder="name@prmsc.org.pk"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </InputGroup>
+        </div>
+
+        <Button type="submit" disabled={loading} className="h-10 w-full">
+          {loading ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              Sending…
+            </span>
+          ) : (
+            "Send reset instructions"
+          )}
+        </Button>
+      </form>
+
+      {message ? (
+        <Alert variant={devToken ? "info" : "default"}>
+          <AlertDescription>
+            {message}
+            {devToken ? (
+              <div className="mt-3 rounded-lg border bg-background p-3 text-left">
+                <p className="text-xs font-semibold text-foreground">
+                  Dev reset token
+                </p>
+                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                  {devToken}
+                </p>
               </div>
-            </div>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-            <Button type="submit" disabled={loading} className="h-10 w-full">
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin" />
-                  Sending…
-                </span>
-              ) : (
-                "Send reset instructions"
-              )}
-            </Button>
-          </form>
+      <Separator />
 
-          {message ? (
-            <div className="rounded-xl border bg-muted/20 p-3 text-sm text-muted-foreground">
-              {message}
-              {devToken ? (
-                <div className="mt-3 rounded-lg border bg-background p-3">
-                  <p className="text-xs font-semibold text-foreground">Dev reset token</p>
-                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                    {devToken}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <Separator />
-
-          <p className="text-center text-sm text-muted-foreground">
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Back to sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link
+          to="/login"
+          className="font-medium text-primary hover:underline underline-offset-4"
+        >
+          Back to sign in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }
-

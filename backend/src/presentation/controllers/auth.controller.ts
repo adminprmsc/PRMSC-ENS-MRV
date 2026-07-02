@@ -45,7 +45,9 @@ export class AuthController {
   async login(@Body() body: LoginDto) {
     const user = await this.authService.authenticate(body.email, body.password);
     if (!user) {
-      throw new UnauthorizedException({ message: 'Invalid email or password' });
+      throw new UnauthorizedException({
+        message: 'Invalid email or password, or account is inactive',
+      });
     }
 
     const fullUser =

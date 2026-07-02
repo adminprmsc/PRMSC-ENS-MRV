@@ -22,6 +22,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useVerificationApi } from "../../hooks";
 import { getApiErrorMessage } from "../../lib/api-error";
+import { PageShell } from "../../components/layout";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
@@ -102,6 +103,9 @@ type SubmissionSystem = {
   pump_flow_rate?: number | string;
   depth_of_water_intake?: number | string;
   height_to_ohr?: number | string;
+  bulk_meter_installed?: boolean | null;
+  ohr_tank_capacity?: number | string;
+  ohr_fill_required?: number | string;
   solar_panel_capacity?: number | string;
   inverter_capacity?: number | string;
   inverter_serial_number?: string;
@@ -268,6 +272,8 @@ const SubmissionReview = () => {
   const canFinalApprove =
     canApproveSubmissions(user?.role) && submission?.status === "verified";
   const isWaterSystem = submission?.submission_type === "water_system";
+  const hasBulkMeter =
+    recordData?.system?.bulk_meter_installed !== false;
 
   const statusBadge = useMemo(() => {
     const status = submission?.status ?? "draft";
@@ -330,7 +336,7 @@ const SubmissionReview = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted/30 p-4 md:p-6">
+      <PageShell>
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
           <Skeleton className="h-12 w-80" />
           <div className="grid gap-4 lg:grid-cols-3">
@@ -345,14 +351,14 @@ const SubmissionReview = () => {
             </div>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!submission) {
     return (
-      <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-        <Card className="mx-auto max-w-2xl">
+      <PageShell narrow>
+        <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">
               Submission was not found or could not be loaded.
@@ -367,12 +373,12 @@ const SubmissionReview = () => {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
+    <PageShell>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -480,6 +486,10 @@ const SubmissionReview = () => {
                 {isWaterSystem ? (
                   <>
                     <MetaItem
+                      label="Logging mode"
+                      value={hasBulkMeter ? "Bulk meter" : "OHR / runtime only"}
+                    />
+                    <MetaItem
                       label="Pump start"
                       value={infoValue(recordData?.pump_start_time)}
                     />
@@ -494,22 +504,46 @@ const SubmissionReview = () => {
                         " hrs",
                       )}
                     />
-                    <MetaItem
-                      label="Previous meter reading"
-                      value={infoValue(recordData?.previous_meter_reading_end, " m³")}
-                    />
-                    <MetaItem
-                      label="Initial / baseline reading"
-                      value={infoValue(recordData?.meter_reading_start, " m³")}
-                    />
-                    <MetaItem
-                      label="Meter reading at pump stop"
-                      value={infoValue(recordData?.meter_reading_end, " m³")}
-                    />
-                    <MetaItem
-                      label="Water pumped this interval"
-                      value={infoValue(recordData?.total_water_pumped, " m³")}
-                    />
+                    {hasBulkMeter ? (
+                      <>
+                        <MetaItem
+                          label="Previous meter reading"
+                          value={infoValue(
+                            recordData?.previous_meter_reading_end,
+                            " m³",
+                          )}
+                        />
+                        <MetaItem
+                          label="Initial / baseline reading"
+                          value={infoValue(recordData?.meter_reading_start, " m³")}
+                        />
+                        <MetaItem
+                          label="Meter reading at pump stop"
+                          value={infoValue(recordData?.meter_reading_end, " m³")}
+                        />
+                        <MetaItem
+                          label="Water pumped this interval"
+                          value={infoValue(recordData?.total_water_pumped, " m³")}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <MetaItem
+                          label="OHR tank capacity"
+                          value={infoValue(
+                            recordData?.system?.ohr_tank_capacity,
+                            " m³",
+                          )}
+                        />
+                        <MetaItem
+                          label="Fill required"
+                          value={infoValue(
+                            recordData?.system?.ohr_fill_required,
+                            " min",
+                          )}
+                        />
+                      </>
+                    )}
                     <MetaItem
                       label="Pump Serial Number"
                       value={infoValue(recordData?.system?.pump_serial_number)}
@@ -799,7 +833,7 @@ const SubmissionReview = () => {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  BarChart3,
   AlertTriangle,
+  BarChart3,
   CalendarClock,
-  ChevronDown,
   ClipboardList,
   Droplets,
   FileCheck,
@@ -25,33 +24,41 @@ import {
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "../components/ui/collapsible";
-import { Separator } from "../components/ui/separator";
-import { HQ_DASHBOARD, hqRoutes, tehsilRoutes } from "../constants/routes";
+import { HQ_DASHBOARD, adminRoutes, hqRoutes, tehsilRoutes } from "../constants/routes";
 import { accountRoutes } from "../constants/routes";
 import {
   canOnboardOperators,
   isExecutiveRole,
   isTehsilManager,
+  isUserAdminRole,
   roleDisplayLabel,
 } from "../constants/roles";
 import { useAuth } from "../contexts/AuthContext";
 import companyLogo from "../assets/company-logo.png";
 import { getActiveWaterSystemCalibrationCertificates } from "../services/tehsilManagerOperatorService";
 import { pakistanCalendarDayDiff } from "../utils/pakistanTime";
+import { cn } from "../lib/utils";
 
-type MenuItem = {
-  path?: string;
+type NavItem = {
+  path: string;
   icon: ReactNode;
   label: string;
   end?: boolean;
-  children?: MenuItem[];
+  badge?: number;
 };
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
+const navLinkClass = (isActive: boolean) =>
+  cn(
+    "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+    isActive
+      ? "bg-sidebar-active text-white"
+      : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
+  );
 
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -66,136 +73,159 @@ const MainLayout = () => {
 
   const exec = user ? isExecutiveRole(user.role) : false;
   const tehsilMgr = user ? isTehsilManager(user.role) : false;
+  const userAdmin = user ? isUserAdminRole(user.role) : false;
   const showOnboard = user ? canOnboardOperators(user.role) : false;
 
-  const menuItems: MenuItem[] = useMemo(() => {
-    const items: MenuItem[] = [];
+  const navSections: NavSection[] = useMemo(() => {
+    const sections: NavSection[] = [];
 
     if (exec) {
-      items.push(
-        {
-          path: HQ_DASHBOARD,
-          icon: <BarChart3 className="size-4" />,
-          label: "Organization KPI",
-          end: true,
-        },
-        {
-          icon: <Droplets className="size-4" />,
-          label: "Water",
-          children: [
-            {
-              path: hqRoutes.waterAnalysis,
-              icon: <Table2 className="size-4" />,
-              label: "Water analysis",
-            },
-          ],
-        },
-        {
-          icon: <Sun className="size-4" />,
-          label: "Solar",
-          children: [
-            {
-              path: hqRoutes.solarAnalysis,
-              icon: <Table2 className="size-4" />,
-              label: "Solar analysis",
-            },
-          ],
-        },
-      );
+      sections.push({
+        title: "Overview",
+        items: [
+          {
+            path: HQ_DASHBOARD,
+            icon: <BarChart3 className="size-4 shrink-0 opacity-90" />,
+            label: "Organization KPI",
+            end: true,
+          },
+        ],
+      });
+      sections.push({
+        title: "Water",
+        items: [
+          {
+            path: hqRoutes.waterAnalysis,
+            icon: <Table2 className="size-4 shrink-0 opacity-90" />,
+            label: "Water analysis",
+          },
+        ],
+      });
+      sections.push({
+        title: "Solar",
+        items: [
+          {
+            path: hqRoutes.solarAnalysis,
+            icon: <Table2 className="size-4 shrink-0 opacity-90" />,
+            label: "Solar analysis",
+          },
+        ],
+      });
+    }
+
+    if (userAdmin) {
+      sections.push({
+        title: "Administration",
+        items: [
+          {
+            path: adminRoutes.users,
+            icon: <Users className="size-4 shrink-0 opacity-90" />,
+            label: "User accounts",
+            end: true,
+          },
+        ],
+      });
     }
 
     if (tehsilMgr) {
-      items.push(
-        {
-          path: tehsilRoutes.dashboard,
-          icon: <LayoutDashboard className="size-4" />,
-          label: "Dashboard",
-          end: true,
-        },
-        {
-          icon: <Droplets className="size-4" />,
-          label: "Water",
-          children: [
-            {
-              path: tehsilRoutes.waterSystems,
-              icon: <Droplets className="size-4" />,
-              label: "Water systems",
-            },
-            {
-              path: tehsilRoutes.calibrationCertificates,
-              icon: <FileText className="size-4" />,
-              label: "Calibration Certificates",
-            },
-            {
-              path: tehsilRoutes.waterSubmissions,
-              icon: <FileCheck className="size-4" />,
-              label: "Submissions",
-            },
-            {
-              path: tehsilRoutes.waterLoggingCompliance,
-              icon: <CalendarClock className="size-4" />,
-              label: "Logging compliance",
-            },
-            {
-              path: tehsilRoutes.waterAlerts,
-              icon: <AlertTriangle className="size-4" />,
-              label: "Anomalies",
-            },
-          ],
-        },
-        {
-          icon: <Sun className="size-4" />,
-          label: "Solar",
-          children: [
-            {
-              path: tehsilRoutes.solarSites,
-              icon: <Sun className="size-4" />,
-              label: "Solar systems",
-            },
-            {
-              path: tehsilRoutes.solarMonthlyLogging,
-              icon: <ClipboardList className="size-4" />,
-              label: "Monthly logging",
-            },
-            {
-              path: tehsilRoutes.solarLoggingCompliance,
-              icon: <CalendarClock className="size-4" />,
-              label: "Logging compliance",
-            },
-          ],
-        },
-        {
-          icon: <Users className="size-4" />,
-          label: "Tubewell operators",
-          children: [
-            ...(showOnboard
-              ? [
-                  {
-                    path: tehsilRoutes.onboardOperator,
-                    icon: <UserPlus className="size-4" />,
-                    label: "Onboard operator",
-                  } satisfies MenuItem,
-                ]
-              : []),
-            {
-              path: tehsilRoutes.operatorAssignments,
-              icon: <Users className="size-4" />,
-              label: "Assignments",
-            },
-          ],
-        },
-      );
+      sections.push({
+        title: "Overview",
+        items: [
+          {
+            path: tehsilRoutes.dashboard,
+            icon: <LayoutDashboard className="size-4 shrink-0 opacity-90" />,
+            label: "Dashboard",
+            end: true,
+          },
+        ],
+      });
+      sections.push({
+        title: "Water",
+        items: [
+          {
+            path: tehsilRoutes.waterSystems,
+            icon: <Droplets className="size-4 shrink-0 opacity-90" />,
+            label: "Water systems",
+          },
+          {
+            path: tehsilRoutes.calibrationCertificates,
+            icon: <FileText className="size-4 shrink-0 opacity-90" />,
+            label: "Calibration certificates",
+            ...(certificateAlertCount > 0
+              ? { badge: certificateAlertCount }
+              : {}),
+          },
+          {
+            path: tehsilRoutes.waterSubmissions,
+            icon: <FileCheck className="size-4 shrink-0 opacity-90" />,
+            label: "Submissions",
+          },
+          {
+            path: tehsilRoutes.waterLoggingCompliance,
+            icon: <CalendarClock className="size-4 shrink-0 opacity-90" />,
+            label: "Logging compliance",
+          },
+          {
+            path: tehsilRoutes.waterAlerts,
+            icon: <AlertTriangle className="size-4 shrink-0 opacity-90" />,
+            label: "Anomalies",
+          },
+        ],
+      });
+      sections.push({
+        title: "Solar",
+        items: [
+          {
+            path: tehsilRoutes.solarSites,
+            icon: <Sun className="size-4 shrink-0 opacity-90" />,
+            label: "Solar systems",
+          },
+          {
+            path: tehsilRoutes.solarMonthlyLogging,
+            icon: <ClipboardList className="size-4 shrink-0 opacity-90" />,
+            label: "Monthly logging",
+          },
+          {
+            path: tehsilRoutes.solarLoggingCompliance,
+            icon: <CalendarClock className="size-4 shrink-0 opacity-90" />,
+            label: "Logging compliance",
+          },
+        ],
+      });
+      sections.push({
+        title: "Operators",
+        items: [
+          ...(showOnboard
+            ? [
+                {
+                  path: tehsilRoutes.onboardOperator,
+                  icon: <UserPlus className="size-4 shrink-0 opacity-90" />,
+                  label: "Onboard operator",
+                } satisfies NavItem,
+              ]
+            : []),
+          {
+            path: tehsilRoutes.operatorAssignments,
+            icon: <Users className="size-4 shrink-0 opacity-90" />,
+            label: "Assignments",
+          },
+        ],
+      });
     }
 
-    // Account utilities for all portal roles
-    items.push({
-      path: accountRoutes.changePassword,
-      icon: <KeyRound className="size-4" />,
-      label: "Change Password",
+    sections.push({
+      title: "Account",
+      items: [
+        {
+          path: accountRoutes.changePassword,
+          icon: <KeyRound className="size-4 shrink-0 opacity-90" />,
+          label: "Change password",
+        },
+      ],
     });
 
-    return items;
-  }, [exec, tehsilMgr, showOnboard]);
+    return sections;
+  }, [exec, tehsilMgr, userAdmin, showOnboard, certificateAlertCount]);
 
   const roleLabel = roleDisplayLabel(user?.role);
   const roleTitle = tehsilMgr ? "Tehsil Manager Operator" : roleLabel;
@@ -260,170 +290,142 @@ const MainLayout = () => {
     };
   }, [tehsilMgr]);
 
+  const sidebarContent = (
+    <>
+      <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
+        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1">
+          <img
+            src={companyLogo}
+            alt="MRV"
+            className="h-full w-full object-contain"
+          />
+        </div>
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold tracking-tight text-white">
+            MRV System
+          </h2>
+          <p className="truncate text-[11px] text-sidebar-muted">
+            Monitoring & Verification
+          </p>
+        </div>
+      </div>
+
+      <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+        {navSections.map((section, sectionIdx) => (
+          <div
+            key={section.title}
+            className={cn(sectionIdx > 0 && "mt-5")}
+          >
+            <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted/80">
+              {section.title}
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={`${section.title}-${item.path}`}
+                  to={item.path}
+                  end={item.end ?? false}
+                  className={({ isActive }) => navLinkClass(isActive)}
+                >
+                  {item.icon}
+                  <span className="truncate">{item.label}</span>
+                  {item.badge ? (
+                    <Badge
+                      variant="destructive"
+                      className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
+                    >
+                      {item.badge}
+                    </Badge>
+                  ) : null}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="border-t border-sidebar-border p-4">
+        <div className="mb-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 px-3 py-2.5">
+          <p className="truncate text-sm font-medium text-white">
+            {user?.name ?? "User"}
+          </p>
+          <p className="truncate text-xs text-sidebar-muted">
+            {roleTitle}
+            {tehsilLabel ? ` · ${tehsilLabel}` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <LogOut className="size-4 shrink-0" />
+          Sign out
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className="flex h-screen overflow-hidden bg-muted/40">
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
-          <motion.div
+          <motion.aside
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 280, opacity: 1 }}
+            animate={{ width: 272, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="hidden h-screen shrink-0 overflow-hidden border-r border-slate-200 bg-white md:flex md:flex-col"
+            className="relative hidden h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
           >
-            <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
-              <div className="flex size-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-                <img
-                  src={companyLogo}
-                  alt="Company logo"
-                  className="h-8 w-8 object-contain"
-                />
-              </div>
-              <div>
-                <h2 className="text-base font-black tracking-tight text-slate-900">
-                  MRV <span className="text-primary">System</span>
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Monitoring & Verification
-                </p>
-              </div>
-            </div>
-
-            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-              {menuItems.map((item) => {
-                if (item.children?.length) {
-                  return (
-                    <Collapsible
-                      key={`group-${item.label}`}
-                      defaultOpen
-                      className="rounded-xl"
-                    >
-                      <CollapsibleTrigger className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900">
-                        {item.icon}
-                        <span className="flex-1 truncate">{item.label}</span>
-                        <ChevronDown className="size-4 text-slate-500 transition-transform duration-200 data-[state=open]:rotate-180 group-hover:text-slate-700" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="relative mt-1 space-y-1 pl-6 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1">
-                        <div className="pointer-events-none absolute left-[18px] top-1 bottom-1 w-px bg-slate-200" />
-                        {item.children.map((child) => (
-                          <NavLink
-                            key={`${child.path}-${child.label}`}
-                            to={child.path ?? ""}
-                            end={child.end ?? false}
-                            className={({ isActive }) =>
-                              `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
-                                isActive
-                                  ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                              }`
-                            }
-                          >
-                            {child.icon}
-                            <span className="truncate">{child.label}</span>
-                            {child.path ===
-                              tehsilRoutes.calibrationCertificates &&
-                            certificateAlertCount > 0 ? (
-                              <Badge
-                                variant="destructive"
-                                className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
-                              >
-                                {certificateAlertCount}
-                              </Badge>
-                            ) : null}
-                          </NavLink>
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                }
-
-                return (
-                  <NavLink
-                    key={`${item.path}-${item.label}`}
-                    to={item.path ?? ""}
-                    end={item.end ?? false}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                        isActive
-                          ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`
-                    }
-                  >
-                    {item.icon}
-                    <span className="truncate">{item.label}</span>
-                  </NavLink>
-                );
-              })}
-            </nav>
-
-            <div className="border-t border-slate-100 p-4">
-              <Button
-                type="button"
-                variant="default"
-                className="h-10 w-full justify-start gap-2"
-                onClick={handleLogout}
-              >
-                <LogOut className="size-4" />
-                Logout
-              </Button>
-            </div>
-          </motion.div>
+            {sidebarContent}
+          </motion.aside>
         )}
       </AnimatePresence>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 px-4 py-2 backdrop-blur md:px-6">
-          <div className="flex items-center justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => setIsSidebarOpen((prev) => !prev)}
-              className="border-slate-300 text-slate-600 hover:text-primary"
-            >
-              {isSidebarOpen ? (
-                <X className="size-4" />
-              ) : (
-                <Menu className="size-4" />
-              )}
-            </Button>
+      {/* Mobile drawer */}
+      {isSidebarOpen ? (
+        <aside className="fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:hidden">
+          {sidebarContent}
+        </aside>
+      ) : null}
+      {isSidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      ) : null}
 
-            <div className="flex items-center gap-2">
-              <Card
-                size="sm"
-                className="hidden rounded-xl border border-slate-200 bg-white shadow-sm md:flex"
-              >
-                <CardContent className="flex items-center gap-3 px-3 py-2">
-                  <Avatar size="sm" className="ring-1 ring-primary/20">
-                    <AvatarFallback className="bg-gradient-to-br from-primary to-secondary font-semibold text-white">
-                      {userInitials || <UserIcon className="size-3" />}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 border-l border-slate-200 pl-3">
-                    <p className="max-w-[220px] truncate text-xs font-semibold leading-tight text-slate-900">
-                      {roleTitle}
-                    </p>
-                    <p
-                      className="mt-0.5 max-w-[220px] truncate text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
-                      title={tehsilLabel}
-                    >
-                      {tehsilLabel}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Avatar size="lg" className="ring-2 ring-primary/20 md:hidden">
-                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary font-bold text-white">
-                  {userInitials || <UserIcon className="size-4" />}
-                </AvatarFallback>
-              </Avatar>
-            </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border/80 bg-card px-4 md:px-6">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsSidebarOpen((prev) => !prev)}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {isSidebarOpen ? (
+              <X className="size-4" />
+            ) : (
+              <Menu className="size-4" />
+            )}
+          </Button>
+
+          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/40 py-1 pr-3 pl-1">
+            <Avatar size="sm">
+              <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+                {userInitials || <UserIcon className="size-3" />}
+              </AvatarFallback>
+            </Avatar>
+            <span className="hidden max-w-[160px] truncate text-sm font-medium text-foreground sm:inline">
+              {user?.name ?? "User"}
+            </span>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto bg-muted/30 p-5 md:p-8">
           <div className="mx-auto w-full max-w-[1600px]">
-            <Separator className="mb-4 bg-transparent" />
             <Outlet />
           </div>
         </main>

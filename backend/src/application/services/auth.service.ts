@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, Not, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import { PasswordResetToken } from '../../infrastructure/database/entities/password-reset-token.entity';
 import { USER_RELATIONS } from '../../infrastructure/database/entities/user-relations';
 import { User } from '../../infrastructure/database/entities/user.entity';
@@ -27,6 +27,9 @@ export class AuthService {
       relations: USER_RELATIONS,
     });
     if (!user || !user.checkPassword(password)) {
+      return null;
+    }
+    if (!user.isActive) {
       return null;
     }
     return user;
@@ -61,6 +64,9 @@ export class AuthService {
       where: { email: email.trim().toLowerCase() },
     });
     if (!user) {
+      return { user: null, rawToken: null };
+    }
+    if (!user.isActive) {
       return { user: null, rawToken: null };
     }
 

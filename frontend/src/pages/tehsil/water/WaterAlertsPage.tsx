@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ChevronLeft, RefreshCcw } from "lucide-react";
+import {
+  PageHeader,
+  PageShell,
+  StatCard,
+} from "../../../components/layout";
+import { AlertTriangle, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   CartesianGrid,
@@ -16,12 +20,13 @@ import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
 import { Skeleton } from "../../../components/ui/skeleton";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
 import {
   Accordion,
@@ -30,7 +35,6 @@ import {
   AccordionTrigger,
 } from "../../../components/ui/accordion";
 import { useAuth } from "../../../contexts/AuthContext";
-import { tehsilRoutes } from "../../../constants/routes";
 import { TEHSIL_OPTIONS, LOCATION_DATA } from "../../../utils/locationData";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { getWaterAnomalies } from "../../../services/tehsilManagerOperatorService";
@@ -71,7 +75,6 @@ type AnomalyItem = {
 };
 
 export default function WaterAlertsPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const scopedTehsils = useMemo((): string[] => {
@@ -129,135 +132,128 @@ export default function WaterAlertsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate(tehsilRoutes.dashboard)}
+    <PageShell>
+      <PageHeader
+        icon={<AlertTriangle />}
+        title="Water anomalies"
+        description="4-day scan · ±10% high or ±50% low vs 3-day average"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            <RefreshCcw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatCard
+          label="Flagged systems"
+          value={flagged.length}
+          accent={flagged.length ? "amber" : "green"}
+        />
+        <StatCard label="Scanned" value={items.length} accent="slate" />
+      </div>
+
+      <Card>
+        <CardHeader className="border-b border-border/60 pb-3">
+          <CardTitle className="text-base">Filters</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4 md:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Tehsil</Label>
+            <Select
+              value={filters.tehsil}
+              onValueChange={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  tehsil: v ?? "All Tehsils",
+                  village: "All Villages",
+                }))
+              }
             >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Anomalies tracking
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Last 4 days scan. An anomaly is flagged when today’s water pumped is &gt;10% above or &gt;50% below the previous 3‑day average.
-              </p>
-            </div>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(scopedTehsils.length === 1 || restrictTehsils
+                  ? scopedTehsils
+                  : ["All Tehsils", ...scopedTehsils]
+                ).map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void load()} disabled={loading}>
-              <RefreshCcw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Village</Label>
+            <Select
+              value={filters.village}
+              onValueChange={(v) =>
+                setFilters((p) => ({ ...p, village: v ?? "All Villages" }))
+              }
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {villageOptions.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">End date</Label>
+            <Input
+              type="date"
+              className="h-9"
+              value={filters.end_date}
+              onChange={(e) =>
+                setFilters((p) => ({ ...p, end_date: e.target.value }))
+              }
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              onClick={() => void load()}
+              disabled={loading}
+              className="w-full"
+              size="sm"
+            >
+              Apply
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Filters</CardTitle>
-            <CardDescription>Scope anomalies to tehsil and village.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            <div>
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">Tehsil</div>
-              <Select
-                value={filters.tehsil}
-                onValueChange={(v) =>
-                  setFilters((p) => ({
-                    ...p,
-                    tehsil: v ?? "All Tehsils",
-                    village: "All Villages",
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(scopedTehsils.length === 1 || restrictTehsils
-                    ? scopedTehsils
-                    : ["All Tehsils", ...scopedTehsils]
-                  ).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">Village</div>
-              <Select
-                value={filters.village}
-                onValueChange={(v) =>
-                  setFilters((p) => ({ ...p, village: v ?? "All Villages" }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {villageOptions.map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                End date (optional)
-              </div>
-              <input
-                type="date"
-                value={filters.end_date}
-                onChange={(e) => setFilters((p) => ({ ...p, end_date: e.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <Button onClick={() => void load()} disabled={loading} className="w-full">
-                Apply
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base">Flagged systems</CardTitle>
-              <Badge variant={flagged.length ? "destructive" : "outline"}>
-                {flagged.length} anomaly(ies)
-              </Badge>
-            </div>
-            <CardDescription>
-              Shows only systems with anomalies under the current filter.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      <Card>
+        <CardHeader className="border-b border-border/60 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">Flagged systems</CardTitle>
+            <Badge variant={flagged.length ? "destructive" : "outline"}>
+              {flagged.length}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
             {loading ? (
               <Skeleton className="h-28 w-full" />
             ) : flagged.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
+              <p className="py-8 text-center text-sm text-muted-foreground">
                 No anomalies detected.
-              </div>
+              </p>
             ) : (
-              <div className="rounded-xl border border-border/70 bg-background">
-                <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
-                  <p className="text-sm font-semibold">Flagged systems</p>
-                  <p className="text-xs text-muted-foreground">
-                    Scroll for more · Expand a row for details
-                  </p>
-                </div>
-                <div className="max-h-[520px] overflow-y-auto p-2">
-                  <Accordion className="w-full">
+              <div className="max-h-[560px] overflow-y-auto">
+                <Accordion className="w-full space-y-2">
                     {flagged.slice(0, 50).map((it) => {
                       const title = [
                         it.water_system.unique_identifier || it.water_system.id,
@@ -311,17 +307,12 @@ export default function WaterAlertsPage() {
                                 <p className="truncate text-sm font-semibold">{title}</p>
                                 {lastOp ? (
                                   <p className="mt-1 truncate text-xs text-muted-foreground">
-                                    Latest operator:{" "}
-                                    <span className="font-medium text-foreground">
-                                      {lastOp.name}
-                                    </span>{" "}
-                                    · {lastOp.email}
-                                    {lastOp.phone ? ` · ${lastOp.phone}` : ""}
+                                    {lastOp.name} · {lastOp.email}
                                   </p>
                                 ) : null}
                               </div>
                               <Badge variant="outline" className="shrink-0 text-xs">
-                                {(it.anomalies?.length ?? 0)} anomaly(ies)
+                                {it.anomalies?.length ?? 0}
                               </Badge>
                             </div>
                           </AccordionTrigger>
@@ -341,14 +332,9 @@ export default function WaterAlertsPage() {
                               </div>
 
                               <div className="w-full">
-                                <div className="flex items-center justify-between gap-2 pb-2">
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <AlertTriangle className="size-4 text-destructive" />
-                                    Review
-                                  </div>
-                                  <Badge variant="outline" className="text-xs">
-                                    Water pumped vs 3‑day avg
-                                  </Badge>
+                                <div className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
+                                  <AlertTriangle className="size-3.5 text-destructive" />
+                                  Pumped vs 3-day avg
                                 </div>
                                 <div className="h-[180px] w-full">
                                   <ResponsiveContainer width="100%" height="100%">
@@ -423,13 +409,11 @@ export default function WaterAlertsPage() {
                       );
                     })}
                   </Accordion>
-                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }
 

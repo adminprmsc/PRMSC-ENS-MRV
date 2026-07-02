@@ -51,6 +51,14 @@ export const hqRoutes = {
   dashboard: HQ_DASHBOARD,
   waterAnalysis: `${HQ_DASHBOARD}/water`,
   solarAnalysis: `${HQ_DASHBOARD}/solar`,
+  waterSystem: (id: string) =>
+    `${HQ_DASHBOARD}/water-systems/${encodeURIComponent(id)}`,
+  solarSite: (id: string) =>
+    `${HQ_DASHBOARD}/solar-sites/${encodeURIComponent(id)}`,
+  waterSubmissionDetails: (id: string) =>
+    `${HQ_DASHBOARD}/submissions/${encodeURIComponent(id)}`,
+  solarRecordDetails: (id: string) =>
+    `${HQ_DASHBOARD}/solar-records/${encodeURIComponent(id)}`,
 } as const;
 
 /** Public auth flows */
@@ -63,4 +71,9 @@ export const authRoutes = {
 /** Authenticated account flows (all portal roles) */
 export const accountRoutes = {
   changePassword: "/account/change-password",
+} as const;
+
+/** Platform administrator */
+export const adminRoutes = {
+  users: "/admin/users",
 } as const;

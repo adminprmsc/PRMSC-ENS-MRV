@@ -4,9 +4,10 @@ import { In, Repository } from 'typeorm';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import {
   ADMIN,
-  ROLE_RANK,
   SUPER_ADMIN,
   USER,
+  isExecutiveReviewerRole,
+  isUserAdminRole,
 } from '../../domain/constants/roles';
 import { SolarSystem } from '../../infrastructure/database/entities/solar-system.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
@@ -49,10 +50,6 @@ export class TehsilAccessService {
     return out;
   }
 
-  hasFullTehsilAccess(user: User): boolean {
-    return this.rbac.userRank(user) >= ROLE_RANK[SUPER_ADMIN];
-  }
-
   async operatorTehsilsDerivedFromWaterSystems(
     user: User,
   ): Promise<Set<string>> {
@@ -86,11 +83,14 @@ export class TehsilAccessService {
     if (!c) {
       return false;
     }
+    const code = this.rbac.userRoleCode(user);
+    if (isUserAdminRole(code)) {
+      return false;
+    }
     if (forWrite) {
-      if (this.rbac.userRank(user) >= ROLE_RANK[SUPER_ADMIN]) {
+      if (isExecutiveReviewerRole(code)) {
         return false;
       }
-      const code = this.rbac.userRoleCode(user);
       if (code === USER) {
         const derived = await this.operatorTehsilsDerivedFromWaterSystems(user);
         return derived.has(c);
@@ -100,18 +100,17 @@ export class TehsilAccessService {
       }
       return false;
     }
-    if (this.hasFullTehsilAccess(user)) {
-      return true;
-    }
-    const code = this.rbac.userRoleCode(user);
-    if (code !== USER && code !== ADMIN) {
-      return false;
-    }
     if (code === USER) {
       const derived = await this.operatorTehsilsDerivedFromWaterSystems(user);
       return derived.has(c);
     }
-    return this.canonicalAssignedTehsilSet(user).has(c);
+    if (code === ADMIN) {
+      return this.canonicalAssignedTehsilSet(user).has(c);
+    }
+    if (code === SUPER_ADMIN) {
+      return this.rbac.managerOperationTehsilSet(user).has(c);
+    }
+    return false;
   }
 
   async assertUserMayAccessTehsil(
@@ -146,10 +145,10 @@ export class TehsilAccessService {
     await this.assertUserMayAccessTehsil(user, system.tehsil, options);
   }
 
-  async assertUserMayLogWaterSystem(
+  assertUserMayLogWaterSystem(
     user: User,
     system: WaterSystem | null | undefined,
-  ): Promise<void> {
+  ): void {
     if (!system) {
       throw new TehsilAccessDenied('System not found');
     }
@@ -173,7 +172,7 @@ export class TehsilAccessService {
       throw new TehsilAccessDenied('System not found');
     }
     if (this.rbac.userRoleCode(user) === USER) {
-      await this.assertUserMayLogWaterSystem(user, system);
+      this.assertUserMayLogWaterSystem(user, system);
       return;
     }
     await this.assertUserMayAccessWaterSystem(user, system);

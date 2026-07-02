@@ -46,6 +46,13 @@ apiClient.interceptors.response.use(
     const isAuthRequest = requestUrl.includes("/auth/login");
 
     if (status === 401 && !isAuthRequest) {
+      const message = String(error.response?.data?.message ?? "");
+      if (message.toLowerCase().includes("inactive")) {
+        sessionStorage.setItem(
+          "mrv_login_message",
+          "Your account is inactive. Contact a platform administrator.",
+        );
+      }
       localStorage.removeItem("mrv_token");
       localStorage.removeItem("mrv_user");
       if (window.location.pathname !== "/login") {

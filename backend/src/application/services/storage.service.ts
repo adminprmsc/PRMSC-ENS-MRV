@@ -9,7 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 
 function secureFilename(filename: string): string {
-  const base = basename(filename).replace(/[^\w.\-]+/g, '_');
+  const base = basename(filename).replace(/[^\w.-]+/g, '_');
   return base || 'file';
 }
 

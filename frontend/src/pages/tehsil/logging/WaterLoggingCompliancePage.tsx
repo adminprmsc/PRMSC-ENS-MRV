@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useId } from "react";
-import { Download, Droplets, Loader2, RefreshCcw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Download, Droplets, ExternalLink, Loader2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { PageHeader, PageShell } from "../../../components/layout";
+import { tehsilRoutes } from "../../../constants/routes";
 import { Button } from "../../../components/ui/button";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import {
@@ -15,7 +18,6 @@ import type {
 } from "./loggingComplianceTypes";
 import { downloadWaterComplianceExcel } from "./exportComplianceExcel";
 import WaterLoggingComplianceSection from "./WaterLoggingComplianceSection";
-import { chunkDaysByWeek } from "./waterDailyChunks";
 import {
   getPakistanIsoDateString,
   subtractPakistanDays,
@@ -29,6 +31,7 @@ function rangeForLastNDays(n: number): { date_from: string; date_to: string } {
 }
 
 export default function WaterLoggingCompliancePage() {
+  const navigate = useNavigate();
   const baseId = useId();
   const panelId = `${baseId}-water-panel`;
 
@@ -41,27 +44,7 @@ export default function WaterLoggingCompliancePage() {
   );
   const [loading, setLoading] = useState(false);
 
-  const weekChunks = useMemo(
-    () => chunkDaysByWeek(rangeData?.days ?? []),
-    [rangeData?.days],
-  );
-
-  const [activeWeekIndex, setActiveWeekIndex] = useState(0);
-
-  useEffect(() => {
-    if (weekChunks.length === 0) {
-      setActiveWeekIndex(0);
-      return;
-    }
-    setActiveWeekIndex(weekChunks.length - 1);
-  }, [
-    rangeData?.date_from,
-    rangeData?.date_to,
-    rangeData?.water_system_id,
-    weekChunks.length,
-  ]);
-
-  const visibleDays = weekChunks[activeWeekIndex] ?? [];
+  const allDays = rangeData?.days ?? [];
 
   const loadSystems = useCallback(async () => {
     try {
@@ -113,67 +96,57 @@ export default function WaterLoggingCompliancePage() {
   }, [loadRange]);
 
   return (
-    <div className="w-full max-w-7xl space-y-8 px-4 py-6 md:px-6">
-      <header className="flex flex-col gap-6 border-b border-border pb-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 gap-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
-            <Droplets className="size-6 text-muted-foreground" aria-hidden />
+    <PageShell>
+      <PageHeader
+        icon={<Droplets />}
+        title="Water logging compliance"
+        description="Daily log status by system and date range"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => navigate(tehsilRoutes.loggingCompliance)}
+            >
+              <ExternalLink className="size-4" />
+              Overview
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                !rangeData || loading || !selectedWaterSystemId || allDays.length === 0
+              }
+              onClick={() => {
+                if (!rangeData) return;
+                downloadWaterComplianceExcel(rangeData, {
+                  tableDays: allDays,
+                });
+              }}
+            >
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || systemsLoading || !selectedWaterSystemId}
+              onClick={() => void loadRange()}
+            >
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="size-4" />
+              )}
+              Refresh
+            </Button>
           </div>
-          <div className="min-w-0 space-y-1.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Compliance
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              Daily water logging
-            </h1>
-            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Select a water system, then choose how many recent days to load.
-              Longer windows are split into week-sized segments like the table.
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={
-              !rangeData || loading || !selectedWaterSystemId || visibleDays.length === 0
-            }
-            onClick={() => {
-              if (!rangeData) return;
-              const options =
-                weekChunks.length > 1
-                  ? {
-                      tableDays: visibleDays,
-                      segmentIndex: activeWeekIndex + 1,
-                      segmentCount: weekChunks.length,
-                    }
-                  : { tableDays: visibleDays };
-              downloadWaterComplianceExcel(rangeData, options);
-            }}
-          >
-            <Download className="size-4" aria-hidden />
-            Export Excel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={loading || systemsLoading || !selectedWaterSystemId}
-            onClick={() => void loadRange()}
-          >
-            {loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCcw className="size-4" />
-            )}
-            Refresh
-          </Button>
-        </div>
-      </header>
+        }
+      />
 
       <WaterLoggingComplianceSection
         baseId={baseId}
@@ -186,11 +159,7 @@ export default function WaterLoggingCompliancePage() {
         onRangeDaysChange={setRangeDays}
         loading={loading}
         rangeData={rangeData}
-        weekChunks={weekChunks}
-        activeWeekIndex={activeWeekIndex}
-        onActiveWeekIndexChange={setActiveWeekIndex}
-        visibleDays={visibleDays}
       />
-    </div>
+    </PageShell>
   );
 }

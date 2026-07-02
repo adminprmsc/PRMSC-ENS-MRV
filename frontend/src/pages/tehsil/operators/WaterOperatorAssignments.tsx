@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Check,
   Droplets,
-  Info,
   Loader2,
   PencilLine,
   RefreshCw,
@@ -13,17 +12,22 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription } from "../../../components/ui/alert";
+import {
+  DataListCard,
+  DataTableHead,
+  DataTableHeader,
+  DataTableWrap,
+  PageHeader,
+  PageShell,
+  StatCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "../../../components/layout";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { Checkbox } from "../../../components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -45,14 +49,6 @@ import {
 } from "../../../components/ui/select";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { Skeleton } from "../../../components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
 import { tehsilRoutes } from "../../../constants/routes";
 import { cn } from "../../../lib/utils";
 import { getApiErrorMessage } from "../../../lib/api-error";
@@ -231,102 +227,47 @@ export default function WaterOperatorAssignments() {
   const tehsilCount = tehsilFilterOptions.length;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8 p-4 pb-12 md:p-8">
-      <header className="flex flex-col gap-6 border-b border-border/80 pb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex gap-4">
-          <div
-            className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15"
-            aria-hidden
-          >
-            <Users className="size-7" />
+    <PageShell>
+      <PageHeader
+        icon={<Users />}
+        title="Operator assignments"
+        description={`${operatorCount} operators · ${catalogLen} systems`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={openAddAssignment}
+              disabled={loading || catalogLen === 0}
+            >
+              <UserPlus className="size-4" />
+              Add
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Refresh
+            </Button>
           </div>
-          <div className="min-w-0 space-y-2">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              Tubewell operator assignments
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Link tubewell operators to water systems you manage. Assignments
-              are limited to your tehsil scope; other districts are never
-              changed.
-            </p>
-          </div>
-        </div>
-        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Button
-            type="button"
-            variant="default"
-            size="default"
-            className="gap-2 shadow-sm"
-            onClick={openAddAssignment}
-            disabled={loading || catalogLen === 0}
-            title={
-              catalogLen === 0
-                ? "Register water systems in your tehsil first"
-                : undefined
-            }
-          >
-            <UserPlus className="size-4" />
-            Add assignment
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="default"
-            className="gap-2 shadow-sm"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-            Refresh data
-          </Button>
-        </div>
-      </header>
+        }
+      />
 
       {data ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <Card size="sm" className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Operators (in scope)</CardDescription>
-              <CardTitle className="font-heading text-3xl font-semibold tabular-nums text-foreground">
-                {operatorCount}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card size="sm" className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Water systems you can assign</CardDescription>
-              <CardTitle className="font-heading text-3xl font-semibold tabular-nums text-foreground">
-                {catalogLen}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card size="sm" className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Tehsils in your catalog</CardDescription>
-              <CardTitle className="font-heading text-3xl font-semibold tabular-nums text-foreground">
-                {tehsilCount}
-              </CardTitle>
-            </CardHeader>
-          </Card>
+          <StatCard label="Operators" value={operatorCount} accent="blue" />
+          <StatCard label="Systems" value={catalogLen} accent="green" />
+          <StatCard label="Tehsils" value={tehsilCount} accent="slate" />
         </div>
       ) : null}
-
-      <Alert variant="info" className="border-primary/20 py-3 shadow-sm">
-        <Info className="size-4 shrink-0" aria-hidden />
-        <AlertDescription className="text-sm leading-relaxed">
-          Use <strong className="text-foreground">Add assignment</strong> to link
-          water systems to a tubewell operator (including one with no sites in
-          your tehsil yet). Open{" "}
-          <strong className="text-foreground">Assign / edit</strong> on a row to
-          change an existing link. Only your tehsil&apos;s systems appear. New
-          accounts: <strong className="text-foreground">Onboard Operator</strong>
-          .
-        </AlertDescription>
-      </Alert>
 
       {loading && !data ? (
         <div className="space-y-3">
@@ -340,71 +281,41 @@ export default function WaterOperatorAssignments() {
       ) : null}
 
       {data ? (
-        <Card className="overflow-hidden shadow-sm">
-          <CardHeader className="border-b border-border/80 bg-muted/20 pb-4">
-            <CardTitle className="font-heading text-lg sm:text-xl">
-              Assignment overview
-            </CardTitle>
-            <CardDescription className="text-base">
-              {catalogLen === 0
-                ? "No water systems are registered in your tehsil yet."
-                : `${operatorCount} operator${operatorCount === 1 ? "" : "s"} linked · ${catalogLen} system${catalogLen === 1 ? "" : "s"} available to assign.`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-x-auto px-0 pb-0 pt-0 sm:px-0">
-            {catalogLen === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                  <Droplets className="size-6 text-muted-foreground" />
-                </div>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Register water systems first, then onboard operators or return
-                  here to manage assignments.
-                </p>
-              </div>
-            ) : data.operators.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                  <Users className="size-6 text-muted-foreground" />
-                </div>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  No operators are linked to your water systems yet. Use{" "}
-                  <span className="font-medium text-foreground">
-                    Onboard Operator
-                  </span>{" "}
-                  to create an account, then assign systems here.
-                </p>
-              </div>
-            ) : (
+        <DataListCard
+          title="Assignments"
+          count={data.operators.length}
+          loading={false}
+        >
+          {catalogLen === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <Droplets className="size-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Register water systems first.
+              </p>
+            </div>
+          ) : data.operators.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <Users className="size-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                No operators linked yet.
+              </p>
+            </div>
+          ) : (
+            <DataTableWrap>
               <Table>
-                <TableHeader>
-                  <TableRow className="border-border/80 hover:bg-transparent">
-                    <TableHead className="min-w-[140px] pl-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Operator
-                    </TableHead>
-                    <TableHead className="min-w-[200px] text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Email
-                    </TableHead>
-                    <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Assigned water systems
-                    </TableHead>
-                    <TableHead className="w-[220px] pr-6 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+                <DataTableHeader>
+                  <DataTableHead>Operator</DataTableHead>
+                  <DataTableHead>Email</DataTableHead>
+                  <DataTableHead>Systems</DataTableHead>
+                  <DataTableHead align="right">Actions</DataTableHead>
+                </DataTableHeader>
                 <TableBody>
                   {data.operators.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="border-border/60 transition-colors hover:bg-muted/40"
-                    >
-                      <TableCell className="pl-6 align-top">
-                        <div className="font-medium text-foreground">
-                          {row.name}
-                        </div>
+                    <TableRow key={row.id}>
+                      <TableCell className="align-top">
+                        <div className="font-medium">{row.name}</div>
                         {row.phone ? (
-                          <div className="mt-0.5 text-xs text-muted-foreground">
+                          <div className="text-xs text-muted-foreground">
                             {row.phone}
                           </div>
                         ) : null}
@@ -413,12 +324,12 @@ export default function WaterOperatorAssignments() {
                         {row.email}
                       </TableCell>
                       <TableCell className="align-top">
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1">
                           {row.water_systems.map((ws) => (
                             <Badge
                               key={ws.id}
                               variant="outline"
-                              className="max-w-[220px] truncate border-border/80 bg-card font-normal text-foreground"
+                              className="max-w-[200px] truncate font-normal"
                               title={`${ws.unique_identifier} — ${ws.village}`}
                             >
                               {ws.village}
@@ -426,28 +337,28 @@ export default function WaterOperatorAssignments() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="pr-6 text-right align-top">
-                        <div className="flex flex-wrap justify-end gap-2">
+                      <TableCell className="text-right align-top">
+                        <div className="inline-flex gap-1">
                           <Button
                             type="button"
-                            size="sm"
-                            variant="default"
-                            className="gap-1.5 shadow-sm"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8"
                             onClick={() => openEdit(row)}
+                            title="Edit assignments"
                           >
-                            <PencilLine className="size-3.5" />
-                            Assign / edit
+                            <PencilLine className="size-4" />
                           </Button>
                           <Button
                             type="button"
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-destructive hover:text-destructive"
                             disabled={saving}
                             onClick={() => void revokeAllForOperator(row)}
+                            title="Revoke all"
                           >
-                            <ShieldOff className="size-3.5" />
-                            Revoke all
+                            <ShieldOff className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -455,9 +366,9 @@ export default function WaterOperatorAssignments() {
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
+            </DataTableWrap>
+          )}
+        </DataListCard>
       ) : null}
 
       <Dialog
@@ -476,24 +387,12 @@ export default function WaterOperatorAssignments() {
             <DialogTitle className="font-heading text-lg sm:text-xl">
               {dialogFlow === "add" ? "New assignment" : "Assign water systems"}
             </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {dialogFlow === "add" && !editing ? (
-                <>
-                  Choose a tubewell operator, then select the water systems they
-                  should log for in your tehsil.
-                </>
-              ) : editing ? (
-                <>
-                  Select systems for{" "}
-                  <span className="font-medium text-foreground">
-                    {editing.name}
-                  </span>
-                  . Only facilities under your tehsil(s) are listed.{" "}
-                  <span className="tabular-nums text-muted-foreground">
-                    {selectedCount} selected
-                  </span>
-                </>
-              ) : null}
+            <DialogDescription className="text-sm">
+              {dialogFlow === "add" && !editing
+                ? "Select operator and water systems."
+                : editing
+                  ? `${editing.name} · ${selectedCount} selected`
+                  : null}
             </DialogDescription>
           </DialogHeader>
 
@@ -534,17 +433,15 @@ export default function WaterOperatorAssignments() {
                   </SelectContent>
                 </Select>
                 {eligibleOperatorList.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border/80 bg-muted/30 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                    There are no tubewell operator accounts to assign yet. Create
-                    one under{" "}
+                  <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                    No operators available.{" "}
                     <button
                       type="button"
                       className="font-medium text-primary underline underline-offset-2"
                       onClick={() => navigate(tehsilRoutes.onboardOperator)}
                     >
-                      Onboard Operator
+                      Onboard operator
                     </button>
-                    , then use Refresh data and try again.
                   </p>
                 ) : null}
               </div>
@@ -677,6 +574,6 @@ export default function WaterOperatorAssignments() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

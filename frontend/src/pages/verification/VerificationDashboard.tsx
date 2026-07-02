@@ -11,10 +11,12 @@ import {
   Sun,
   XCircle,
 } from "lucide-react";
-import { canApproveSubmissions, isStaffRole } from "../../constants/roles";
+import { canApproveSubmissions, isTehsilManager } from "../../constants/roles";
 import { useAuth } from "../../contexts/AuthContext";
 import { useVerificationApi } from "../../hooks";
 import { getApiErrorMessage } from "../../lib/api-error";
+import { PageHeader, PageShell, StatCard } from "../../components/layout";
+import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
@@ -136,7 +138,7 @@ const VerificationDashboard = () => {
   const [rejectRemarks, setRejectRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const canVerifyReject = isStaffRole(user?.role);
+  const canVerifyReject = isTehsilManager(user?.role);
   const canApprove = canApproveSubmissions(user?.role);
 
   const loadData = async (soft = false) => {
@@ -218,17 +220,13 @@ const VerificationDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Verification Dashboard
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Review submitted records and progress them through verification.
-            </p>
-          </div>
+    <>
+    <PageShell>
+      <PageHeader
+        icon={<ShieldCheck />}
+        title="Verification dashboard"
+        description="Review submitted records and progress them through verification and approval."
+        actions={
           <Button
             variant="outline"
             onClick={() => void loadData(true)}
@@ -239,36 +237,15 @@ const VerificationDashboard = () => {
             />
             Refresh
           </Button>
-        </div>
+        }
+      />
 
         {stats ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardDescription>Pending Review</CardDescription>
-                <CardTitle className="text-2xl">
-                  {stats.pending_review}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardDescription>Verified</CardDescription>
-                <CardTitle className="text-2xl">{stats.verified}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardDescription>Approved</CardDescription>
-                <CardTitle className="text-2xl">{stats.approved}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardDescription>Rejected</CardDescription>
-                <CardTitle className="text-2xl">{stats.rejected}</CardTitle>
-              </CardHeader>
-            </Card>
+            <StatCard label="Pending review" value={stats.pending_review} accent="amber" />
+            <StatCard label="Verified" value={stats.verified} accent="violet" />
+            <StatCard label="Approved" value={stats.approved} accent="green" />
+            <StatCard label="Rejected" value={stats.rejected} accent="slate" />
           </div>
         ) : loading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -319,11 +296,9 @@ const VerificationDashboard = () => {
         </Card>
 
         {error ? (
-          <Card>
-            <CardContent className="pt-6 text-sm text-destructive">
-              {error}
-            </CardContent>
-          </Card>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         ) : null}
 
         <Card>
@@ -548,7 +523,7 @@ const VerificationDashboard = () => {
             )}
           </CardContent>
         </Card>
-      </div>
+    </PageShell>
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
@@ -579,7 +554,7 @@ const VerificationDashboard = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 

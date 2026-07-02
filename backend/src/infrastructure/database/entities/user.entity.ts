@@ -16,6 +16,7 @@ import {
 import { Role } from './role.entity';
 import { UserTehsil } from './user-tehsil.entity';
 import { UserWaterSystem } from './user-water-system.entity';
+import { UserManagerOperation } from './user-manager-operation.entity';
 
 @Entity('users')
 export class User {
@@ -40,6 +41,9 @@ export class User {
   @Column({ name: 'role_id', type: 'varchar', length: 36 })
   roleId!: string;
 
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive!: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt!: Date;
 
@@ -55,6 +59,9 @@ export class User {
 
   @OneToMany(() => UserWaterSystem, (link) => link.user, { cascade: true })
   waterSystemLinks!: UserWaterSystem[];
+
+  @OneToMany(() => UserManagerOperation, (link) => link.user, { cascade: true })
+  managerOperationLinks!: UserManagerOperation[];
 
   get role(): string | null {
     return this.assignedRole?.code ?? null;

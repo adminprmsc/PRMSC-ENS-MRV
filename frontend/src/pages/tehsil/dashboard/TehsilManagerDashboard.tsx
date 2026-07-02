@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Activity,
-  BarChart2,
-  Building,
-  Droplet,
-  Plus,
-  Sun,
   AlertTriangle,
+  Building,
+  CalendarClock,
+  ChevronRight,
+  Droplets,
+  FileCheck,
+  FileText,
+  Gauge,
+  LayoutDashboard,
+  Sun,
 } from "lucide-react";
 
 import { Badge } from "../../../components/ui/badge";
@@ -21,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
+import { PageHeader, PageShell, StatCard } from "../../../components/layout";
 import { Label } from "../../../components/ui/label";
 import {
   Select,
@@ -29,9 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import { Spinner } from "../../../components/ui/spinner";
 import { tehsilRoutes } from "../../../constants/routes";
-import { canRegisterTehsilFacilities } from "../../../constants/roles";
 import { useAuth } from "../../../contexts/AuthContext";
 import { TEHSIL_OPTIONS, LOCATION_DATA } from "../../../utils/locationData";
 import { useTehsilProgramSummary } from "../../../hooks";
@@ -45,9 +47,53 @@ type Filters = {
   year: number;
 };
 
+const QUICK_LINKS = [
+  {
+    label: "Water systems",
+    description: "Tube wells",
+    icon: Droplets,
+    route: tehsilRoutes.waterSystems,
+    accent: "text-blue-600 bg-blue-50",
+  },
+  {
+    label: "Submissions",
+    description: "Daily logs",
+    icon: FileCheck,
+    route: tehsilRoutes.waterSubmissions,
+    accent: "text-violet-600 bg-violet-50",
+  },
+  {
+    label: "Anomalies",
+    description: "Volume flags",
+    icon: AlertTriangle,
+    route: tehsilRoutes.waterAlerts,
+    accent: "text-amber-600 bg-amber-50",
+  },
+  {
+    label: "Certificates",
+    description: "Calibration",
+    icon: FileText,
+    route: tehsilRoutes.calibrationCertificates,
+    accent: "text-emerald-600 bg-emerald-50",
+  },
+  {
+    label: "Solar systems",
+    description: "PV sites",
+    icon: Sun,
+    route: tehsilRoutes.solarSites,
+    accent: "text-amber-600 bg-amber-50",
+  },
+  {
+    label: "Monthly solar logs",
+    description: "Grid import/export",
+    icon: CalendarClock,
+    route: tehsilRoutes.solarMonthlyLogging,
+    accent: "text-orange-600 bg-orange-50",
+  },
+] as const;
+
 const TehsilManagerDashboard = () => {
   const { user } = useAuth();
-  const showFacilityRegistration = canRegisterTehsilFacilities(user?.role);
   const navigate = useNavigate();
 
   const scopedTehsils = useMemo((): string[] => {
@@ -101,10 +147,11 @@ const TehsilManagerDashboard = () => {
     isLoading: statsLoading,
     isError: statsError,
     error: statsErrorObject,
+    refetch,
   } = useTehsilProgramSummary(activeFilters);
 
   const MONTHS: Array<{ value: string | number; label: string }> = [
-    { value: "", label: "All Months" },
+    { value: "", label: "All months" },
     { value: 1, label: "January" },
     { value: 2, label: "February" },
     { value: 3, label: "March" },
@@ -148,238 +195,198 @@ const TehsilManagerDashboard = () => {
   const safeSummary = summary ?? {
     ohr_count: 0,
     solar_facilities: 0,
+    bulk_meters: 0,
   };
+
+  const meterCoveragePct = useMemo(() => {
+    const total = safeSummary.ohr_count;
+    if (!total) return null;
+    return Math.round((100 * safeSummary.bulk_meters) / total);
+  }, [safeSummary.ohr_count, safeSummary.bulk_meters]);
 
   const tehsilScope =
     scopedTehsils.length === 1
       ? scopedTehsils[0]
       : `${scopedTehsils.length} assigned tehsils`;
 
+  const activeScopeLabel = useMemo(() => {
+    const tehsil =
+      activeFilters.tehsil === "All Tehsils"
+        ? "All tehsils"
+        : activeFilters.tehsil;
+    const village =
+      activeFilters.village === "All Villages"
+        ? "all villages"
+        : activeFilters.village;
+    const month =
+      activeFilters.month === ""
+        ? "all months"
+        : MONTHS.find((m) => m.value === activeFilters.month)?.label ??
+          String(activeFilters.month);
+    return `${tehsil} · ${village} · ${month} ${activeFilters.year}`;
+  }, [activeFilters, MONTHS]);
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between"
-        >
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
-              Tehsil Operations Dashboard
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Infrastructure, compliance, and anomaly monitoring.
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        icon={<LayoutDashboard className="size-[18px]" />}
+        title="Dashboard"
+        description="At-a-glance view of infrastructure in your tehsil scope."
+        badge={
           <Badge
             variant="outline"
-            className="w-fit border-slate-300 bg-white text-xs font-medium uppercase tracking-wide text-slate-700"
+            className="text-xs font-medium uppercase tracking-wide"
           >
-            Scope: {tehsilScope}
+            {tehsilScope}
           </Badge>
-        </motion.div>
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => void refetch()}
+            disabled={statsLoading}
+          >
+            <Activity className={`size-4 ${statsLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        }
+      />
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <StatsCard
-            title="Tube wells registered"
-            value={safeSummary.ohr_count}
-            desc="In selected scope"
-            icon={<Building className="size-5 text-blue-600" />}
-            loading={statsLoading}
-          />
-          <StatsCard
-            title="Solar sites registered"
-            value={safeSummary.solar_facilities}
-            desc="PV sites in scope"
-            icon={<Sun className="size-5 text-amber-600" />}
-            loading={statsLoading}
-          />
-        </div>
-
-        <Card className="rounded-2xl border-slate-200">
-          <CardHeader>
-            <CardTitle className="text-base">Scope filters</CardTitle>
-            <CardDescription>Refine dashboard metrics by area and period.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-5">
-            <FilterSelect
-              label="Tehsil"
-              value={filters.tehsil}
-              onChange={(value) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  tehsil: value,
-                  village: "All Villages",
-                }))
-              }
-              options={TEHSILS}
-              disabled={scopedTehsils.length === 1}
-            />
-            <FilterSelect
-              label="Village"
-              value={filters.village}
-              onChange={(value) =>
-                setFilters((prev) => ({ ...prev, village: value }))
-              }
-              options={villageOptions}
-            />
-            <FilterSelect
-              label="Month"
-              value={String(filters.month)}
-              onChange={(value) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  month: value === "" ? "" : Number(value),
-                }))
-              }
-              options={MONTHS.map((m) => ({
-                label: m.label,
-                value: String(m.value),
-              }))}
-            />
-            <FilterSelect
-              label="Year"
-              value={String(filters.year)}
-              onChange={(value) =>
-                setFilters((prev) => ({ ...prev, year: Number(value) }))
-              }
-              options={YEARS.map((year) => ({
-                label: String(year),
-                value: String(year),
-              }))}
-            />
-            <div className="flex items-end">
-              <Button
-                className="h-10 w-full gap-2 bg-blue-600 hover:bg-blue-700"
-                onClick={handleApplyFilters}
-              >
-                <Activity className="size-4" />
-                Apply filters
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-slate-200 bg-white">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base">Anomaly Monitoring</CardTitle>
-              <Badge variant="outline">4-day baseline</Badge>
-            </div>
-            <CardDescription>
-              Detect abnormal shifts in water volume against rolling averages.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-muted-foreground">Review flagged logs and operator-level details.</div>
-            <Button
-              type="button"
-              onClick={() => navigate(tehsilRoutes.waterAlerts)}
-              className="gap-2"
-            >
-              <AlertTriangle className="size-4" />
-              Open anomalies
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="flex items-center gap-2">
-          <Activity className="size-5 text-slate-700" />
-          <h2 className="text-lg font-bold text-slate-800">Program Management</h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <ManagementCard
-            title="Water infrastructure"
-            description="Register and maintain tube well systems for assigned villages."
-            tag="Water system"
-            tagVariant="secondary"
-            icon={<Droplet className="size-6 text-blue-600" />}
-            {...(showFacilityRegistration
-              ? {
-                  primaryAction: {
-                    label: "Register water system",
-                    onClick: () => {
-                      navigate(tehsilRoutes.waterForm);
-                    },
-                    icon: <Plus className="size-4" />,
-                    variant: "default" as const,
-                    className: "bg-blue-600 hover:bg-blue-700",
-                  },
-                }
-              : {})}
-          />
-          <ManagementCard
-            title="Solar generation"
-            description="Manage solar assets and capture monthly energy records."
-            tag="Solar"
-            tagVariant="outline"
-            icon={<Sun className="size-6 text-amber-600" />}
-            {...(showFacilityRegistration
-              ? {
-                  primaryAction: {
-                    label: "Register solar site",
-                    onClick: () => {
-                      navigate(tehsilRoutes.solarForm);
-                    },
-                    icon: <Plus className="size-4" />,
-                    variant: "default" as const,
-                    className: "bg-amber-600 hover:bg-amber-700",
-                  },
-                }
-              : {})}
-            secondaryAction={{
-              label: "Monthly solar logs",
-              onClick: () => {
-                navigate(tehsilRoutes.solarEnergy);
-              },
-              icon: <BarChart2 className="size-4" />,
-            }}
-          />
-        </div>
-
-        <Card className="rounded-2xl border-dashed border-slate-200 bg-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Logging compliance</CardTitle>
-            <CardDescription>Track completion across water and solar reporting.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(tehsilRoutes.loggingCompliance)}
-            >
-              Open logging compliance
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          label="Tube wells"
+          value={safeSummary.ohr_count}
+          description="Registered in scope"
+          icon={<Building className="size-5" />}
+          loading={statsLoading}
+          accent="blue"
+        />
+        <StatCard
+          label="Solar sites"
+          value={safeSummary.solar_facilities}
+          description="Registered in scope"
+          icon={<Sun className="size-5" />}
+          loading={statsLoading}
+          accent="amber"
+        />
+        <StatCard
+          label="Bulk meters"
+          value={
+            meterCoveragePct !== null
+              ? `${safeSummary.bulk_meters} (${meterCoveragePct}%)`
+              : safeSummary.bulk_meters
+          }
+          description={
+            meterCoveragePct !== null
+              ? "Installed · share of tube wells"
+              : "Installed in scope"
+          }
+          icon={<Gauge className="size-5" />}
+          loading={statsLoading}
+          accent="green"
+        />
       </div>
-    </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Scope</CardTitle>
+          <CardDescription>
+            Metrics reflect: <span className="font-medium">{activeScopeLabel}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <FilterSelect
+            label="Tehsil"
+            value={filters.tehsil}
+            onChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                tehsil: value,
+                village: "All Villages",
+              }))
+            }
+            options={TEHSILS}
+            disabled={scopedTehsils.length === 1}
+          />
+          <FilterSelect
+            label="Village"
+            value={filters.village}
+            onChange={(value) =>
+              setFilters((prev) => ({ ...prev, village: value }))
+            }
+            options={villageOptions}
+          />
+          <FilterSelect
+            label="Month"
+            value={String(filters.month)}
+            onChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                month: value === "" ? "" : Number(value),
+              }))
+            }
+            options={MONTHS.map((m) => ({
+              label: m.label,
+              value: String(m.value),
+            }))}
+          />
+          <FilterSelect
+            label="Year"
+            value={String(filters.year)}
+            onChange={(value) =>
+              setFilters((prev) => ({ ...prev, year: Number(value) }))
+            }
+            options={YEARS.map((year) => ({
+              label: String(year),
+              value: String(year),
+            }))}
+          />
+          <div className="flex items-end">
+            <Button className="h-10 w-full" onClick={handleApplyFilters}>
+              Apply
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Quick access
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {QUICK_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <button
+                key={link.route}
+                type="button"
+                onClick={() => navigate(link.route)}
+                className="group flex items-center gap-3 rounded-xl border border-border/80 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-accent/40"
+              >
+                <div
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${link.accent}`}
+                >
+                  <Icon className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {link.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {link.description}
+                  </p>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </PageShell>
   );
 };
-
-type StatsCardProps = {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  desc: string;
-  loading: boolean;
-};
-
-const StatsCard = ({ title, value, icon, desc, loading }: StatsCardProps) => (
-  <Card className="rounded-2xl border-slate-200">
-    <CardHeader className="pb-2">
-      <div className="rounded-xl bg-slate-100 p-2 w-fit">{icon}</div>
-      <CardTitle className="text-sm text-slate-700">{title}</CardTitle>
-    </CardHeader>
-    <CardContent className="pt-0">
-      <div className="text-3xl font-black tracking-tight text-slate-900">
-        {loading ? <Spinner className="size-6 text-slate-500" /> : value}
-      </div>
-      <p className="mt-2 text-sm text-slate-500">{desc}</p>
-    </CardContent>
-  </Card>
-);
 
 type FilterSelectOption = string | { label: string; value: string };
 
@@ -404,7 +411,7 @@ function FilterSelect({
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </Label>
       <Select
@@ -415,7 +422,7 @@ function FilterSelect({
           onChange(nextValue === EMPTY_VALUE ? "" : nextValue);
         }}
       >
-        <SelectTrigger className="h-10 w-full rounded-lg border-slate-200 bg-white px-3 text-sm text-slate-700">
+        <SelectTrigger className="h-10 w-full">
           <SelectValue placeholder={`Select ${label}`} />
         </SelectTrigger>
         <SelectContent align="start" className="max-h-72">
@@ -430,73 +437,6 @@ function FilterSelect({
         </SelectContent>
       </Select>
     </div>
-  );
-}
-
-function ManagementCard({
-  title,
-  description,
-  tag,
-  tagVariant,
-  icon,
-  primaryAction,
-  secondaryAction,
-}: {
-  title: string;
-  description: string;
-  tag: string;
-  tagVariant: "secondary" | "outline";
-  icon: React.ReactNode;
-  primaryAction?: {
-    label: string;
-    onClick: () => void;
-    icon: React.ReactNode;
-    variant: "default";
-    className?: string;
-  };
-  secondaryAction?: {
-    label: string;
-    onClick: () => void;
-    icon: React.ReactNode;
-  };
-}) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="rounded-2xl border-slate-200">
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-slate-100 p-3">{icon}</div>
-            <Badge variant={tagVariant}>{tag}</Badge>
-          </div>
-          <CardTitle className="text-xl font-extrabold">{title}</CardTitle>
-          <CardDescription className="text-sm leading-relaxed">
-            {description}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          {primaryAction ? (
-            <Button
-              className={`h-10 gap-2 ${primaryAction.className ?? ""}`}
-              onClick={primaryAction.onClick}
-              variant={primaryAction.variant}
-            >
-              {primaryAction.label}
-              {primaryAction.icon}
-            </Button>
-          ) : null}
-          {secondaryAction ? (
-            <Button
-              className="h-10 gap-2"
-              onClick={secondaryAction.onClick}
-              variant="outline"
-            >
-              {secondaryAction.label}
-              {secondaryAction.icon}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-    </motion.div>
   );
 }
 

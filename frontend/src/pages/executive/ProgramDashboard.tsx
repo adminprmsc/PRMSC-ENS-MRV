@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { LayoutDashboard } from "lucide-react";
 import { useProgramDashboardApi } from "../../hooks";
 import { getApiErrorMessage } from "../../lib/api-error";
 import { LOCATION_DATA, TEHSIL_OPTIONS } from "../../utils/locationData";
@@ -35,6 +36,7 @@ import SystemsMapCard from "./SystemsMapCard";
 import OrganizationKpiPanel, {
   type ScopeFilters,
 } from "./OrganizationKpiPanel";
+import { PageHeader, PageShell } from "@/components/layout";
 
 type SummaryData = {
   ohr_count: number;
@@ -372,20 +374,12 @@ const ProgramDashboard = ({
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/40 to-muted/20 p-4 md:p-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">
-                {headingTitle}
-              </h1>
-            </div>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              {headingDescription}
-            </p>
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader
+        title={headingTitle}
+        description={headingDescription}
+        icon={<LayoutDashboard className="size-5" />}
+      />
 
         {managementView ? (
           <p className="max-w-3xl border-l-2 border-primary/35 pl-4 text-sm leading-relaxed text-muted-foreground">
@@ -664,8 +658,7 @@ const ProgramDashboard = ({
           </CardContent>
         </Card>
         ) : null}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 
