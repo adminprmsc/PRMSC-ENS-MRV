@@ -52,6 +52,7 @@ import {
 } from "../../components/ui/chart";
 import { Progress } from "../../components/ui/progress";
 import { Skeleton } from "../../components/ui/skeleton";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
 type SummaryData = {
   ohr_count: number;
@@ -218,6 +219,15 @@ function ExecutiveKpiRow({
   );
 }
 
+function tehsilOptionLabel(value: string, assignedCount: number) {
+  if (value === ALL_ASSIGNED_TEHSILS) {
+    return assignedCount > 0
+      ? `All assigned tehsils (${assignedCount})`
+      : "All tehsils";
+  }
+  return value;
+}
+
 function ScopeFilterControls({
   filters,
   onChange,
@@ -238,8 +248,10 @@ function ScopeFilterControls({
   scopeLabel: string;
 }) {
   const tehsilOptions = restrictTehsils
-    ? allowedTehsils
-    : ["All Tehsils", ...allowedTehsils];
+    ? allowedTehsils.length > 1
+      ? [ALL_ASSIGNED_TEHSILS, ...allowedTehsils]
+      : allowedTehsils
+    : [ALL_ASSIGNED_TEHSILS, ...allowedTehsils];
 
   return (
     <Card className="overflow-hidden border-border/60">
@@ -255,9 +267,9 @@ function ScopeFilterControls({
             </CardDescription>
           </div>
         </div>
-        <Badge variant="secondary" className="max-w-full truncate font-normal">
+        <Badge variant="secondary" className="max-w-[min(100%,280px)] shrink font-normal">
           <MapPin className="mr-1 size-3 shrink-0" />
-          {scopeLabel}
+          <span className="truncate">{scopeLabel}</span>
         </Badge>
       </CardHeader>
       <CardContent className="pt-4">
@@ -276,7 +288,7 @@ function ScopeFilterControls({
               <SelectContent>
                 {tehsilOptions.map((t) => (
                   <SelectItem key={t} value={t}>
-                    {t}
+                    {tehsilOptionLabel(t, allowedTehsils.length)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -411,8 +423,10 @@ const OrganizationKpiPanel = ({
             <CardDescription className="text-xs">
               Site mix and meter coverage for{" "}
               <span className="font-medium text-foreground">
-                {scopeFilters?.tehsil === "All Tehsils"
-                  ? "all tehsils"
+                {scopeFilters?.tehsil === ALL_ASSIGNED_TEHSILS
+                  ? restrictTehsils
+                    ? `all assigned tehsils (${allowedTehsils.length})`
+                    : "all tehsils"
                   : scopeFilters?.tehsil}
                 {scopeFilters?.village && scopeFilters.village !== "All Villages"
                   ? ` · ${scopeFilters.village}`

@@ -37,6 +37,7 @@ import {
 } from "../../services/tehsilManagerOperatorService";
 import type { QueryFilters } from "../../services/types";
 import type { SolarSystemRow, WaterSystemRow } from "../../types/api";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
 import pakistanOutlineJson from "../../data/pakistan-outline.json";
 import punjabPkBoundaryJson from "../../data/punjab-pk-boundary.json";
@@ -203,7 +204,7 @@ function mapListQuery(filters: SystemsMapFilters): QueryFilters {
 function MapLegend({ compact }: { compact?: boolean | undefined }) {
   return (
     <div
-      className={`pointer-events-none absolute bottom-2 left-2 z-[500] flex flex-wrap gap-1.5 rounded-lg border border-border/70 bg-background/92 px-2 py-1.5 shadow-sm backdrop-blur-sm ${
+      className={`pointer-events-none absolute bottom-2 left-2 z-[10] flex flex-wrap gap-1.5 rounded-md border border-border/70 bg-background/95 px-2 py-1.5 shadow-sm ${
         compact ? "text-[10px]" : "text-xs"
       }`}
     >
@@ -247,19 +248,18 @@ function SystemsMapCanvas({
       className={`relative w-full min-w-0 overflow-hidden rounded-xl border border-border/60 bg-gradient-to-b from-slate-50/80 to-muted/30 shadow-inner [&_.leaflet-container]:z-0 ${heightClass}`}
     >
       {scopeLabel ? (
-        <div className="pointer-events-none absolute left-2 top-2 z-[500] max-w-[calc(100%-4.5rem)] rounded-lg border border-border/60 bg-background/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
-          <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            <MapPin className="size-3 shrink-0" />
+        <div className="pointer-events-none absolute left-2 top-2 z-[10] max-w-[min(calc(100%-4.5rem),220px)] rounded-md border border-border/70 bg-background/95 px-2 py-1 shadow-sm">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Active scope
           </p>
-          <p className="truncate text-xs font-semibold text-foreground">
+          <p className="truncate text-[11px] font-medium text-foreground">
             {scopeLabel}
           </p>
         </div>
       ) : null}
       {loading ? (
         <div
-          className="absolute inset-0 z-[480] flex items-center justify-center bg-background/40 backdrop-blur-[1px]"
+          className="absolute inset-0 z-[20] flex items-center justify-center bg-background/55"
           aria-live="polite"
         >
           <div className="rounded-lg border bg-background/95 px-3 py-2 text-xs font-medium text-muted-foreground shadow-sm">
@@ -334,6 +334,7 @@ function SystemsMapCanvas({
 
 type SystemsMapCardProps = {
   mapFilters: SystemsMapFilters;
+  allowedTehsils?: string[];
   summaryCounts?: { water: number; solar: number } | null | undefined;
   /** Shorter preview with expand-to-fullscreen option (COO dashboard). */
   compact?: boolean;
@@ -345,6 +346,7 @@ type SystemsMapCardProps = {
 
 export default function SystemsMapCard({
   mapFilters,
+  allowedTehsils = [],
   summaryCounts,
   compact = false,
   scopeLabel,
@@ -360,42 +362,97 @@ export default function SystemsMapCard({
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const q = mapListQuery(mapFilters);
-      const [waterResult, solarResult] = await Promise.allSettled([
-        getWaterSystems(q),
-        getSolarSystems(q),
-      ]);
+      const village = mapFilters.village;
 
-      const waterRaw =
-        waterResult.status === "fulfilled" ? waterResult.value : null;
-      const solarRaw =
-        solarResult.status === "fulfilled" ? solarResult.value : null;
+      const fetchListsForTehsil = async (tehsil: string) => {
+        const q: QueryFilters = { tehsil, village };
+        const [waterResult, solarResult] = await Promise.allSettled([
+          getWaterSystems(q),
+          getSolarSystems(q),
+        ]);
+        return {
+          water:
+            waterResult.status === "fulfilled"
+              ? (normalizeListPayload(waterResult.value) as WaterSystemRow[])
+              : [],
+          solar:
+            solarResult.status === "fulfilled"
+              ? (normalizeListPayload(solarResult.value) as SolarSystemRow[])
+              : [],
+          waterError:
+            waterResult.status === "rejected" ? waterResult.reason : null,
+          solarError:
+            solarResult.status === "rejected" ? solarResult.reason : null,
+        };
+      };
 
-      if (waterResult.status === "rejected") {
-        toast.error(
-          getApiErrorMessage(
-            waterResult.reason,
-            "Failed to load water systems for map",
-          ),
+      let water: WaterSystemRow[] = [];
+      let solar: SolarSystemRow[] = [];
+
+      if (
+        mapFilters.tehsil === ALL_ASSIGNED_TEHSILS &&
+        allowedTehsils.length > 0
+      ) {
+        const results = await Promise.all(
+          allowedTehsils.map((tehsil) => fetchListsForTehsil(tehsil)),
         );
-      }
-      if (solarResult.status === "rejected") {
-        toast.error(
-          getApiErrorMessage(
-            solarResult.reason,
-            "Failed to load solar systems for map",
-          ),
-        );
-      }
+        const waterById = new Map<string, WaterSystemRow>();
+        const solarById = new Map<string, SolarSystemRow>();
+        for (const result of results) {
+          if (result.waterError) {
+            toast.error(
+              getApiErrorMessage(
+                result.waterError,
+                "Failed to load water systems for map",
+              ),
+            );
+          }
+          if (result.solarError) {
+            toast.error(
+              getApiErrorMessage(
+                result.solarError,
+                "Failed to load solar systems for map",
+              ),
+            );
+          }
+          for (const row of result.water) waterById.set(String(row.id), row);
+          for (const row of result.solar) solarById.set(String(row.id), row);
+        }
+        water = [...waterById.values()];
+        solar = [...solarById.values()];
+      } else {
+        const q = mapListQuery(mapFilters);
+        const [waterResult, solarResult] = await Promise.allSettled([
+          getWaterSystems(q),
+          getSolarSystems(q),
+        ]);
 
-      const water =
-        waterRaw != null
-          ? (normalizeListPayload(waterRaw) as WaterSystemRow[])
-          : [];
-      const solar =
-        solarRaw != null
-          ? (normalizeListPayload(solarRaw) as SolarSystemRow[])
-          : [];
+        if (waterResult.status === "rejected") {
+          toast.error(
+            getApiErrorMessage(
+              waterResult.reason,
+              "Failed to load water systems for map",
+            ),
+          );
+        }
+        if (solarResult.status === "rejected") {
+          toast.error(
+            getApiErrorMessage(
+              solarResult.reason,
+              "Failed to load solar systems for map",
+            ),
+          );
+        }
+
+        water =
+          waterResult.status === "fulfilled"
+            ? (normalizeListPayload(waterResult.value) as WaterSystemRow[])
+            : [];
+        solar =
+          solarResult.status === "fulfilled"
+            ? (normalizeListPayload(solarResult.value) as SolarSystemRow[])
+            : [];
+      }
 
       setRegistryTotals({ water: water.length, solar: solar.length });
 
@@ -445,7 +502,7 @@ export default function SystemsMapCard({
     } finally {
       setLoading(false);
     }
-  }, [mapFilters.tehsil, mapFilters.village]);
+  }, [mapFilters.tehsil, mapFilters.village, allowedTehsils]);
 
   useEffect(() => {
     void load();
