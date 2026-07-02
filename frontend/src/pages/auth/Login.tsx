@@ -4,7 +4,6 @@ import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthLayout, PasswordFieldWithIcon } from "../../components/layout";
-import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import {
   InputGroup,
@@ -37,6 +36,27 @@ const fieldLabelClass =
 
 const inputGroupClass =
   "h-11 rounded-lg border-border/70 bg-background shadow-sm transition-shadow focus-within:shadow-md";
+
+function LoginErrorAlert({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-lg border border-destructive/15 bg-destructive/[0.04] px-3.5 py-3"
+    >
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+        <AlertCircle className="size-4" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="text-sm font-semibold leading-snug text-foreground">
+          Could not sign in
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {message}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -74,7 +94,6 @@ const Login = () => {
       if (!result.success) {
         const message = result.message || "Invalid email or password";
         setErrorMessage(message);
-        toast.error(message);
         return;
       }
       setErrorMessage("");
@@ -82,7 +101,6 @@ const Login = () => {
     } catch (error: unknown) {
       const message = getErrorMessage(error, "Login failed");
       setErrorMessage(message);
-      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -153,13 +171,7 @@ const Login = () => {
           />
         </div>
 
-        {errorMessage ? (
-          <Alert variant="destructive" className="border-destructive/25 bg-destructive/5">
-            <AlertCircle className="size-4" />
-            <AlertTitle className="text-sm">Could not sign in</AlertTitle>
-            <AlertDescription className="text-sm">{errorMessage}</AlertDescription>
-          </Alert>
-        ) : null}
+        {errorMessage ? <LoginErrorAlert message={errorMessage} /> : null}
 
         <Button
           type="submit"
