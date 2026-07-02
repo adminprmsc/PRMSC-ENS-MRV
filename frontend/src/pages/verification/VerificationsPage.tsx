@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PageShell } from "../../components/layout";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -163,8 +164,8 @@ export default function VerificationsPage() {
   }, [rows, search, view]);
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
+    <PageShell>
+      
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -314,7 +315,5 @@ export default function VerificationsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
-  );
+      </PageShell>  );
 }

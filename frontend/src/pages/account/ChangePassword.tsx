@@ -1,21 +1,28 @@
 import { useState } from "react";
-import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  PageHeader,
+  PageShell,
+  PasswordField,
+} from "../../components/layout";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { changePassword } from "../../services";
 import { getApiErrorMessage } from "../../lib/api-error";
-import { useNavigate } from "react-router-dom";
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -36,66 +43,47 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      <Card className="border-border/80">
+    <PageShell narrow>
+      <PageHeader
+        icon={<KeyRound />}
+        title="Change password"
+        description="Update your account password. Your current password is required to confirm this change."
+      />
+
+      <Card>
         <CardHeader>
-          <CardTitle>Change password</CardTitle>
+          <CardTitle>Security settings</CardTitle>
           <CardDescription>
-            Update your password. You’ll need your current password to confirm.
+            Use a strong password with at least 8 characters.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={submit}>
-            <div className="space-y-1.5">
-              <Label htmlFor="current_password">Current password</Label>
-              <div className="relative">
-                <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="current_password"
-                  type={showCurrent ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="h-10 pl-9 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent((s) => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:bg-muted"
-                  aria-label={showCurrent ? "Hide current password" : "Show current password"}
-                >
-                  {showCurrent ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            </div>
+            <PasswordField
+              id="current_password"
+              label="Current password"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              autoComplete="current-password"
+              required
+            />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="new_password">New password</Label>
-              <div className="relative">
-                <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="new_password"
-                  type={showNew ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                  className="h-10 pl-9 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew((s) => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:bg-muted"
-                  aria-label={showNew ? "Hide new password" : "Show new password"}
-                >
-                  {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            </div>
+            <PasswordField
+              id="new_password"
+              label="New password"
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+              required
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={loading}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate(-1)}
+                disabled={loading}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>
@@ -112,7 +100,6 @@ export default function ChangePasswordPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
-

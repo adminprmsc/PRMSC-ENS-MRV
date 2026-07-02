@@ -9,7 +9,9 @@ import {
   SYSTEM_ADMIN,
   USER,
   hierarchyRank,
+  isUserAdminRole,
   normalizeRoleCode,
+  rankAtLeast,
 } from '../../domain/constants/roles';
 import { Submission } from '../../infrastructure/database/entities/submission.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
@@ -51,7 +53,7 @@ export class RbacService {
   }
 
   rankAtLeast(roleCode: string | null | undefined, minCode: string): boolean {
-    return hierarchyRank(roleCode) >= ROLE_RANK[minCode];
+    return rankAtLeast(roleCode, minCode);
   }
 
   effectivePermissions(permissionsJson: unknown): Set<string> {
@@ -68,9 +70,24 @@ export class RbacService {
     return this.effectivePermissions(permissionsJson).has(permission);
   }
 
+  managerOperationTehsilSet(user: User): Set<string> {
+    const out = new Set<string>();
+    for (const link of user.managerOperationLinks ?? []) {
+      const c = canonicalTehsil(link.tehsil);
+      if (c) {
+        out.add(c);
+      }
+    }
+    return out;
+  }
+
   async userAssignedTehsils(user: User): Promise<Set<string>> {
-    if (this.userRoleCode(user) === USER) {
+    const code = this.userRoleCode(user);
+    if (code === USER) {
       return this.tehsilAccess.operatorTehsilsDerivedFromWaterSystems(user);
+    }
+    if (code === SUPER_ADMIN) {
+      return this.managerOperationTehsilSet(user);
     }
     return new Set((user.tehsilLinks ?? []).map((link) => link.tehsil));
   }
@@ -93,11 +110,11 @@ export class RbacService {
     user: User,
     tehsil: string | null | undefined,
   ): Promise<boolean> {
-    if (this.userRank(user) >= ROLE_RANK[SUPER_ADMIN]) {
-      return true;
+    if (isUserAdminRole(this.userRoleCode(user))) {
+      return false;
     }
     const code = this.userRoleCode(user);
-    if (code !== USER && code !== ADMIN) {
+    if (code !== USER && code !== ADMIN && code !== SUPER_ADMIN) {
       return false;
     }
     const c = canonicalTehsil(tehsil);
@@ -143,8 +160,8 @@ export class RbacService {
     user: User,
     submission: Submission,
   ): Promise<boolean> {
-    if (this.userRank(user) >= ROLE_RANK[SUPER_ADMIN]) {
-      return true;
+    if (isUserAdminRole(this.userRoleCode(user))) {
+      return false;
     }
     if (this.userRoleCode(user) === USER) {
       if (String(submission.operatorId) !== String(user.id)) {
@@ -164,7 +181,10 @@ export class RbacService {
       const t = await this.submissionTehsil(submission);
       return t !== null && (await this.canAccessTehsil(user, t));
     }
-    if (this.userRoleCode(user) === ADMIN) {
+    if (
+      this.userRoleCode(user) === ADMIN ||
+      this.userRoleCode(user) === SUPER_ADMIN
+    ) {
       const t = await this.submissionTehsil(submission);
       return await this.canAccessTehsil(user, t);
     }
@@ -194,10 +214,13 @@ export class RbacService {
       const t = await this.submissionTehsil(submission);
       return await this.canAccessTehsil(user, t);
     }
-    if (this.userRank(user) >= ROLE_RANK[SUPER_ADMIN]) {
-      return true;
+    if (isUserAdminRole(this.userRoleCode(user))) {
+      return false;
     }
-    if (this.userRoleCode(user) === ADMIN) {
+    if (
+      this.userRoleCode(user) === ADMIN ||
+      this.userRoleCode(user) === SUPER_ADMIN
+    ) {
       const t = await this.submissionTehsil(submission);
       return await this.canAccessTehsil(user, t);
     }
@@ -208,11 +231,11 @@ export class RbacService {
     user: User,
     submission: Submission,
   ): Promise<boolean> {
-    const rk = this.userRank(user);
-    if (rk < ROLE_RANK[ADMIN]) {
+    if (this.userRoleCode(user) !== ADMIN) {
       return false;
     }
-    if (rk >= ROLE_RANK[SUPER_ADMIN]) {
+    const rk = this.userRank(user);
+    if (rk < ROLE_RANK[ADMIN]) {
       return false;
     }
     const t = await this.submissionTehsil(submission);

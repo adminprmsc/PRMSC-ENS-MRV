@@ -1,36 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, Pencil, Plus, RefreshCcw, Search, Zap } from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCcw, Sun, Zap } from "lucide-react";
 
-import { Button } from "../../../components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
-import { Input } from "../../../components/ui/input";
-import { Skeleton } from "../../../components/ui/skeleton";
-import {
+  DataListCard,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeader,
+  DataTableWrap,
+  kv,
+  PageHeader,
+  PageShell,
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
-} from "../../../components/ui/table";
+} from "../../../components/layout";
+import { Button } from "../../../components/ui/button";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import type { SolarSystemRow } from "../../../types/api";
 import { formatPakistanDateTime } from "../../../utils/pakistanTime";
-
-const kv = (v: unknown) => {
-  if (v === null || v === undefined || v === "") return "—";
-  return String(v);
-};
 
 export default function SolarSites() {
   const navigate = useNavigate();
@@ -63,42 +55,32 @@ export default function SolarSites() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return sites;
-    return sites.filter((s) => {
-      return (
-        s.tehsil?.toLowerCase().includes(q) ||
-        s.village?.toLowerCase().includes(q) ||
-        (s.settlement ?? "").toLowerCase().includes(q) ||
-        (s.unique_identifier ?? "").toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q) ||
-        (s.disco_info ?? "").toLowerCase().includes(q) ||
-        (s.bill_reference_number ?? "").toLowerCase().includes(q)
-      );
-    });
+    return sites.filter((s) =>
+      [
+        s.tehsil,
+        s.village,
+        s.settlement,
+        s.unique_identifier,
+        s.disco_info,
+        s.bill_reference_number,
+        s.id,
+      ]
+        .filter(Boolean)
+        .some((x) => String(x).toLowerCase().includes(q)),
+    );
   }, [sites, search]);
 
-  const openDetails = (s: SolarSystemRow) => {
-    navigate(tehsilRoutes.solarSiteView(s.id));
-  };
-
-  const goToEdit = (s: SolarSystemRow) => {
-    navigate(tehsilRoutes.solarSiteEdit(s.id));
-  };
-
   return (
-    <div className="min-h-screen bg-muted/30 p-4 md:p-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Solar Systems
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              View and manage registered solar systems in your tehsil scope.
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        icon={<Sun className="text-amber-600" />}
+        title="Solar systems"
+        description={`${filtered.length} registered sites`}
+        actions={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => void load(true)}
               disabled={refreshing}
             >
@@ -108,122 +90,92 @@ export default function SolarSites() {
               Refresh
             </Button>
             <Button
-              onClick={() => navigate(tehsilRoutes.solarForm)}
-              className="gap-2"
-            >
-              <Plus className="size-4" />
-              Register Solar Systems
-            </Button>
-            <Button
-              variant="secondary"
+              variant="outline"
+              size="sm"
               onClick={() => navigate(tehsilRoutes.solarEnergyAdd)}
-              className="gap-2"
             >
               <Zap className="size-4" />
-              Add monthly log
+              Monthly log
+            </Button>
+            <Button size="sm" onClick={() => navigate(tehsilRoutes.solarForm)}>
+              <Plus className="size-4" />
+              Register
             </Button>
           </div>
-        </div>
+        }
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>All sites</CardTitle>
-            <CardDescription>
-              {loading ? "" : `${filtered.length} site(s)`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by tehsil, village, DISCO, bill ref, UID, or ID…"
-                className="pl-9"
-              />
-            </div>
-
-            {loading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 8 }).map((_, idx) => (
-                  <Skeleton key={idx} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tehsil</TableHead>
-                      <TableHead>Village</TableHead>
-                      <TableHead>Settlement</TableHead>
-                      <TableHead>UID</TableHead>
-                      <TableHead>DISCO</TableHead>
-                      <TableHead>Bill ref</TableHead>
-                      <TableHead>Panel (kW)</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={10}
-                          className="h-24 text-center text-muted-foreground"
+      <DataListCard
+        loading={loading}
+        count={filtered.length}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Tehsil, village, DISCO, bill ref, UID…"
+      >
+        <DataTableWrap>
+          <Table>
+            <DataTableHeader>
+              <DataTableHead>Location</DataTableHead>
+              <DataTableHead>UID</DataTableHead>
+              <DataTableHead>DISCO</DataTableHead>
+              <DataTableHead>Capacity</DataTableHead>
+              <DataTableHead>Updated</DataTableHead>
+              <DataTableHead align="right">Actions</DataTableHead>
+            </DataTableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <DataTableEmpty colSpan={6} />
+              ) : (
+                filtered.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <p className="font-medium">{kv(s.village)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {kv(s.tehsil)}
+                        {s.settlement ? ` · ${s.settlement}` : ""}
+                      </p>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {kv(s.unique_identifier)}
+                    </TableCell>
+                    <TableCell className="text-sm">{kv(s.disco_info)}</TableCell>
+                    <TableCell className="tabular-nums text-sm">
+                      {s.solar_panel_capacity != null
+                        ? `${s.solar_panel_capacity} kW`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatPakistanDateTime(s.updated_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            navigate(tehsilRoutes.solarSiteView(s.id))
+                          }
                         >
-                          No solar sites found.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filtered.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell className="font-medium">
-                            {kv(s.tehsil)}
-                          </TableCell>
-                          <TableCell>{kv(s.village)}</TableCell>
-                          <TableCell>{kv(s.settlement)}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {kv(s.unique_identifier)}
-                          </TableCell>
-                          <TableCell>{kv(s.disco_info)}</TableCell>
-                          <TableCell className="max-w-[10rem] truncate font-mono text-xs">
-                            {kv(s.bill_reference_number)}
-                          </TableCell>
-                          <TableCell>{kv(s.solar_panel_capacity)}</TableCell>
-                          <TableCell>{formatPakistanDateTime(s.created_at)}</TableCell>
-                          <TableCell>{formatPakistanDateTime(s.updated_at)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="inline-flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openDetails(s)}
-                              >
-                                <Eye className="size-4" />
-                                View
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => goToEdit(s)}
-                                className="gap-1.5"
-                              >
-                                <Pencil className="size-4" />
-                                Edit
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+                          <Eye className="size-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            navigate(tehsilRoutes.solarSiteEdit(s.id))
+                          }
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </DataTableWrap>
+      </DataListCard>
+    </PageShell>
   );
 }

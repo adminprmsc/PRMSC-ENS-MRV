@@ -103,12 +103,10 @@ The script dumps from Supabase, saves `prmsc_backup.dump` locally as a backup, a
 Database + API in Docker; frontend via Vite on the host:
 
 ```bash
-cp .env.docker.example .env.docker
-# edit secrets or leave CHANGE_ME for local-only
+cp .env.docker.dev.example .env.docker
 
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d postgres backend
 
-cd backend && npm run start:dev    # or use Docker backend on :5001
 cd frontend && npm run dev
 ```
 

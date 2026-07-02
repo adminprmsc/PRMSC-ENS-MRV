@@ -4,7 +4,7 @@ import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { canonicalTehsil } from '../../domain/constants/tehsils';
-import { ADMIN, ROLE_RANK, SUPER_ADMIN } from '../../domain/constants/roles';
+import { ADMIN, SUPER_ADMIN } from '../../domain/constants/roles';
 import {
   toIsoDateString,
   toIsoDateTimeString,
@@ -733,7 +733,6 @@ export class TehsilManagerService {
     const user = await this.loadActor(jwt);
     if (!user) return { statusCode: 404, body: { message: 'User not found' } };
 
-    const rk = this.rbac.userRank(user);
     const ts = [...(await this.rbac.userAssignedTehsils(user))];
 
     let waterDay: Date;
@@ -765,14 +764,7 @@ export class TehsilManagerService {
 
     let waterSystems: WaterSystem[];
     let solarSystems: SolarSystem[];
-    if (rk >= ROLE_RANK[SUPER_ADMIN]) {
-      waterSystems = await this.waterSystemRepo.find({
-        order: { tehsil: 'ASC', village: 'ASC', uniqueIdentifier: 'ASC' },
-      });
-      solarSystems = await this.solarSystemRepo.find({
-        order: { tehsil: 'ASC', village: 'ASC', uniqueIdentifier: 'ASC' },
-      });
-    } else if (ts.length) {
+    if (ts.length) {
       waterSystems = await this.waterSystemRepo.find({
         where: { tehsil: In(ts) },
         order: { tehsil: 'ASC', village: 'ASC', uniqueIdentifier: 'ASC' },
@@ -2139,15 +2131,12 @@ export class TehsilManagerService {
     const user = await this.loadActor(jwt);
     if (!user) return { statusCode: 404, body: { message: 'User not found' } };
 
-    const rk = this.rbac.userRank(user);
     const ts = [...(await this.rbac.userAssignedTehsils(user))];
     const filterTehsil = query.tehsil;
     const filterVillage = query.village;
 
     let systems: SolarSystem[];
-    if (rk >= ROLE_RANK[SUPER_ADMIN]) {
-      systems = await this.solarSystemRepo.find();
-    } else if (ts.length) {
+    if (ts.length) {
       systems = await this.solarSystemRepo.find({ where: { tehsil: In(ts) } });
     } else {
       return {
@@ -3017,6 +3006,19 @@ export class TehsilManagerService {
     });
 
     if (this.rbac.userRoleCode(currentUser!) === ADMIN) {
+      const filtered = [];
+      for (const s of submissions) {
+        if (
+          await this.rbac.canAccessTehsil(
+            currentUser!,
+            await this.rbac.submissionTehsil(s),
+          )
+        ) {
+          filtered.push(s);
+        }
+      }
+      submissions = filtered;
+    } else if (this.rbac.userRoleCode(currentUser!) === SUPER_ADMIN) {
       const filtered = [];
       for (const s of submissions) {
         if (

@@ -1,17 +1,47 @@
-import { useMemo } from "react";
-import { Download, Loader2, MapPin } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ClipboardList,
+  FileEdit,
+  Loader2,
+  MapPin,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  DataListCard,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeader,
+  DataTableWrap,
+  StatCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "../../../components/layout";
 import { Badge } from "../../../components/ui/badge";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
-import { Label } from "../../../components/ui/label";
-import { Separator } from "../../../components/ui/separator";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "../../../components/ui/empty";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "../../../components/ui/field";
 import {
   Select,
   SelectContent,
@@ -19,18 +49,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
+import { Skeleton } from "../../../components/ui/skeleton";
 import { tehsilRoutes } from "../../../constants/routes";
-import { Button } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
-import { downloadWaterComplianceExcel } from "./exportComplianceExcel";
 import { formatPakistanIsoDateLabel } from "../../../utils/pakistanTime";
 import {
   type WaterDailyRangeDay,
@@ -41,6 +62,7 @@ import {
   waterStatusLabel,
   waterStatusVariant,
 } from "./loggingComplianceTypes";
+
 type WaterLoggingComplianceSectionProps = {
   baseId: string;
   panelId: string;
@@ -52,29 +74,10 @@ type WaterLoggingComplianceSectionProps = {
   onRangeDaysChange: (days: 7 | 14 | 30) => void;
   loading: boolean;
   rangeData: WaterDailyRangePayload | null;
-  weekChunks: WaterDailyRangeDay[][];
-  activeWeekIndex: number;
-  onActiveWeekIndexChange: (index: number) => void;
-  visibleDays: WaterDailyRangeDay[];
 };
 
 function formatDayLabel(isoDate: string): string {
   return formatPakistanIsoDateLabel(isoDate);
-}
-
-function shortDate(isoDate: string): string {
-  return formatPakistanIsoDateLabel(isoDate, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function weekChunkLabel(chunk: WaterDailyRangeDay[]): string {
-  if (chunk.length === 0) return "";
-  const a = chunk[0]?.date;
-  const b = chunk[chunk.length - 1]?.date;
-  if (!a || !b) return "";
-  return `${shortDate(a)} – ${shortDate(b)}`;
 }
 
 function countStatuses(days: WaterDailyRangeDay[]) {
@@ -86,16 +89,11 @@ function countStatuses(days: WaterDailyRangeDay[]) {
   return counts;
 }
 
-function StepIndex({ n }: { n: number }) {
-  return (
-    <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold tabular-nums text-muted-foreground"
-      aria-hidden
-    >
-      {n}
-    </span>
-  );
-}
+const RANGE_PRESETS: { days: 7 | 14 | 30; label: string }[] = [
+  { days: 7, label: "7d" },
+  { days: 14, label: "14d" },
+  { days: 30, label: "30d" },
+];
 
 export default function WaterLoggingComplianceSection({
   baseId,
@@ -108,14 +106,12 @@ export default function WaterLoggingComplianceSection({
   onRangeDaysChange,
   loading,
   rangeData,
-  weekChunks,
-  activeWeekIndex,
-  onActiveWeekIndexChange,
-  visibleDays,
 }: WaterLoggingComplianceSectionProps) {
   const navigate = useNavigate();
+  const [tableSearch, setTableSearch] = useState("");
 
-  const weekStats = useMemo(() => countStatuses(visibleDays), [visibleDays]);
+  const allDays = rangeData?.days ?? [];
+  const rangeStats = useMemo(() => countStatuses(allDays), [allDays]);
 
   const selectedSystem = waterSystems.find(
     (s) => s.id === selectedWaterSystemId,
@@ -125,39 +121,35 @@ export default function WaterLoggingComplianceSection({
   const opsTitle = formatAssignedOperatorsTitle(operatorsForTable);
   const showOps = opsText.trim() !== "";
 
-  const rangePresets: { days: 7 | 14 | 30; label: string }[] = [
-    { days: 7, label: "7 days" },
-    { days: 14, label: "14 days" },
-    { days: 30, label: "30 days" },
-  ];
+  const filteredDays = useMemo(() => {
+    const q = tableSearch.trim().toLowerCase();
+    if (!q) return allDays;
+    return allDays.filter((row) => {
+      const status = waterStatusLabel(row.daily_status).toLowerCase();
+      return row.date.includes(q) || status.includes(q);
+    });
+  }, [allDays, tableSearch]);
 
-  const totalWeekParts = weekChunks.length;
+  const showEmptyPick =
+    !systemsLoading && waterSystems.length > 0 && !selectedWaterSystemId;
+  const showNoSystems = !systemsLoading && waterSystems.length === 0;
+  const showData = Boolean(rangeData && selectedWaterSystemId);
 
   return (
     <div
       id={panelId}
       role="tabpanel"
       aria-labelledby={`${baseId}-tab-water`}
-      className="w-full space-y-6"
+      className="space-y-5"
     >
-      <Card className="border-border shadow-none">
-        <CardHeader className="pb-2 pt-6">
-          <CardTitle className="text-base font-medium">Selection</CardTitle>
-          <CardDescription className="text-sm">
-            Choose a system first. The window ends today and counts backward.
-            Results refresh when inputs change.
-          </CardDescription>
+      <Card>
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="text-base font-semibold">Filters</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-0 pb-6">
-          <div className="flex gap-4">
-            <StepIndex n={1} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Label
-                htmlFor="water-system-pick"
-                className="text-sm font-medium"
-              >
-                Water system
-              </Label>
+        <CardContent className="pt-5">
+          <FieldGroup className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+            <Field className="lg:col-span-5">
+              <FieldLabel htmlFor="water-system-pick">Water system</FieldLabel>
               <Select
                 value={selectedWaterSystemId || undefined}
                 onValueChange={(v) => {
@@ -167,47 +159,44 @@ export default function WaterLoggingComplianceSection({
               >
                 <SelectTrigger
                   id="water-system-pick"
-                  className="h-10 max-w-lg"
+                  className="h-10 w-full"
                   aria-describedby={`${baseId}-step1-hint`}
                 >
                   <SelectValue
-                    placeholder={systemsLoading ? "" : "Select system"}
+                    placeholder={
+                      systemsLoading ? "Loading…" : "Select system"
+                    }
                   />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72">
                   {waterSystems.map((ws) => (
                     <SelectItem key={ws.id} value={ws.id}>
-                      <span className="font-mono text-sm">
+                      <span className="font-mono text-xs">
                         {ws.unique_identifier}
                       </span>
                       <span className="text-muted-foreground">
                         {" "}
-                        — {ws.village}
+                        · {ws.village}
                       </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p id={`${baseId}-step1-hint`} className="sr-only">
-                Water system to review daily logs for.
-              </p>
-            </div>
-          </div>
+              <FieldDescription id={`${baseId}-step1-hint`}>
+                Window ends today and counts backward.
+              </FieldDescription>
+            </Field>
 
-          <Separator className="my-6" />
-
-          <div className="flex gap-4">
-            <StepIndex n={2} />
-            <div className="min-w-0 flex-1 space-y-3">
-              <span className="text-sm font-medium">Date range</span>
-              <div className="flex flex-wrap gap-2">
-                {rangePresets.map(({ days, label }) => (
+            <Field className="lg:col-span-7">
+              <FieldLabel>Period</FieldLabel>
+              <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
+                {RANGE_PRESETS.map(({ days, label }) => (
                   <Button
                     key={days}
                     type="button"
-                    variant={rangeDays === days ? "secondary" : "outline"}
                     size="sm"
-                    className="min-w-[5.5rem] font-normal"
+                    variant={rangeDays === days ? "default" : "ghost"}
+                    className="min-w-[3.25rem] rounded-md"
                     onClick={() => onRangeDaysChange(days)}
                     disabled={loading || !selectedWaterSystemId}
                   >
@@ -215,244 +204,165 @@ export default function WaterLoggingComplianceSection({
                   </Button>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {totalWeekParts > 1 ? (
-            <>
-              <Separator className="my-6" />
-              <div className="flex gap-4">
-                <StepIndex n={3} />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Label
-                    htmlFor="water-week-chunk"
-                    className="text-sm font-medium"
-                  >
-                    Segment
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Up to seven days per segment, chronological order.
-                  </p>
-                  <Select
-                    value={String(activeWeekIndex)}
-                    onValueChange={(v) => {
-                      if (v != null) onActiveWeekIndexChange(Number(v));
-                    }}
-                    disabled={loading || weekChunks.length === 0}
-                  >
-                    <SelectTrigger
-                      id="water-week-chunk"
-                      className="h-10 max-w-lg"
-                    >
-                      <SelectValue placeholder="Select segment" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {weekChunks.map((chunk, idx) => (
-                        <SelectItem key={idx} value={String(idx)}>
-                          {idx + 1} / {totalWeekParts} · {weekChunkLabel(chunk)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </>
-          ) : null}
+              <FieldDescription>
+                All days in the window are shown in the table below.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
         </CardContent>
       </Card>
 
       {systemsLoading ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading systems…
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
         </div>
       ) : null}
 
-      {!systemsLoading && waterSystems.length > 0 && !selectedWaterSystemId ? (
-        <Card className="border-dashed shadow-none">
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <MapPin className="size-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium text-foreground">
-              Select a water system
-            </p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Pick a site above to load daily logging and show the table.
-            </p>
-          </CardContent>
-        </Card>
+      {showEmptyPick ? (
+        <Empty className="border border-dashed bg-muted/20 py-14">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MapPin />
+            </EmptyMedia>
+            <EmptyTitle>Select a water system</EmptyTitle>
+            <EmptyDescription>
+              Choose a site above to load daily logging for the selected period.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
 
-      {!systemsLoading && waterSystems.length === 0 ? (
-        <Card className="border-dashed shadow-none">
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <MapPin className="size-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium text-foreground">
-              No water systems in scope
-            </p>
-            <p className="max-w-sm text-sm text-muted-foreground">
+      {showNoSystems ? (
+        <Empty className="border border-dashed bg-muted/20 py-14">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MapPin />
+            </EmptyMedia>
+            <EmptyTitle>No water systems in scope</EmptyTitle>
+            <EmptyDescription>
               Register systems under Water systems, then return here.
-            </p>
-          </CardContent>
-        </Card>
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
 
       {loading && !rangeData && selectedWaterSystemId ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          Loading…
+          Loading daily logs…
         </div>
       ) : null}
 
-      {rangeData && selectedWaterSystemId ? (
+      {showData && rangeData ? (
         <>
-          <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="font-mono font-medium text-foreground">
-                {rangeData.unique_identifier}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">
-                {selectedSystem?.settlement
-                  ? `${selectedSystem.village}, ${selectedSystem.settlement}`
-                  : rangeData.village}
-              </span>
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {rangeData.date_from} — {rangeData.date_to} · {rangeDays} days
-              {totalWeekParts > 1
-                ? ` · Segment ${activeWeekIndex + 1} of ${totalWeekParts} · ${visibleDays.length} day(s) shown`
-                : ` · ${visibleDays.length} day(s) shown`}
-            </p>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 bg-muted/25 px-4 py-3 text-sm">
+            <span className="font-mono text-xs font-semibold">
+              {rangeData.unique_identifier}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">
+              {selectedSystem?.settlement
+                ? `${selectedSystem.village}, ${selectedSystem.settlement}`
+                : rangeData.village}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">
+              {rangeData.date_from} — {rangeData.date_to} · {allDays.length}{" "}
+              day{allDays.length === 1 ? "" : "s"}
+            </span>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Card className="border-border shadow-none">
-              <CardHeader className="pb-1 pt-4">
-                <CardDescription className="text-xs font-normal text-muted-foreground">
-                  Missing
-                </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums text-destructive">
-                  {weekStats.missing ?? 0}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 text-xs text-muted-foreground">
-                No entry for that day
-              </CardContent>
-            </Card>
-            <Card className="border-border shadow-none">
-              <CardHeader className="pb-1 pt-4">
-                <CardDescription className="text-xs font-normal text-muted-foreground">
-                  Draft
-                </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums">
-                  {weekStats.draft ?? 0}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 text-xs text-muted-foreground">
-                Not submitted
-              </CardContent>
-            </Card>
-            <Card className="border-border shadow-none">
-              <CardHeader className="pb-1 pt-4">
-                <CardDescription className="text-xs font-normal text-muted-foreground">
-                  Submitted / approved
-                </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums text-foreground">
-                  {(weekStats.submitted ?? 0) + (weekStats.accepted ?? 0)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 text-xs text-muted-foreground">
-                In review or accepted
-              </CardContent>
-            </Card>
+            <StatCard
+              label="Missing"
+              value={rangeStats.missing ?? 0}
+              description="No entry for that day"
+              accent="amber"
+              icon={<AlertCircle className="size-5" />}
+              valueClassName="text-destructive"
+              loading={loading}
+            />
+            <StatCard
+              label="Draft"
+              value={rangeStats.draft ?? 0}
+              description="Saved but not submitted"
+              accent="slate"
+              icon={<FileEdit className="size-5" />}
+              loading={loading}
+            />
+            <StatCard
+              label="Submitted / approved"
+              value={(rangeStats.submitted ?? 0) + (rangeStats.accepted ?? 0)}
+              description="In review or accepted"
+              accent="green"
+              icon={<CheckCircle2 className="size-5" />}
+              loading={loading}
+            />
           </div>
 
-          <Card className="border-border shadow-none">
-            <CardHeader className="border-b border-border/80 pb-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <CardTitle className="text-base font-medium">
-                    Daily detail
-                  </CardTitle>
-                  <CardDescription className="text-sm">
-                    <button
-                      type="button"
-                      className="text-foreground underline-offset-4 hover:underline"
-                      onClick={() => navigate(tehsilRoutes.waterSubmissions)}
-                    >
-                      Submissions
-                    </button>{" "}
-                    for formal review. Export matches the table: same columns
-                    and the current segment when the period is split into weeks.
-                  </CardDescription>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-2"
-                  disabled={visibleDays.length === 0}
-                  onClick={() =>
-                    downloadWaterComplianceExcel(
-                      rangeData,
-                      weekChunks.length > 1
-                        ? {
-                            tableDays: visibleDays,
-                            segmentIndex: activeWeekIndex + 1,
-                            segmentCount: weekChunks.length,
-                          }
-                        : { tableDays: visibleDays },
-                    )
-                  }
-                >
-                  <Download className="size-4" />
-                  Export Excel
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0 sm:p-0">
+          <DataListCard
+            title="Daily log"
+            count={filteredDays.length}
+            search={tableSearch}
+            onSearchChange={setTableSearch}
+            searchPlaceholder="Search date or status…"
+            loading={loading && allDays.length === 0}
+            toolbar={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => navigate(tehsilRoutes.waterSubmissions)}
+              >
+                <ClipboardList className="size-4" />
+                Submissions
+              </Button>
+            }
+          >
+            <DataTableWrap>
               <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="min-w-[200px] pl-6">Date</TableHead>
-                    <TableHead className="min-w-[160px]">Status</TableHead>
-                    <TableHead className="min-w-[180px] pr-6">
-                      Operators
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+                <DataTableHeader>
+                  <DataTableHead className="min-w-[200px]">Date</DataTableHead>
+                  <DataTableHead className="min-w-[140px]">Status</DataTableHead>
+                  <DataTableHead className="min-w-[200px]">
+                    Operators
+                  </DataTableHead>
+                </DataTableHeader>
                 <TableBody>
-                  {visibleDays.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={3}
-                        className="py-10 text-center text-muted-foreground"
-                      >
-                        No rows for this segment.
-                      </TableCell>
-                    </TableRow>
+                  {filteredDays.length === 0 ? (
+                    <DataTableEmpty
+                      colSpan={3}
+                      message={
+                        tableSearch.trim()
+                          ? "No rows match your search."
+                          : "No rows for this period."
+                      }
+                    />
                   ) : (
-                    visibleDays.map((row) => (
+                    filteredDays.map((row) => (
                       <TableRow key={row.date}>
-                        <TableCell className="align-top pl-6">
-                          <div className="text-sm font-medium leading-tight">
+                        <TableCell>
+                          <p className="text-sm font-medium">
                             {formatDayLabel(row.date)}
-                          </div>
-                          <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                          </p>
+                          <p className="font-mono text-xs text-muted-foreground">
                             {row.date}
-                          </div>
+                          </p>
                         </TableCell>
-                        <TableCell className="align-top">
+                        <TableCell>
                           <Badge
                             variant={waterStatusVariant(row.daily_status)}
-                            className="whitespace-normal text-left font-normal"
+                            className="font-normal"
                           >
                             {waterStatusLabel(row.daily_status)}
                           </Badge>
                         </TableCell>
                         <TableCell
                           className={cn(
-                            "max-w-[360px] align-top text-sm pr-6",
+                            "max-w-[360px] text-sm",
                             showOps
                               ? "text-foreground"
                               : "text-muted-foreground",
@@ -460,9 +370,9 @@ export default function WaterLoggingComplianceSection({
                           title={opsTitle}
                         >
                           {showOps ? (
-                            <span className="line-clamp-3">{opsText}</span>
+                            <span className="line-clamp-2">{opsText}</span>
                           ) : (
-                            <span className="italic">—</span>
+                            "—"
                           )}
                         </TableCell>
                       </TableRow>
@@ -470,8 +380,8 @@ export default function WaterLoggingComplianceSection({
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </DataTableWrap>
+          </DataListCard>
         </>
       ) : null}
     </div>

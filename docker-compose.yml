@@ -4,8 +4,8 @@
 #   ./deploy/setup.sh
 #
 # Local laptop (database + API only, frontend via npm run dev):
-#   cp .env.docker.example .env.docker
-#   docker compose --env-file .env.docker up -d postgres backend
+#   cp .env.docker.dev.example .env.docker
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.docker up -d postgres backend
 
 services:
   postgres:

@@ -23,8 +23,7 @@ import {
 type ExecutiveScopeFiltersCardProps = {
   filters: ExecutiveScopeFilters;
   activeScopeLabel: string;
-  allowedTehsils: string[];
-  restrictTehsils: boolean;
+  tehsilOptions: string[];
   villageOptions: string[];
   onUpdate: <K extends keyof ExecutiveScopeFilters>(
     key: K,
@@ -33,11 +32,14 @@ type ExecutiveScopeFiltersCardProps = {
   onApply: () => void;
 };
 
+function tehsilLabel(value: string) {
+  return value === "All Tehsils" ? "All assigned tehsils" : value;
+}
+
 function ExecutiveScopeFiltersCard({
   filters,
   activeScopeLabel,
-  allowedTehsils,
-  restrictTehsils,
+  tehsilOptions,
   villageOptions,
   onUpdate,
   onApply,
@@ -63,12 +65,9 @@ function ExecutiveScopeFiltersCard({
             <SelectValue placeholder="Tehsil" />
           </SelectTrigger>
           <SelectContent>
-            {(restrictTehsils
-              ? allowedTehsils
-              : ["All Tehsils", ...allowedTehsils]
-            ).map((t) => (
+            {tehsilOptions.map((t) => (
               <SelectItem key={t} value={t}>
-                {t}
+                {tehsilLabel(t)}
               </SelectItem>
             ))}
           </SelectContent>

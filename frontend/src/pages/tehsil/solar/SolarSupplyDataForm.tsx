@@ -1,15 +1,15 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from "react";
 import {
   useNavigate,
   useSearchParams,
   useParams,
   useLocation,
 } from "react-router-dom";
-import { motion } from "framer-motion";
 import { tehsilRoutes } from "../../../constants/routes";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { useAuth } from "../../../contexts/AuthContext";
 import Toast from "../../../components/Toast";
+import { PageHeader, PageShell } from "../../../components/layout";
 import {
   Alert,
   AlertDescription,
@@ -25,6 +25,12 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "../../../components/ui/field";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -32,10 +38,10 @@ import {
   SelectValue,
 } from "../../../components/ui/select";
 import { Input } from "../../../components/ui/input";
-import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
 import { Separator } from "../../../components/ui/separator";
 import { getApiErrorMessage } from "../../../lib/api-error";
+import { cn } from "../../../lib/utils";
 import {
   Sun,
   ArrowLeft,
@@ -71,6 +77,28 @@ function canonicalTehsil(raw: string): string | null {
   const t = raw.trim().toUpperCase();
   return (TEHSIL_OPTIONS as readonly string[]).find((o) => o === t) ?? null;
 }
+
+function FormField({
+  label,
+  description,
+  children,
+  className,
+}: {
+  label: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Field className={className}>
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
+const inputClass = "h-10 bg-background w-full";
 
 function formatSiteLabel(s: RegisteredSolarSystem): string {
   const parts = [s.village];
@@ -214,6 +242,8 @@ const SolarSupplyDataForm = () => {
     return new Set(fromUser).size > 0;
   }, [user?.tehsils]);
 
+  const tehsilSelectLocked = tehsilSelectOptions.length === 1;
+
   const scopedRegisteredSystems = useMemo(() => {
     if (!hasResolvedProfileTehsils) return registeredSystems;
     const allowed = new Set(tehsilSelectOptions);
@@ -228,6 +258,16 @@ const SolarSupplyDataForm = () => {
       ? tehsilSelectOptions[0]
       : tehsilSelectOptions.join(" · ")
     : null;
+
+  const singleSiteLocked = scopedRegisteredSystems.length === 1;
+
+  useEffect(() => {
+    if (isDedicatedRecordEdit || systemIdParam) return;
+    if (scopedRegisteredSystems.length !== 1) return;
+    const id = String(scopedRegisteredSystems[0]?.id ?? "");
+    if (!id) return;
+    setSelectedSystemId((prev) => (prev === id ? prev : id));
+  }, [scopedRegisteredSystems, isDedicatedRecordEdit, systemIdParam]);
 
   const selectedSystem = useMemo(() => {
     const fromList = scopedRegisteredSystems.find(
@@ -956,47 +996,41 @@ const SolarSupplyDataForm = () => {
   const showSystemsSpinner = loadingSystems && !isDedicatedRecordEdit;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="min-h-screen bg-muted/30 p-4 pb-16 md:p-6"
-    >
+    <PageShell>
       <Toast
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ message: "", type: "success" })}
       />
 
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="mb-6 flex items-start gap-3">
-          <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
+      <PageHeader
+        icon={<Sun />}
+        title={
+          isDedicatedRecordEdit
+            ? "Edit monthly solar log"
+            : isAddOnlyRoute
+              ? "Add monthly solar log"
+              : "Monthly solar energy log"
+        }
+        description={
+          isDedicatedRecordEdit
+            ? "Update import, export, and evidence for this month."
+            : "Grid import/export for a registered site."
+        }
+        badge={
+          tehsilScopeLabel ? (
+            <Badge variant="secondary" className="gap-1 font-normal">
+              <MapPin className="size-3" />
+              {tehsilScopeLabel}
+            </Badge>
+          ) : null
+        }
+        actions={
+          <Button variant="outline" size="icon" onClick={() => navigateBack()}>
             <ArrowLeft className="size-4" />
           </Button>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                {isDedicatedRecordEdit
-                  ? "Edit monthly solar log"
-                  : isAddOnlyRoute
-                    ? "Add monthly solar log"
-                    : "Monthly solar energy log"}
-              </h1>
-              {tehsilScopeLabel ? (
-                <Badge variant="outline" className="gap-1">
-                  <MapPin className="size-3.5" />
-                  {tehsilScopeLabel}
-                </Badge>
-              ) : null}
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isDedicatedRecordEdit
-                ? "Update import, export, and evidence for this month."
-                : isAddOnlyRoute
-                  ? "Enter a new monthly reading for a registered site. To change an existing month, use Solar Monthly Logging → Edit."
-                  : "Log grid import/export for a registered site (no draft/verification on this screen)."}
-            </p>
-          </div>
-        </div>
+        }
+      />
 
         {isDedicatedRecordEdit && loadingDedicatedRecord ? (
           <div className="flex justify-center py-16">
@@ -1042,15 +1076,14 @@ const SolarSupplyDataForm = () => {
             </CardContent>
           </Card>
         ) : (
-          <Card className="border-slate-200">
-            <CardHeader>
+          <Card>
+            <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base">Entry</CardTitle>
               <CardDescription>
-                Select site and period, then enter energy values and upload
-                evidence.
+                Site, period, energy values, and bill evidence.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               {isAddOnlyRoute ? (
                 loadingExistingForAdd ? (
                   <Alert>
@@ -1116,114 +1149,157 @@ const SolarSupplyDataForm = () => {
                   </p>
                 </div>
               ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label>Solar site</Label>
-                    <Select
-                      value={selectedSystemId || "__none__"}
-                      onValueChange={(v) => {
-                        if (v == null || v === "__none__")
-                          setSelectedSystemId("");
-                        else setSelectedSystemId(v);
-                      }}
+                <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-6">
+                  {tehsilSelectLocked ? (
+                    <FormField
+                      label="Tehsil"
+                      description="Auto-selected for your scope."
+                      className="xl:col-span-1"
                     >
-                      <SelectTrigger className="h-11 w-full">
-                        <SelectValue placeholder="Choose a site" />
-                      </SelectTrigger>
-                      <SelectContent className="h-72">
-                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
-                          <Input
-                            value={siteSearch}
-                            onChange={(e) => setSiteSearch(e.target.value)}
-                            onKeyDownCapture={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (
-                                e.key === "ArrowDown" ||
-                                e.key === "ArrowUp" ||
-                                e.key === "Enter" ||
-                                e.key === "Tab"
-                              ) {
-                                e.preventDefault();
-                              }
-                            }}
-                            onKeyUp={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={(e) => e.stopPropagation()}
-                            placeholder="Type to search village/settlement..."
-                            className="h-9"
-                            autoFocus
-                          />
-                        </div>
-                        <SelectItem value="__none__">Choose a site…</SelectItem>
-                        {filteredScopedSystems.map((s) => (
-                          <SelectItem key={String(s.id)} value={String(s.id)}>
-                            {formatSiteLabel(s)}
-                          </SelectItem>
-                        ))}
-                        {filteredScopedSystems.length === 0 ? (
-                          <p className="px-2 py-2 text-xs text-muted-foreground">
-                            No sites match your search.
-                          </p>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <Input
+                        readOnly
+                        value={tehsilSelectOptions[0] ?? ""}
+                        className={cn(inputClass, "bg-muted/40 font-medium")}
+                      />
+                    </FormField>
+                  ) : hasResolvedProfileTehsils ? (
+                    <FormField
+                      label="Tehsil scope"
+                      description="Sites filtered to these tehsils."
+                      className="xl:col-span-2"
+                    >
+                      <Input
+                        readOnly
+                        value={tehsilSelectOptions.join(" · ")}
+                        className={cn(inputClass, "bg-muted/40 text-xs font-medium")}
+                      />
+                    </FormField>
+                  ) : null}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5">
-                        <Calendar className="size-3.5 text-slate-400" />
-                        Year
-                      </Label>
+                  {singleSiteLocked && selectedSystem ? (
+                    <FormField
+                      label="Solar site"
+                      description="Only site in your scope."
+                      className={cn(
+                        "sm:col-span-2",
+                        tehsilSelectLocked
+                          ? "xl:col-span-3"
+                          : hasResolvedProfileTehsils
+                            ? "xl:col-span-2"
+                            : "xl:col-span-4",
+                      )}
+                    >
+                      <Input
+                        readOnly
+                        value={formatSiteLabel(selectedSystem)}
+                        className={cn(inputClass, "bg-muted/40 font-medium")}
+                      />
+                    </FormField>
+                  ) : (
+                    <FormField
+                      label="Solar site"
+                      className={cn(
+                        "sm:col-span-2",
+                        tehsilSelectLocked
+                          ? "xl:col-span-3"
+                          : hasResolvedProfileTehsils
+                            ? "xl:col-span-2"
+                            : "xl:col-span-4",
+                      )}
+                    >
                       <Select
-                        value={String(year)}
-                        onValueChange={(v) => v && setYear(Number(v))}
+                        value={selectedSystemId || undefined}
+                        onValueChange={(v) => {
+                          setSelectedSystemId(v ?? "");
+                        }}
                       >
-                        <SelectTrigger className="h-11 w-full">
-                          <SelectValue />
+                        <SelectTrigger className={inputClass}>
+                          <SelectValue placeholder="Select site" />
                         </SelectTrigger>
-                        <SelectContent className="h-72">
-                          {[currentYear, currentYear - 1, currentYear - 2].map(
-                            (y) => (
-                              <SelectItem key={y} value={String(y)}>
-                                {y}
-                              </SelectItem>
-                            ),
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5">
-                        <Calendar className="size-3.5 text-slate-400" />
-                        Month
-                      </Label>
-                      <Select
-                        value={String(month)}
-                        onValueChange={(v) => v && setMonth(Number(v))}
-                      >
-                        <SelectTrigger className="h-11 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="h-72">
-                          {MONTHS.map((m) => (
-                            <SelectItem
-                              key={m.num}
-                              value={String(m.num)}
-                              disabled={
-                                year === currentYear && m.num > currentMonth
-                              }
-                            >
-                              {m.name}
+                        <SelectContent className="max-h-72">
+                          <div className="sticky top-0 z-10 border-b bg-popover p-2">
+                            <Input
+                              value={siteSearch}
+                              onChange={(e) => setSiteSearch(e.target.value)}
+                              onKeyDownCapture={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (
+                                  e.key === "ArrowDown" ||
+                                  e.key === "ArrowUp" ||
+                                  e.key === "Enter" ||
+                                  e.key === "Tab"
+                                ) {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onKeyUp={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
+                              placeholder="Search site…"
+                              className="h-9"
+                            />
+                          </div>
+                          {filteredScopedSystems.map((s) => (
+                            <SelectItem key={String(s.id)} value={String(s.id)}>
+                              {formatSiteLabel(s)}
                             </SelectItem>
                           ))}
+                          {filteredScopedSystems.length === 0 ? (
+                            <p className="px-2 py-2 text-xs text-muted-foreground">
+                              No sites match.
+                            </p>
+                          ) : null}
                         </SelectContent>
                       </Select>
-                    </div>
-                  </div>
-                </>
+                    </FormField>
+                  )}
+
+                  <FormField label="Year" className="xl:col-span-1">
+                    <Select
+                      value={String(year)}
+                      onValueChange={(v) => v && setYear(Number(v))}
+                    >
+                      <SelectTrigger className={inputClass}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[currentYear, currentYear - 1, currentYear - 2].map(
+                          (y) => (
+                            <SelectItem key={y} value={String(y)}>
+                              {y}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="Month" className="xl:col-span-1">
+                    <Select
+                      value={String(month)}
+                      onValueChange={(v) => v && setMonth(Number(v))}
+                    >
+                      <SelectTrigger className={inputClass}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MONTHS.map((m) => (
+                          <SelectItem
+                            key={m.num}
+                            value={String(m.num)}
+                            disabled={
+                              year === currentYear && m.num > currentMonth
+                            }
+                          >
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </FieldGroup>
               )}
 
               {recordUpdatedAt ? (
@@ -1240,9 +1316,9 @@ const SolarSupplyDataForm = () => {
               <div className="rounded-xl border border-border/70 bg-card p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <Label className="text-sm font-semibold">
+                    <p className="text-sm font-semibold">
                       Does this bill include separate peak/off-peak readings?
-                    </Label>
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Choose <span className="font-semibold">Yes</span> when the bill has
                       separate peak and off-peak values. Choose{" "}
@@ -1271,141 +1347,134 @@ const SolarSupplyDataForm = () => {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {touRequired === "yes" ? (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="export-off-peak">Export off-peak (kWh)</Label>
+                    <FormField label="Export off-peak (kWh)">
                       <Input
                         id="export-off-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={exportOffPeak}
                         onChange={(e) => setExportOffPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="export-peak">Export peak (kWh)</Label>
+                    </FormField>
+                    <FormField label="Export peak (kWh)">
                       <Input
                         id="export-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={exportPeak}
                         onChange={(e) => setExportPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="import-off-peak">Import off-peak (kWh)</Label>
+                    </FormField>
+                    <FormField label="Import off-peak (kWh)">
                       <Input
                         id="import-off-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={importOffPeak}
                         onChange={(e) => setImportOffPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="import-peak">Import peak (kWh)</Label>
+                    </FormField>
+                    <FormField label="Import peak (kWh)">
                       <Input
                         id="import-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={importPeak}
                         onChange={(e) => setImportPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="net-off-peak">Net off-peak (kWh)</Label>
+                    </FormField>
+                    <FormField label="Net off-peak (kWh)">
                       <Input
                         id="net-off-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={netOffPeak}
                         onChange={(e) => setNetOffPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="net-peak">Net peak (kWh)</Label>
+                    </FormField>
+                    <FormField label="Net peak (kWh)">
                       <Input
                         id="net-peak"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={netPeak}
                         onChange={(e) => setNetPeak(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
+                    </FormField>
                   </>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="export-total">Export (kWh)</Label>
+                    <FormField label="Export (kWh)">
                       <Input
                         id="export-total"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={exportTotal}
                         onChange={(e) => setExportTotal(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="import-total">Import (kWh)</Label>
+                    </FormField>
+                    <FormField label="Import (kWh)">
                       <Input
                         id="import-total"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={importTotal}
                         onChange={(e) => setImportTotal(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="net-total">Net (kWh)</Label>
+                    </FormField>
+                    <FormField label="Net (kWh)">
                       <Input
                         id="net-total"
                         type="number"
                         step="0.01"
-                        className="h-11"
+                        className={inputClass}
                         value={netTotal}
                         onChange={(e) => setNetTotal(e.target.value)}
                         placeholder="0"
                       />
-                    </div>
+                    </FormField>
                   </>
                 )}
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="remarks">Remarks</Label>
-                  <Textarea
-                    id="remarks"
-                    className="min-h-20 resize-none"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="Optional notes for this month"
-                  />
+                <div className="col-span-full">
+                  <Field>
+                    <FieldLabel htmlFor="remarks">Remarks</FieldLabel>
+                    <Textarea
+                      id="remarks"
+                      className="min-h-20 resize-none"
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Optional notes"
+                    />
+                  </Field>
                 </div>
               </div>
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+              <Field>
+                <FieldLabel className="flex items-center gap-2">
                   <Camera className="size-4 text-amber-600" />
                   Metering evidence
-                </Label>
+                </FieldLabel>
                 {existingEvidenceUrl && !attachment ? (
                   <a
                     href={existingEvidenceUrl}
@@ -1453,7 +1522,7 @@ const SolarSupplyDataForm = () => {
                     </>
                   )}
                 </button>
-              </div>
+              </Field>
 
               <Separator />
 
@@ -1491,8 +1560,7 @@ const SolarSupplyDataForm = () => {
             </CardContent>
           </Card>
         )}
-      </div>
-    </motion.div>
+    </PageShell>
   );
 };
 

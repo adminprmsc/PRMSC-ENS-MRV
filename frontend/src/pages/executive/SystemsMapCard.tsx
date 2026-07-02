@@ -490,17 +490,22 @@ export default function SystemsMapCard({
 
   return (
     <>
-      <Card className="flex h-full min-h-[320px] flex-col overflow-hidden border-border/60 shadow-sm">
-        <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 border-b border-border/40 bg-muted/20 pb-3">
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="text-base">
-              {compact ? "Geographic distribution" : "Map of sites"}
-            </CardTitle>
-            <CardDescription className="text-xs leading-relaxed">
-              {compact
-                ? "Sites in the selected tehsil / village — counts match the footprint panel."
-                : "Water (blue) and solar (amber) in scope. Dashed pins are approximate until GPS is saved."}
-            </CardDescription>
+      <Card className="flex h-full min-h-[320px] flex-col overflow-hidden border-border/60">
+        <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 border-b border-border/60 py-3">
+          <div className="flex items-start gap-2.5">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <MapPin className="size-4" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-sm font-semibold">
+                {compact ? "Geographic distribution" : "Map of sites"}
+              </CardTitle>
+              <CardDescription className="text-xs leading-relaxed">
+                {compact
+                  ? "Sites in selected tehsil / village — counts match footprint panel."
+                  : "Water (blue) and solar (amber) in scope. Dashed pins are approximate until GPS is saved."}
+              </CardDescription>
+            </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             <Badge

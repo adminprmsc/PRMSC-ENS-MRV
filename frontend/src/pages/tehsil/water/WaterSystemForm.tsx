@@ -1,9 +1,8 @@
-import { useState, useMemo, useEffect, type ChangeEvent } from "react";
+import { useState, useMemo, useEffect, type ChangeEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { tehsilRoutes } from "../../../constants/routes";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { useAuth } from "../../../contexts/AuthContext";
-import { motion } from "framer-motion";
 import {
   Droplets,
   Loader2,
@@ -13,6 +12,7 @@ import {
   Info,
 } from "lucide-react";
 import Toast from "../../../components/Toast";
+import { PageHeader, PageShell } from "../../../components/layout";
 import { Button } from "../../../components/ui/button";
 import {
   Card,
@@ -22,8 +22,13 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { FormStepper } from "../../../components/ui/form-stepper";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "../../../components/ui/field";
 import { Input } from "../../../components/ui/input";
-import { Label } from "../../../components/ui/label";
 import { Separator } from "../../../components/ui/separator";
 import { Badge } from "../../../components/ui/badge";
 import {
@@ -38,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import { Textarea } from "../../../components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -50,12 +54,44 @@ import {
   LOCATION_DATA,
   SETTLEMENT_DATA,
 } from "../../../utils/locationData";
+import { cn } from "../../../lib/utils";
 
 /** Map API / profile tehsil string to canonical `TEHSIL_OPTIONS` entry. */
 function canonicalTehsil(raw: string): string | null {
   const t = raw.trim().toUpperCase();
   return (TEHSIL_OPTIONS as readonly string[]).find((o) => o === t) ?? null;
 }
+
+function FormField({
+  label,
+  required,
+  description,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Field className={className}>
+      <FieldLabel>
+        {label}
+        {required ? (
+          <span className="text-destructive" aria-hidden>
+            *
+          </span>
+        ) : null}
+      </FieldLabel>
+      {children}
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
+const inputClass = "h-10 bg-background";
 
 type ToastType = "success" | "error";
 type SubmissionStatus = "submitted";
@@ -81,15 +117,7 @@ const WaterSystemForm = () => {
     return [...TEHSIL_OPTIONS];
   }, [user?.tehsils]);
 
-  const hasResolvedProfileTehsils = useMemo(() => {
-    const fromUser = (user?.tehsils ?? [])
-      .map(canonicalTehsil)
-      .filter((x): x is string => Boolean(x));
-    return new Set(fromUser).size > 0;
-  }, [user?.tehsils]);
-
-  const tehsilSelectLocked =
-    hasResolvedProfileTehsils && tehsilSelectOptions.length === 1;
+  const tehsilSelectLocked = tehsilSelectOptions.length === 1;
 
   const [formData, setFormData] = useState({
     tehsil: "",
@@ -121,14 +149,15 @@ const WaterSystemForm = () => {
   const [systemExists, setSystemExists] = useState(false);
 
   useEffect(() => {
-    if (!hasResolvedProfileTehsils || tehsilSelectOptions.length === 0) return;
-    setFormData((prev) => {
-      if (prev.tehsil) return prev;
-      const next = tehsilSelectOptions[0] ?? "";
-      if (!next) return prev;
-      return { ...prev, tehsil: next, village: "", settlement: "" };
-    });
-  }, [hasResolvedProfileTehsils, tehsilSelectOptions]);
+    if (isEditMode || tehsilSelectOptions.length !== 1) return;
+    const only = tehsilSelectOptions[0];
+    if (!only) return;
+    setFormData((prev) =>
+      prev.tehsil === only
+        ? prev
+        : { ...prev, tehsil: only, village: "", settlement: "" },
+    );
+  }, [isEditMode, tehsilSelectOptions]);
 
   useEffect(() => {
     setVillageSearch("");
@@ -355,142 +384,118 @@ const WaterSystemForm = () => {
 
   const stepMeta = steps.find((s) => s.id === activeStep) ?? steps[0];
 
-  const RequiredMark = () => (
-    <span className="ml-1 text-xs font-semibold text-destructive">*</span>
-  );
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="min-h-screen bg-muted/30 p-4 md:p-6"
-    >
+    <PageShell>
       <Toast
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ message: "", type: "success" })}
       />
 
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="size-4" />
-            </Button>
-            <div className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm">
-              <Droplets className="size-5" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                  {isEditMode ? "Edit water system" : "Register water system"}
-                </h1>
-                <Badge variant="outline">
-                  {isEditMode ? "Edit mode" : "New registration"}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {isEditMode
-                  ? "Update equipment and metering details for the selected location."
-                  : "Register a new water system for monitoring and reporting."}
-              </p>
-            </div>
-          </div>
-        </div>
+      <PageHeader
+        icon={<Droplets />}
+        title={isEditMode ? "Edit water system" : "Register water system"}
+        description={
+          isEditMode
+            ? "Update equipment and metering for this location."
+            : "Register a new water system for monitoring and reporting."
+        }
+        badge={
+          <Badge variant="secondary" className="font-normal">
+            {isEditMode ? "Edit mode" : "New registration"}
+          </Badge>
+        }
+        actions={
+          <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft className="size-4" />
+          </Button>
+        }
+      />
 
-        <Card className="mb-6 border-slate-200">
-          <CardContent className="pt-6">
-            <FormStepper
-              steps={steps}
-              currentStep={activeStep}
-              onStepClick={attemptStepChange}
-            />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <FormStepper
+            steps={steps}
+            currentStep={activeStep}
+            onStepClick={attemptStepChange}
+          />
+        </CardContent>
+      </Card>
 
-        {systemExists ? (
-          <Alert className="mb-6 border-amber-200 bg-amber-50 text-amber-950">
-            <AlertTitle>Location already registered</AlertTitle>
-            <AlertDescription>
-              This tehsil/village/settlement already has a registered water
-              system. Choose a different location.
-            </AlertDescription>
-          </Alert>
-        ) : null}
+      {systemExists ? (
+        <Alert variant="destructive">
+          <AlertTitle>Location already registered</AlertTitle>
+          <AlertDescription>
+            Choose a different tehsil, village, or settlement.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-        <motion.div
-          initial={{ opacity: 0, x: 10 }}
-          animate={{ opacity: 1, x: 0 }}
-        >
-          <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-base">{stepMeta?.label}</CardTitle>
-              <CardDescription>{stepMeta?.hint}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+      <Card>
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="text-base">{stepMeta?.label}</CardTitle>
+          <CardDescription>{stepMeta?.hint}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
               {activeStep === 1 ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>
-                      Tehsil
-                      {tehsilSelectLocked ? (
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">
-                          (your tehsil)
-                        </span>
-                      ) : null}
-                      <RequiredMark />
-                    </Label>
-                    <Select
-                      value={formData.tehsil || "__empty__"}
-                      disabled={tehsilSelectLocked || isEditMode}
-                      onValueChange={(v) => {
-                        if (!v) return;
-                        handleFieldChange("tehsil", v === "__empty__" ? "" : v);
-                      }}
+                <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                  {tehsilSelectLocked ? (
+                    <FormField
+                      label="Tehsil"
+                      required
+                      description="Auto-selected for your scope."
                     >
-                      <SelectTrigger className="h-11 w-full">
-                        <SelectValue placeholder="Select Tehsil" />
-                      </SelectTrigger>
-                      <SelectContent className="h-72">
-                        {!tehsilSelectLocked ? (
-                          <SelectItem value="__empty__">
-                            Select Tehsil
-                          </SelectItem>
-                        ) : null}
-                        {tehsilSelectOptions.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Your access is scoped by assigned tehsils.
-                    </p>
-                  </div>
+                      <Input
+                        readOnly
+                        value={formData.tehsil}
+                        className={cn(inputClass, "bg-muted/40 font-medium")}
+                      />
+                    </FormField>
+                  ) : (
+                    <FormField
+                      label="Tehsil"
+                      required
+                      description="Scoped to your assigned tehsils."
+                    >
+                      <Select
+                        value={formData.tehsil || undefined}
+                        disabled={isEditMode}
+                        onValueChange={(v) => {
+                          if (v) void handleFieldChange("tehsil", v);
+                        }}
+                      >
+                        <SelectTrigger className={cn("w-full", inputClass)}>
+                          <SelectValue placeholder="Select tehsil" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {tehsilSelectOptions.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label>
-                      Village
-                      <RequiredMark />
-                    </Label>
+                  <FormField
+                    label="Village"
+                    required
+                    description="Filtered by selected tehsil."
+                  >
                     <Select
-                      value={formData.village || "__empty__"}
+                      value={formData.village || undefined}
                       onValueChange={(v) => {
-                        if (!v) return;
-                        handleFieldChange(
-                          "village",
-                          v === "__empty__" ? "" : v,
-                        );
+                        if (v) void handleFieldChange("village", v);
                       }}
                     >
                       <SelectTrigger
-                        className="h-11 w-full"
+                        className={cn("w-full", inputClass)}
                         disabled={!formData.tehsil || isEditMode}
                       >
-                        <SelectValue placeholder="Select Village" />
+                        <SelectValue placeholder="Select village" />
                       </SelectTrigger>
-                      <SelectContent className="h-72">
+                      <SelectContent className="max-h-72">
                         <div className="sticky top-0 z-10 border-b bg-popover p-2">
                           <Input
                             value={villageSearch}
@@ -511,14 +516,10 @@ const WaterSystemForm = () => {
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                             onFocus={(e) => e.stopPropagation()}
-                            placeholder="Type to search village..."
+                            placeholder="Search village…"
                             className="h-9"
-                            autoFocus
                           />
                         </div>
-                        <SelectItem value="__empty__">
-                          Select Village
-                        </SelectItem>
                         {filteredVillages.map((v) => (
                           <SelectItem key={v} value={v}>
                             {v}
@@ -526,35 +527,30 @@ const WaterSystemForm = () => {
                         ))}
                         {filteredVillages.length === 0 ? (
                           <p className="px-2 py-2 text-xs text-muted-foreground">
-                            No villages match your search.
+                            No villages match.
                           </p>
                         ) : null}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Villages are filtered by selected tehsil.
-                    </p>
-                  </div>
+                  </FormField>
 
-                  <div className="space-y-2">
-                    <Label>Settlement (Optional)</Label>
+                  <FormField
+                    label="Settlement"
+                    description="Optional — leave blank if not mapped."
+                  >
                     <Select
-                      value={formData.settlement || "__empty__"}
+                      value={formData.settlement || undefined}
                       onValueChange={(v) => {
-                        if (!v) return;
-                        handleFieldChange(
-                          "settlement",
-                          v === "__empty__" ? "" : v,
-                        );
+                        void handleFieldChange("settlement", v ?? "");
                       }}
                     >
                       <SelectTrigger
-                        className="h-11 w-full"
+                        className={cn("w-full", inputClass)}
                         disabled={!formData.village || isEditMode}
                       >
-                        <SelectValue placeholder="Select Settlement" />
+                        <SelectValue placeholder="Select settlement" />
                       </SelectTrigger>
-                      <SelectContent className="h-72">
+                      <SelectContent className="max-h-72">
                         <div className="sticky top-0 z-10 border-b bg-popover p-2">
                           <Input
                             value={settlementSearch}
@@ -577,14 +573,11 @@ const WaterSystemForm = () => {
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                             onFocus={(e) => e.stopPropagation()}
-                            placeholder="Type to search settlement..."
+                            placeholder="Search settlement…"
                             className="h-9"
-                            autoFocus
                           />
                         </div>
-                        <SelectItem value="__empty__">
-                          Select Settlement (Optional)
-                        </SelectItem>
+                        <SelectItem value="">None</SelectItem>
                         {filteredSettlements.map((s) => (
                           <SelectItem key={s} value={s}>
                             {s}
@@ -592,342 +585,295 @@ const WaterSystemForm = () => {
                         ))}
                         {filteredSettlements.length === 0 ? (
                           <p className="px-2 py-2 text-xs text-muted-foreground">
-                            No settlements match your search.
+                            No settlements match.
                           </p>
                         ) : null}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Leave blank if the site has no settlement mapping.
-                    </p>
-                  </div>
+                  </FormField>
 
-                  <div className="space-y-2">
-                    <Label>Latitude (Optional)</Label>
-                    <Input
-                      type="number"
-                      name="latitude"
-                      value={formData.latitude}
-                      onChange={handleChange}
-                      className="h-11"
-                      placeholder="e.g. 29.99812"
-                      disabled={loading}
-                      inputMode="decimal"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      GPS coordinate for mapping and analytics.
-                    </p>
-                  </div>
+                  <div className="col-span-full grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <FormField
+                      label="Latitude"
+                      description="GPS coordinate for mapping."
+                    >
+                      <Input
+                        type="number"
+                        name="latitude"
+                        value={formData.latitude}
+                        onChange={handleChange}
+                        className={inputClass}
+                        placeholder="e.g. 29.99812"
+                        disabled={loading}
+                        inputMode="decimal"
+                      />
+                    </FormField>
 
-                  <div className="space-y-2">
-                    <Label>Longitude (Optional)</Label>
-                    <Input
-                      type="number"
-                      name="longitude"
-                      value={formData.longitude}
-                      onChange={handleChange}
-                      className="h-11"
-                      placeholder="e.g. 73.25291"
-                      disabled={loading}
-                      inputMode="decimal"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      GPS coordinate for mapping and analytics.
-                    </p>
+                    <FormField
+                      label="Longitude"
+                      description="GPS coordinate for mapping."
+                    >
+                      <Input
+                        type="number"
+                        name="longitude"
+                        value={formData.longitude}
+                        onChange={handleChange}
+                        className={inputClass}
+                        placeholder="e.g. 73.25291"
+                        disabled={loading}
+                        inputMode="decimal"
+                      />
+                    </FormField>
                   </div>
-                </div>
+                </FieldGroup>
               ) : null}
 
               {activeStep === 2 ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>
-                      Pump model
-                      <RequiredMark />
-                    </Label>
+                <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <FormField label="Pump model" required>
                     <Input
                       name="pump_model"
                       value={formData.pump_model}
                       onChange={handleChange}
-                      className="h-11"
+                      className={inputClass}
                       placeholder="e.g. Grundfos CRI"
                       disabled={loading}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Pump serial number</Label>
+                  </FormField>
+                  <FormField label="Pump serial number">
                     <Input
                       name="pump_serial_number"
                       value={formData.pump_serial_number}
                       onChange={handleChange}
-                      className="h-11"
+                      className={inputClass}
                       placeholder="SN-XXXX"
                       disabled={loading}
                     />
-                  </div>
-                  <div className="space-y-2">
+                  </FormField>
+                  <FormField
+                    label="Column height (m)"
+                    description="Vertical distance of the water column."
+                  >
                     <div className="flex items-center gap-2">
-                      <Label className="leading-none">Column Height (m)</Label>
+                      <Input
+                        type="number"
+                        name="depth_of_water_intake"
+                        value={formData.depth_of_water_intake}
+                        onChange={handleChange}
+                        className={cn(inputClass, "flex-1")}
+                        placeholder="0.0"
+                        disabled={loading}
+                      />
                       <Tooltip>
                         <TooltipTrigger
                           render={
-                            <button
+                            <Button
                               type="button"
-                              className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                              aria-label="What is Column Height?"
+                              variant="ghost"
+                              size="icon"
+                              className="size-10 shrink-0 text-muted-foreground"
+                              aria-label="Column height help"
                             >
                               <Info className="size-4" />
-                            </button>
+                            </Button>
                           }
                         />
                         <TooltipContent>
-                          Vertical distance/height of the water column (formerly
-                          “Intake depth”).
+                          Formerly intake depth — height of the water column.
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                    <Input
-                      type="number"
-                      name="depth_of_water_intake"
-                      value={formData.depth_of_water_intake}
-                      onChange={handleChange}
-                      className="h-11"
-                      placeholder="0.0"
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>
-                      Flow rate (m³/h)
-                      <RequiredMark />
-                    </Label>
+                  </FormField>
+                  <FormField label="Flow rate (m³/h)" required>
                     <Input
                       type="number"
                       name="pump_flow_rate"
                       value={formData.pump_flow_rate}
                       onChange={handleChange}
-                      className="h-11"
+                      className={inputClass}
                       placeholder="0.0"
                       disabled={loading}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>
-                      Pump horse power (HP)
-                      <RequiredMark />
-                    </Label>
+                  </FormField>
+                  <FormField label="Pump horse power (HP)" required>
                     <Input
                       type="number"
                       inputMode="decimal"
                       name="pump_horse_power"
                       value={formData.pump_horse_power}
                       onChange={handleChange}
-                      className="h-11"
+                      className={inputClass}
                       placeholder="e.g. 7.5"
                       disabled={loading}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>
-                      Operation start
-                      <RequiredMark />
-                    </Label>
+                  </FormField>
+                  <FormField label="Operation start" required>
                     <Input
                       type="date"
                       name="start_of_operation"
                       value={formData.start_of_operation}
                       onChange={handleChange}
-                      className="h-11"
+                      className={inputClass}
                       disabled={loading}
                     />
-                  </div>
-                </div>
+                  </FormField>
+                </FieldGroup>
               ) : null}
 
               {activeStep === 3 ? (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-border/70 bg-card p-4">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <Label className="text-sm font-semibold">
-                          Bulk meter installed? <RequiredMark />
-                        </Label>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Choose <span className="font-semibold">Yes</span> if a
-                          bulk meter is installed; otherwise choose{" "}
-                          <span className="font-semibold">No</span>.
-                        </p>
-                      </div>
-                      <div className="inline-flex w-fit overflow-hidden rounded-lg border">
-                        <Button
-                          type="button"
-                          variant={
-                            formData.bulk_meter_installed ? "default" : "ghost"
-                          }
-                          className="rounded-none px-5"
-                          onClick={() =>
-                            setFormData((p) => ({
-                              ...p,
-                              bulk_meter_installed: true,
-                            }))
-                          }
-                          disabled={loading}
-                        >
-                          Yes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            !formData.bulk_meter_installed ? "default" : "ghost"
-                          }
-                          className="rounded-none px-5"
-                          onClick={() =>
-                            setFormData((p) => ({
-                              ...p,
-                              bulk_meter_installed: false,
-                            }))
-                          }
-                          disabled={loading}
-                        >
-                          No
-                        </Button>
-                      </div>
+                <div className="space-y-5">
+                  <div className="flex flex-col gap-3 rounded-lg border border-border/80 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium">
+                        Bulk meter installed
+                        <span className="text-destructive">*</span>
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Yes if a bulk meter is on site; No for OHR-only systems.
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-lg border border-border bg-background p-0.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          formData.bulk_meter_installed ? "default" : "ghost"
+                        }
+                        className="min-w-[4rem] rounded-md"
+                        onClick={() =>
+                          setFormData((p) => ({
+                            ...p,
+                            bulk_meter_installed: true,
+                          }))
+                        }
+                        disabled={loading}
+                      >
+                        Yes
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          !formData.bulk_meter_installed ? "default" : "ghost"
+                        }
+                        className="min-w-[4rem] rounded-md"
+                        onClick={() =>
+                          setFormData((p) => ({
+                            ...p,
+                            bulk_meter_installed: false,
+                          }))
+                        }
+                        disabled={loading}
+                      >
+                        No
+                      </Button>
                     </div>
                   </div>
 
                   {!formData.bulk_meter_installed ? (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>
-                          Tank capacity (m3) <RequiredMark />
-                        </Label>
+                    <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                      <FormField label="Tank capacity (m³)" required>
                         <Input
                           type="number"
                           inputMode="decimal"
                           name="ohr_tank_capacity"
                           value={formData.ohr_tank_capacity}
                           onChange={handleChange}
-                          className="h-11"
+                          className={inputClass}
                           placeholder="e.g. 10"
                           disabled={loading}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          Design time to fill tank (minutes) <RequiredMark />
-                        </Label>
+                      </FormField>
+                      <FormField label="Design fill time (min)" required>
                         <Input
                           type="number"
                           inputMode="decimal"
                           name="ohr_fill_required"
                           value={formData.ohr_fill_required}
                           onChange={handleChange}
-                          className="h-11"
+                          className={inputClass}
                           placeholder="e.g. 10"
                           disabled={loading}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          Pump capacity (kW) <RequiredMark />
-                        </Label>
+                      </FormField>
+                      <FormField label="Pump capacity (kW)" required>
                         <Input
                           type="number"
                           inputMode="decimal"
                           name="pump_capacity"
                           value={formData.pump_capacity}
                           onChange={handleChange}
-                          className="h-11"
+                          className={inputClass}
                           placeholder="e.g. 5"
                           disabled={loading}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          Pump head (m) <RequiredMark />
-                        </Label>
+                      </FormField>
+                      <FormField label="Pump head (m)" required>
                         <Input
                           type="number"
                           inputMode="decimal"
                           name="pump_head"
                           value={formData.pump_head}
                           onChange={handleChange}
-                          className="h-11"
+                          className={inputClass}
                           placeholder="e.g. 40"
                           disabled={loading}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          Actual time to fill the tank (minutes) <RequiredMark />
-                        </Label>
+                      </FormField>
+                      <FormField label="Actual fill time (min)" required>
                         <Input
                           type="number"
                           inputMode="decimal"
                           name="time_to_fill"
                           value={formData.time_to_fill}
                           onChange={handleChange}
-                          className="h-11"
+                          className={inputClass}
                           placeholder="e.g. 60"
                           disabled={loading}
                         />
-                      </div>
-                    </div>
+                      </FormField>
+                    </FieldGroup>
                   ) : (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>
-                            Installation date <RequiredMark />
-                          </Label>
-                          <Input
-                            type="date"
-                            name="installation_date"
-                            value={formData.installation_date}
-                            onChange={handleChange}
-                            className="h-11"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>
-                            Meter model <RequiredMark />
-                          </Label>
-                          <Input
-                            name="meter_model"
-                            value={formData.meter_model}
-                            onChange={handleChange}
-                            className="h-11"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>
-                            Meter serial number <RequiredMark />
-                          </Label>
-                          <Input
-                            name="meter_serial_number"
-                            value={formData.meter_serial_number}
-                            onChange={handleChange}
-                            className="h-11"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>
-                            Accuracy class <RequiredMark />
-                          </Label>
-                          <Input
-                            name="meter_accuracy_class"
-                            value={formData.meter_accuracy_class}
-                            onChange={handleChange}
-                            placeholder="e.g. Class B"
-                            className="h-11"
-                            disabled={loading}
-                          />
-                        </div>
-                      </div>
-                    </>
+                    <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                      <FormField label="Installation date" required>
+                        <Input
+                          type="date"
+                          name="installation_date"
+                          value={formData.installation_date}
+                          onChange={handleChange}
+                          className={inputClass}
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Meter model" required>
+                        <Input
+                          name="meter_model"
+                          value={formData.meter_model}
+                          onChange={handleChange}
+                          className={inputClass}
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Meter serial number" required>
+                        <Input
+                          name="meter_serial_number"
+                          value={formData.meter_serial_number}
+                          onChange={handleChange}
+                          className={inputClass}
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Accuracy class" required>
+                        <Input
+                          name="meter_accuracy_class"
+                          value={formData.meter_accuracy_class}
+                          onChange={handleChange}
+                          placeholder="e.g. Class B"
+                          className={inputClass}
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </FieldGroup>
                   )}
                 </div>
               ) : null}
@@ -937,10 +883,11 @@ const WaterSystemForm = () => {
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {activeStep > 1 ? (
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => setActiveStep((prev) => prev - 1)}
                   >
-                    Previous Step
+                    Back
                   </Button>
                 ) : (
                   <div />
@@ -949,22 +896,25 @@ const WaterSystemForm = () => {
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {activeStep < 3 ? (
                     <Button
+                      type="button"
                       onClick={() => attemptStepChange(activeStep + 1)}
                       className="gap-2"
                       disabled={loading}
                     >
-                      Next Step <ChevronRight className="size-4" />
+                      Continue
+                      <ChevronRight className="size-4" />
                     </Button>
                   ) : (
                     <Button
-                      onClick={() => handleSubmit("submitted")}
+                      type="button"
+                      onClick={() => void handleSubmit("submitted")}
                       disabled={
                         loading ||
                         systemExists ||
                         !formData.tehsil ||
                         !formData.village
                       }
-                      className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                      className="gap-2"
                     >
                       {loading ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -978,9 +928,7 @@ const WaterSystemForm = () => {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
-      </div>
-    </motion.div>
+    </PageShell>
   );
 };
 

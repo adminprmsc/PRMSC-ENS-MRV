@@ -22,30 +22,26 @@ export const PORTAL_ROLES: readonly UserRole[] = [
 /** Tehsil Manager Operator — tehsil-scoped operations. */
 export const TEHSIL_MANAGER_ROLES: readonly UserRole[] = [ROLE.ADMIN];
 
-/** Manager Operations + MRV COO — org KPI (no tehsil facility forms). */
-export const EXECUTIVE_ROLES: readonly UserRole[] = [
-  ROLE.SUPER_ADMIN,
-  ROLE.SYSTEM_ADMIN,
-];
+/** Manager Operations — HQ dashboard (tehsil scope from assigned tehsils in JWT). */
+export const EXECUTIVE_ROLES: readonly UserRole[] = [ROLE.SUPER_ADMIN];
 
-/** All manager roles that can open submissions / verification queues (API filters by tehsil for ADMIN). */
-export const STAFF_ROLES: readonly UserRole[] = [
-  ROLE.ADMIN,
-  ROLE.SUPER_ADMIN,
-  ROLE.SYSTEM_ADMIN,
-];
+/** Platform administrator — user accounts and access only. */
+export const USER_ADMIN_ROLES: readonly UserRole[] = [ROLE.SYSTEM_ADMIN];
+
+/** Roles that can open the tehsil submissions / verification queue UI. */
+export const STAFF_ROLES: readonly UserRole[] = [ROLE.ADMIN];
 
 /** Only Tehsil Manager may onboard operators and register tehsil facilities. */
 export const TEHSIL_FACILITY_ROLES: readonly UserRole[] = [ROLE.ADMIN];
 
-/** Manager Operations + MRV COO — final approval of verified submissions. */
-export const APPROVER_ROLES: readonly UserRole[] = [
-  ROLE.SUPER_ADMIN,
-  ROLE.SYSTEM_ADMIN,
-];
+/** Read-only review on HQ / submissions — no verify/reject mutations. */
+export const READ_ONLY_REVIEW_ROLES: readonly UserRole[] = [ROLE.SUPER_ADMIN];
+
+/** Manager Operations — final approval when implemented. */
+export const APPROVER_ROLES: readonly UserRole[] = [ROLE.SUPER_ADMIN];
 
 export const ROLE_LABEL: Record<UserRole, string> = {
-  [ROLE.SYSTEM_ADMIN]: "MRV COO",
+  [ROLE.SYSTEM_ADMIN]: "Platform Administrator",
   [ROLE.SUPER_ADMIN]: "Manager Operations",
   [ROLE.ADMIN]: "Tehsil Manager Operator",
   [ROLE.USER]: "Tubewell operator",
@@ -76,9 +72,19 @@ export function isExecutiveRole(role: string | undefined | null): boolean {
   return n !== undefined && EXECUTIVE_ROLES.includes(n);
 }
 
+export function isUserAdminRole(role: string | undefined | null): boolean {
+  const n = normalizeRole(role);
+  return n !== undefined && USER_ADMIN_ROLES.includes(n);
+}
+
 export function isStaffRole(role: string | undefined | null): boolean {
   const n = normalizeRole(role);
   return n !== undefined && STAFF_ROLES.includes(n);
+}
+
+export function isReadOnlyReviewer(role: string | undefined | null): boolean {
+  const n = normalizeRole(role);
+  return n !== undefined && READ_ONLY_REVIEW_ROLES.includes(n);
 }
 
 /** Legacy field role (not used in this portal login flow). */
@@ -115,5 +121,6 @@ export function canRegisterFacilities(role: string | undefined | null): boolean 
 export function defaultPathForRole(role: string | undefined | null): string {
   if (isTehsilManager(role)) return "/tehsil";
   if (isExecutiveRole(role)) return "/hq";
+  if (isUserAdminRole(role)) return "/admin/users";
   return "/login";
 }

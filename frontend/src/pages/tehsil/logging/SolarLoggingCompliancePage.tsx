@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useId } from "react";
-import { Download, Loader2, RefreshCcw, Sun } from "lucide-react";
+import { Download, ExternalLink, Loader2, RefreshCcw, Sun } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import { PageHeader, PageShell } from "../../../components/layout";
 import { Button } from "../../../components/ui/button";
+import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import {
   getSolarMonthlyYearRange,
@@ -18,6 +21,7 @@ import SolarLoggingComplianceSection from "./SolarLoggingComplianceSection";
 import { getPakistanYear } from "../../../utils/pakistanTime";
 
 export default function SolarLoggingCompliancePage() {
+  const navigate = useNavigate();
   const baseId = useId();
   const panelId = `${baseId}-solar-panel`;
 
@@ -83,56 +87,52 @@ export default function SolarLoggingCompliancePage() {
   }, [loadYear]);
 
   return (
-    <div className="w-full max-w-7xl space-y-8 px-4 py-6 md:px-6">
-      <header className="flex flex-col gap-6 border-b border-border pb-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 gap-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
-            <Sun className="size-6 text-muted-foreground" aria-hidden />
+    <PageShell>
+      <PageHeader
+        icon={<Sun />}
+        title="Solar logging compliance"
+        description="Monthly grid log status by site and year"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => navigate(tehsilRoutes.loggingCompliance)}
+            >
+              <ExternalLink className="size-4" />
+              Overview
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!yearData || loading || !selectedSolarSystemId}
+              onClick={() => {
+                if (yearData) downloadSolarComplianceExcel(yearData);
+              }}
+            >
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || sitesLoading || !selectedSolarSystemId}
+              onClick={() => void loadYear()}
+            >
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="size-4" />
+              )}
+              Refresh
+            </Button>
           </div>
-          <div className="min-w-0 space-y-1.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Compliance
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              Monthly solar logging
-            </h1>
-            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Select a PV site and calendar year to review all twelve months in
-              one place.
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={!yearData || loading || !selectedSolarSystemId}
-            onClick={() => {
-              if (yearData) downloadSolarComplianceExcel(yearData);
-            }}
-          >
-            <Download className="size-4" aria-hidden />
-            Export Excel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={loading || sitesLoading || !selectedSolarSystemId}
-            onClick={() => void loadYear()}
-          >
-            {loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCcw className="size-4" />
-            )}
-            Refresh
-          </Button>
-        </div>
-      </header>
+        }
+      />
 
       <SolarLoggingComplianceSection
         baseId={baseId}
@@ -147,6 +147,6 @@ export default function SolarLoggingCompliancePage() {
         loading={loading}
         yearData={yearData}
       />
-    </div>
+    </PageShell>
   );
 }

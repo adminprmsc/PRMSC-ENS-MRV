@@ -6,12 +6,15 @@ import {
   useParams,
 } from "react-router-dom";
 import { Toaster } from "sonner";
+import { AppLoading } from "./components/layout/AppLoading";
 
 import {
   defaultPathForRole,
   EXECUTIVE_ROLES,
-  STAFF_ROLES,
+  PORTAL_ROLES,
   TEHSIL_MANAGER_ROLES,
+  USER_ADMIN_ROLES,
+  isExecutiveRole,
   isTehsilManager,
 } from "./constants/roles";
 import OnboardOperator from "./pages/tehsil/onboarding/OnboardOperator";
@@ -42,6 +45,9 @@ import WaterSubmissionDetailsPage from "./pages/tehsil/submissions/WaterSubmissi
 import ExecutiveDashboard from "./pages/executive/ExecutiveDashboard";
 import ExecutiveWaterAnalysis from "./pages/executive/ExecutiveWaterAnalysis";
 import ExecutiveSolarAnalysis from "./pages/executive/ExecutiveSolarAnalysis";
+import HqSolarRecordViewPage from "./pages/executive/HqSolarRecordViewPage";
+import HqWaterSystemDetailPage from "./pages/executive/HqWaterSystemDetailPage";
+import HqSolarSiteDetailPage from "./pages/executive/HqSolarSiteDetailPage";
 import TehsilManagerDashboard from "./pages/tehsil/dashboard/TehsilManagerDashboard";
 import LoggingCompliance from "./pages/tehsil/logging/LoggingCompliance";
 import SolarLoggingCompliancePage from "./pages/tehsil/logging/SolarLoggingCompliancePage";
@@ -50,17 +56,18 @@ import WaterOperatorAssignments from "./pages/tehsil/operators/WaterOperatorAssi
 
 import SubmissionsAudit from "./pages/verification/VerificationDashboard";
 import SubmissionReview from "./pages/verification/SubmissionReview";
-import { tehsilRoutes } from "./constants/routes";
+import UsersAdminPage from "./pages/admin/UsersAdminPage";
+import { adminRoutes, tehsilRoutes } from "./constants/routes";
 
 const VerificationsRedirect = () => {
   const { user } = useAuth();
   const role = user?.role ?? null;
-  return (
-    <Navigate
-      to={isTehsilManager(role) ? tehsilRoutes.waterSubmissions : "/submissions"}
-      replace
-    />
-  );
+  const target = isTehsilManager(role)
+    ? tehsilRoutes.waterSubmissions
+    : isExecutiveRole(role)
+      ? "/hq"
+      : "/submissions";
+  return <Navigate to={target} replace />;
 };
 
 /** Legacy bookmarked URLs: `/operator/solar-energy-data/:id` → tehsil edit route */
@@ -83,19 +90,7 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          color: "#818cf8",
-        }}
-      >
-        Loading...
-      </div>
-    );
+    return <AppLoading />;
   }
   if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
@@ -106,42 +101,14 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
 
 function PortalHomeRedirect() {
   const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          color: "#64748b",
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
+  if (loading) return <AppLoading />;
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={defaultPathForRole(user.role)} replace />;
 }
 
 function RootRedirect() {
   const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          color: "#64748b",
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
+  if (loading) return <AppLoading />;
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={defaultPathForRole(user.role)} replace />;
 }
@@ -162,8 +129,17 @@ function App() {
             <Route
               path="/account/change-password"
               element={
-                <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <ProtectedRoute allowedRoles={[...PORTAL_ROLES]}>
                   <ChangePasswordPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path={adminRoutes.users}
+              element={
+                <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
+                  <UsersAdminPage />
                 </ProtectedRoute>
               }
             />
@@ -189,6 +165,38 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
                   <ExecutiveSolarAnalysis />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/water-systems/:id"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <HqWaterSystemDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/solar-sites/:id"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <HqSolarSiteDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/submissions/:id"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <WaterSubmissionDetailsPage readOnly />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/solar-records/:id"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <HqSolarRecordViewPage />
                 </ProtectedRoute>
               }
             />
@@ -407,20 +415,21 @@ function App() {
               }
             />
 
-            {/* Submissions & verification — all portal roles; API scopes ADMIN to tehsil */}
-            <Route
-              path="/verification"
-              element={<Navigate to="/submissions" replace />}
-            />
+            {/* Submissions & verification — tehsil managers only; HQ uses water/solar drill-down */}
+            <Route path="/verification" element={<VerificationsRedirect />} />
             <Route
               path="/verification/review/:id"
-              element={<Navigate to="/submissions/review/:id" replace />}
+              element={
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
+                  <SubmissionReview />
+                </ProtectedRoute>
+              }
             />
 
             <Route
               path="/submissions"
               element={
-                <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
                   <SubmissionsAudit />
                 </ProtectedRoute>
               }
@@ -428,20 +437,13 @@ function App() {
             <Route
               path="/submissions/review/:id"
               element={
-                <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
                   <SubmissionReview />
                 </ProtectedRoute>
               }
             />
 
-            <Route
-              path="/verifications"
-              element={
-                <ProtectedRoute allowedRoles={[...STAFF_ROLES]}>
-                  <VerificationsRedirect />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/verifications" element={<VerificationsRedirect />} />
 
             {/* Legacy analyst paths → executive KPI home */}
             <Route path="/analyst" element={<Navigate to="/hq" replace />} />

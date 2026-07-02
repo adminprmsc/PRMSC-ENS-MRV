@@ -1,53 +1,87 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Droplets } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronRight, Droplets, FileText } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 import DataGrid from "@/components/DataGrid";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageShell, StatCard } from "@/components/layout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton, {
   ExecutiveKpiCardsSkeleton,
 } from "@/components/DataGridSkeleton";
+import { hqRoutes } from "@/constants/routes";
 import { useProgramDashboardApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
-import {
-  useWaterAnalysisColumns,
-  waterSystemDetailFields,
-} from "./executiveAnalysisColumns";
+import { fetchScopedWaterSystems } from "./fetchExecutiveScopedDashboard";
+import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
-
-function RowDetailsPanel({ row }: { row: WaterSystemDetailRow }) {
-  const fields = useMemo(() => waterSystemDetailFields(row), [row]);
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        System detail breakdown
-      </p>
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {fields.map((f) => (
-          <div key={f.label} className="rounded-md bg-slate-50 px-3 py-2">
-            <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
-              {f.label}
-            </dt>
-            <dd className="mt-0.5 text-sm font-medium tabular-nums text-slate-900">
-              {f.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-const MemoRowDetails = memo(RowDetailsPanel);
+import {
+  latestAcceptedByWaterSystem,
+  useHqSubmissions,
+} from "./useHqSubmissions";
 
 const ExecutiveWaterAnalysis = () => {
   const { getDashboardWaterSystemsDetail } = useProgramDashboardApi();
   const scope = useExecutiveScopeFilters();
-  const columns = useWaterAnalysisColumns();
+  const baseColumns = useWaterAnalysisColumns();
+  const { submissions } = useHqSubmissions();
+
+  const latestLogBySystem = useMemo(
+    () => latestAcceptedByWaterSystem(submissions),
+    [submissions],
+  );
 
   const [rows, setRows] = useState<WaterSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
+    () => [
+      ...baseColumns,
+      {
+        id: "actions",
+        header: "Actions",
+        meta: { filterVariant: "none" },
+        cell: ({ row }) => {
+          const systemId = row.original.water_system_id;
+          const latest = latestLogBySystem.get(systemId);
+          const navState = {
+            from: "/hq/water",
+            metrics: row.original,
+            year: scope.apiFilters.year,
+            ...(scope.apiFilters.month != null
+              ? { month: scope.apiFilters.month }
+              : {}),
+          };
+
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to={hqRoutes.waterSystem(systemId)}
+                state={navState}
+                className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
+              >
+                Explore
+                <ChevronRight className="size-3.5" />
+              </Link>
+              {latest ? (
+                <Link
+                  to={hqRoutes.waterSubmissionDetails(latest.id)}
+                  state={{ from: hqRoutes.waterSystem(systemId), systemId }}
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  <FileText className="size-3.5" />
+                  Latest log
+                </Link>
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ],
+    [baseColumns, latestLogBySystem, scope.apiFilters.year, scope.apiFilters.month],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -55,10 +89,12 @@ const ExecutiveWaterAnalysis = () => {
       setLoading(true);
       setError("");
       try {
-        const data = await getDashboardWaterSystemsDetail(scope.apiFilters);
-        if (!cancelled) {
-          setRows((data?.rows ?? []) as WaterSystemDetailRow[]);
-        }
+        const list = await fetchScopedWaterSystems(
+          getDashboardWaterSystemsDetail,
+          scope.apiFilters,
+          scope.allowedTehsils,
+        );
+        if (!cancelled) setRows(list);
       } catch (err) {
         if (!cancelled) {
           setError(getApiErrorMessage(err, "Failed to load water system analysis"));
@@ -72,7 +108,7 @@ const ExecutiveWaterAnalysis = () => {
     return () => {
       cancelled = true;
     };
-  }, [scope.apiFilters, getDashboardWaterSystemsDetail]);
+  }, [scope.apiFilters, scope.allowedTehsils, getDashboardWaterSystemsDetail]);
 
   const totals = useMemo(() => {
     return rows.reduce(
@@ -84,34 +120,20 @@ const ExecutiveWaterAnalysis = () => {
     );
   }, [rows]);
 
-  const renderRowDetails = useCallback(
-    (row: WaterSystemDetailRow) => <MemoRowDetails row={row} />,
-    [],
-  );
-
   const getRowId = useCallback((row: WaterSystemDetailRow) => row.water_system_id, []);
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Droplets className="size-5 text-blue-600" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Water system analysis
-          </h1>
-        </div>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Per-system water metrics from bulk-meter logs. Total pumped is the sum of
-          interval volumes (each log: stop reading minus previous stop). Latest meter
-          is the cumulative reading at the most recent log — not a sum of readings.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        icon={<Droplets className="text-blue-600" />}
+        title="Water system analysis"
+        description="Paginated registry for your assigned tehsils. Explore a system for full profile and logs, or open the latest accepted log directly."
+      />
 
       <ExecutiveScopeFiltersCard
         filters={scope.filters}
         activeScopeLabel={scope.activeScopeLabel}
-        allowedTehsils={scope.allowedTehsils}
-        restrictTehsils={scope.restrictTehsils}
+        tehsilOptions={scope.tehsilOptions}
         villageOptions={scope.villageOptions}
         onUpdate={scope.updateFilter}
         onApply={scope.applyFilters}
@@ -122,54 +144,38 @@ const ExecutiveWaterAnalysis = () => {
           <ExecutiveKpiCardsSkeleton count={3} />
           <DataGridSkeleton rows={10} columns={8} />
         </div>
+      ) : error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : (
         <>
-          {error ? (
-            <Card>
-              <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Card className="shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Systems in scope</p>
-                    <p className="text-2xl font-semibold tabular-nums">{rows.length}</p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Total pumped (intervals)</p>
-                    <p className="text-2xl font-semibold tabular-nums">
-                      {totals.water.toLocaleString(undefined, { maximumFractionDigits: 0 })} m³
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-sm">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Total pump runtime</p>
-                    <p className="text-2xl font-semibold tabular-nums">
-                      {totals.hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} h
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="Systems in scope" value={rows.length} accent="blue" />
+            <StatCard
+              label="Total pumped (intervals)"
+              value={`${totals.water.toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
+              accent="blue"
+            />
+            <StatCard
+              label="Total pump runtime"
+              value={`${totals.hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} h`}
+              accent="slate"
+            />
+          </div>
 
-              <DataGrid
-                title="Water systems registry"
-                description="Interval sums and cumulative meter readings per system (rejected logs excluded)."
-                rows={rows}
-                columns={columns}
-                exportFileName={`water-systems-${scope.activeFilters.year}-${scope.activeFilters.tehsil}`}
-                getRowId={getRowId}
-                renderRowDetails={renderRowDetails}
-                initialPageSize={25}
-              />
-            </>
-          )}
+          <DataGrid
+            title="Water systems registry"
+            description="Use pagination below the table. Explore goes deeper; Latest log opens the most recent accepted submission."
+            rows={rows}
+            columns={columns}
+            exportFileName={`water-systems-${scope.activeFilters.year}-${scope.activeFilters.tehsil}`}
+            getRowId={getRowId}
+            initialPageSize={25}
+          />
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

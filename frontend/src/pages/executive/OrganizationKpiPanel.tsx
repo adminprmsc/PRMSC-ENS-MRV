@@ -16,10 +16,13 @@ import {
   Clock,
   Droplets,
   Gauge,
+  MapPin,
   SlidersHorizontal,
   Sun,
   Zap,
 } from "lucide-react";
+import { StatCard } from "@/components/layout";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -27,6 +30,11 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -108,59 +116,105 @@ const solarEnergyConfig = {
   gridKwh: { label: "Grid import", color: "#ef4444" },
 } satisfies ChartConfig;
 
-function KpiTile({
-  icon: Icon,
-  iconClass,
-  label,
+/** Full locale numbers for executive KPI tiles (not compact axis notation). */
+function formatExecutiveMetric(n: number): string {
+  if (!Number.isFinite(n) || Math.abs(n) < 1e-9) return "0";
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
+}
+
+function ExecutiveKpiValue({
   value,
   unit,
-  hint,
   loading,
-  accent,
 }: {
-  icon: typeof Droplets;
-  iconClass: string;
-  label: string;
-  value: string;
-  unit?: string;
-  hint: string;
+  value: number;
+  unit: string;
   loading: boolean;
-  accent: string;
+}) {
+  if (loading) return null;
+  return (
+    <>
+      <span className="font-mono tabular-nums tracking-tight">
+        {formatExecutiveMetric(value)}
+      </span>
+      <span className="ml-1.5 text-lg font-medium text-muted-foreground">
+        {unit}
+      </span>
+    </>
+  );
+}
+
+function ExecutiveKpiRow({
+  loading,
+  periodTotals,
+}: {
+  loading: boolean;
+  periodTotals: {
+    waterM3: number;
+    pumpH: number;
+    solarKwh: number;
+    gridKwh: number;
+  };
 }) {
   return (
-    <Card className="relative overflow-hidden border-border/60 shadow-sm">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-1"
-        style={{ background: accent }}
+    <>
+      <StatCard
+        accent="blue"
+        label="Water delivered"
+        loading={loading}
+        description="Interval volume from daily operator logs"
+        icon={<Droplets className="size-5" />}
+        value={
+          <ExecutiveKpiValue
+            loading={loading}
+            value={periodTotals.waterM3}
+            unit="m³"
+          />
+        }
       />
-      <CardHeader className="pb-2 pt-5">
-        <CardDescription className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <span
-            className={`flex size-7 items-center justify-center rounded-lg bg-muted/80 ${iconClass}`}
-          >
-            <Icon className="size-4" />
-          </span>
-          {label}
-        </CardDescription>
-        <CardTitle className="font-heading text-2xl tabular-nums sm:text-3xl">
-          {loading ? (
-            <Skeleton className="h-8 w-32" />
-          ) : (
-            <>
-              {value}
-              {unit ? (
-                <span className="ml-1 text-lg font-medium text-muted-foreground">
-                  {unit}
-                </span>
-              ) : null}
-            </>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+      <StatCard
+        accent="slate"
+        label="Pump runtime"
+        loading={loading}
+        description="Total operating hours in period"
+        icon={<Clock className="size-5" />}
+        value={
+          <ExecutiveKpiValue
+            loading={loading}
+            value={periodTotals.pumpH}
+            unit="h"
+          />
+        }
+      />
+      <StatCard
+        accent="amber"
+        label="Solar export"
+        loading={loading}
+        description="Energy exported to grid"
+        icon={<Sun className="size-5" />}
+        value={
+          <ExecutiveKpiValue
+            loading={loading}
+            value={periodTotals.solarKwh}
+            unit="kWh"
+          />
+        }
+      />
+      <StatCard
+        accent="violet"
+        label="Grid import"
+        loading={loading}
+        description="Electricity drawn from grid"
+        icon={<Zap className="size-5" />}
+        value={
+          <ExecutiveKpiValue
+            loading={loading}
+            value={periodTotals.gridKwh}
+            unit="kWh"
+          />
+        }
+      />
+    </>
   );
 }
 
@@ -188,32 +242,35 @@ function ScopeFilterControls({
     : ["All Tehsils", ...allowedTehsils];
 
   return (
-    <div className="space-y-2 rounded-xl border border-border/50 bg-gradient-to-r from-background via-background to-muted/30 p-3 md:p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex items-start gap-2">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+    <Card className="overflow-hidden border-border/60">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-border/60 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
             <SlidersHorizontal className="size-4" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">
-              Programme scope
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Map, site mix, and KPI totals update together when you change
-              filters.
-            </p>
+            <CardTitle className="text-sm font-semibold">Programme scope</CardTitle>
+            <CardDescription className="text-xs">
+              Filters sync map, footprint, and KPI totals
+            </CardDescription>
           </div>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-3xl">
-          <div className="space-y-1">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Badge variant="secondary" className="max-w-full truncate font-normal">
+          <MapPin className="mr-1 size-3 shrink-0" />
+          {scopeLabel}
+        </Badge>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <FieldGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Field>
+            <FieldLabel className="text-[10px] uppercase tracking-wide">
               Tehsil
-            </label>
+            </FieldLabel>
             <Select
               value={filters.tehsil}
               onValueChange={(v) => onChange({ tehsil: v ?? filters.tehsil })}
             >
-              <SelectTrigger className="h-9 w-full bg-background text-xs">
+              <SelectTrigger className="h-9 w-full bg-background text-sm">
                 <SelectValue placeholder="Tehsil" />
               </SelectTrigger>
               <SelectContent>
@@ -224,16 +281,16 @@ function ScopeFilterControls({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          </Field>
+          <Field>
+            <FieldLabel className="text-[10px] uppercase tracking-wide">
               Village
-            </label>
+            </FieldLabel>
             <Select
               value={filters.village}
               onValueChange={(v) => onChange({ village: v ?? filters.village })}
             >
-              <SelectTrigger className="h-9 w-full bg-background text-xs">
+              <SelectTrigger className="h-9 w-full bg-background text-sm">
                 <SelectValue placeholder="Village" />
               </SelectTrigger>
               <SelectContent>
@@ -244,16 +301,16 @@ function ScopeFilterControls({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          </Field>
+          <Field>
+            <FieldLabel className="text-[10px] uppercase tracking-wide">
               Year
-            </label>
+            </FieldLabel>
             <Select
               value={filters.year}
               onValueChange={(v) => onChange({ year: v ?? filters.year })}
             >
-              <SelectTrigger className="h-9 w-full bg-background text-xs">
+              <SelectTrigger className="h-9 w-full bg-background text-sm">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>
@@ -264,16 +321,16 @@ function ScopeFilterControls({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          </Field>
+          <Field>
+            <FieldLabel className="text-[10px] uppercase tracking-wide">
               Month
-            </label>
+            </FieldLabel>
             <Select
               value={filters.month}
               onValueChange={(v) => onChange({ month: v ?? filters.month })}
             >
-              <SelectTrigger className="h-9 w-full bg-background text-xs">
+              <SelectTrigger className="h-9 w-full bg-background text-sm">
                 <SelectValue placeholder="Month" />
               </SelectTrigger>
               <SelectContent>
@@ -285,18 +342,10 @@ function ScopeFilterControls({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
-      </div>
-      <p className="border-t border-border/40 pt-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Active view:</span>{" "}
-        {scopeLabel}
-        <span className="hidden sm:inline">
-          {" "}
-          · Site map & footprint use tehsil/village · Charts use year/month
-        </span>
-      </p>
-    </div>
+          </Field>
+        </FieldGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -353,14 +402,14 @@ const OrganizationKpiPanel = ({
         ) : null}
 
         <Card
-          className={`flex flex-col overflow-hidden border-border/60 shadow-sm ${
+          className={`flex flex-col overflow-hidden border-border/60 ${
             mapSlot ? "xl:col-span-7" : "xl:col-span-4"
           }`}
         >
-          <CardHeader className="border-b border-border/50 bg-gradient-to-br from-slate-50 to-blue-50/40 pb-3 dark:from-slate-900/60 dark:to-blue-950/20">
-            <CardTitle className="text-base">Programme footprint</CardTitle>
-            <CardDescription>
-              Site mix and meter coverage — synced with map for{" "}
+          <CardHeader className="border-b border-border/60 py-3">
+            <CardTitle className="text-sm font-semibold">Programme footprint</CardTitle>
+            <CardDescription className="text-xs">
+              Site mix and meter coverage for{" "}
               <span className="font-medium text-foreground">
                 {scopeFilters?.tehsil === "All Tehsils"
                   ? "all tehsils"
@@ -427,8 +476,8 @@ const OrganizationKpiPanel = ({
               )}
               {!loading && totalSites > 0 ? (
                 <div className="mt-2 text-center">
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {formatKpiValue(totalSites)}
+                  <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
+                    {formatExecutiveMetric(totalSites)}
                   </p>
                   <p className="text-xs text-muted-foreground">total sites</p>
                 </div>
@@ -442,8 +491,8 @@ const OrganizationKpiPanel = ({
                   <span>Tube wells</span>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold tabular-nums">
-                    {loading ? "—" : formatKpiValue(summary.ohr_count)}
+                  <p className="font-mono font-semibold tabular-nums tracking-tight">
+                    {loading ? "—" : formatExecutiveMetric(summary.ohr_count)}
                   </p>
                   {!loading && totalSites > 0 ? (
                     <p className="text-xs text-muted-foreground">
@@ -458,8 +507,8 @@ const OrganizationKpiPanel = ({
                   <span>Solar sites</span>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold tabular-nums">
-                    {loading ? "—" : formatKpiValue(summary.solar_facilities)}
+                  <p className="font-mono font-semibold tabular-nums tracking-tight">
+                    {loading ? "—" : formatExecutiveMetric(summary.solar_facilities)}
                   </p>
                   {!loading && totalSites > 0 ? (
                     <p className="text-xs text-muted-foreground">
@@ -488,7 +537,7 @@ const OrganizationKpiPanel = ({
                 <p className="text-xs text-muted-foreground">
                   {loading
                     ? "Loading meter data…"
-                    : `${formatKpiValue(summary.bulk_meters)} of ${formatKpiValue(summary.ohr_count)} tube wells`}
+                    : `${formatExecutiveMetric(summary.bulk_meters)} of ${formatExecutiveMetric(summary.ohr_count)} tube wells`}
                 </p>
               </div>
             </div>
@@ -498,109 +547,31 @@ const OrganizationKpiPanel = ({
 
         {!mapSlot ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:col-span-8">
-          <KpiTile
-            loading={loading}
-            icon={Droplets}
-            iconClass="text-blue-600"
-            label="Water delivered"
-            value={formatKpiValue(periodTotals.waterM3)}
-            unit="m³"
-            hint="Interval volume from daily operator logs"
-            accent="linear-gradient(90deg, #3b82f6, #60a5fa)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Clock}
-            iconClass="text-sky-600"
-            label="Pump runtime"
-            value={formatKpiValue(periodTotals.pumpH)}
-            unit="h"
-            hint="Total operating hours in period"
-            accent="linear-gradient(90deg, #0ea5e9, #38bdf8)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Sun}
-            iconClass="text-amber-600"
-            label="Solar export"
-            value={formatKpiValue(periodTotals.solarKwh)}
-            unit="kWh"
-            hint="Energy exported to grid"
-            accent="linear-gradient(90deg, #d97706, #fbbf24)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Zap}
-            iconClass="text-red-600"
-            label="Grid import"
-            value={formatKpiValue(periodTotals.gridKwh)}
-            unit="kWh"
-            hint="Electricity drawn from grid"
-            accent="linear-gradient(90deg, #ef4444, #f87171)"
-          />
+          <ExecutiveKpiRow loading={loading} periodTotals={periodTotals} />
         </div>
         ) : null}
       </div>
 
       {mapSlot ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiTile
-            loading={loading}
-            icon={Droplets}
-            iconClass="text-blue-600"
-            label="Water delivered"
-            value={formatKpiValue(periodTotals.waterM3)}
-            unit="m³"
-            hint="Interval volume from daily operator logs"
-            accent="linear-gradient(90deg, #3b82f6, #60a5fa)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Clock}
-            iconClass="text-sky-600"
-            label="Pump runtime"
-            value={formatKpiValue(periodTotals.pumpH)}
-            unit="h"
-            hint="Total operating hours in period"
-            accent="linear-gradient(90deg, #0ea5e9, #38bdf8)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Sun}
-            iconClass="text-amber-600"
-            label="Solar export"
-            value={formatKpiValue(periodTotals.solarKwh)}
-            unit="kWh"
-            hint="Energy exported to grid"
-            accent="linear-gradient(90deg, #d97706, #fbbf24)"
-          />
-          <KpiTile
-            loading={loading}
-            icon={Zap}
-            iconClass="text-red-600"
-            label="Grid import"
-            value={formatKpiValue(periodTotals.gridKwh)}
-            unit="kWh"
-            hint="Electricity drawn from grid"
-            accent="linear-gradient(90deg, #ef4444, #f87171)"
-          />
+          <ExecutiveKpiRow loading={loading} periodTotals={periodTotals} />
         </div>
       ) : null}
 
       <div>
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight">
+            <h2 className="text-sm font-semibold tracking-tight">
               Performance trends
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Monthly breakdown for {year}
             </p>
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Water delivery</CardTitle>
               <CardDescription>
@@ -682,7 +653,7 @@ const OrganizationKpiPanel = ({
             </CardContent>
           </Card>
 
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Pump runtime</CardTitle>
               <CardDescription>
@@ -739,7 +710,7 @@ const OrganizationKpiPanel = ({
           </Card>
         </div>
 
-        <Card className="mt-4 border-border/60 shadow-sm">
+        <Card className="mt-4 border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Solar energy balance</CardTitle>
             <CardDescription>

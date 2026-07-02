@@ -441,7 +441,7 @@ export class TubewellOperatorService {
             where: { id: record.waterSystemId },
           });
           try {
-            await this.tehsilAccess.assertUserMayLogWaterSystem(user, ws);
+            this.tehsilAccess.assertUserMayLogWaterSystem(user, ws);
           } catch {
             throw new ForbiddenException({
               message: 'Access denied for this record',
@@ -499,16 +499,11 @@ export class TubewellOperatorService {
       throw new NotFoundException({ message: 'User not found' });
     }
 
-    const rk = this.rbac.userRank(user);
     const ts = [...(await this.rbac.userAssignedTehsils(user))];
 
     let systems: WaterSystem[];
 
-    if (rk >= this.rbac.ROLE_RANK[this.rbac.SUPER_ADMIN]) {
-      systems = await this.waterSystemRepo.find({
-        relations: { meters: true },
-      });
-    } else if (this.rbac.userRoleCode(user) === this.rbac.USER) {
+    if (this.rbac.userRoleCode(user) === this.rbac.USER) {
       const wids = user.assignedWaterSystemIds;
       if (!wids?.length) {
         return [];
@@ -728,15 +723,11 @@ export class TubewellOperatorService {
 
   async getWaterDrafts(userId: string) {
     const user = await this.userService.getUserById(userId);
-    const rk = this.rbac.userRank(user!);
     const ts = [...(await this.rbac.userAssignedTehsils(user!))];
 
     let systemIds: string[];
 
-    if (rk >= this.rbac.ROLE_RANK[this.rbac.SUPER_ADMIN]) {
-      const all = await this.waterSystemRepo.find({ select: { id: true } });
-      systemIds = all.map((s) => s.id);
-    } else if (this.rbac.userRoleCode(user!) === this.rbac.USER) {
+    if (this.rbac.userRoleCode(user!) === this.rbac.USER) {
       const wids = user!.assignedWaterSystemIds;
       if (!wids?.length) {
         return { drafts: [] };
@@ -1204,7 +1195,7 @@ export class TubewellOperatorService {
     }
 
     try {
-      await this.tehsilAccess.assertUserMayLogWaterSystem(user!, system);
+      this.tehsilAccess.assertUserMayLogWaterSystem(user!, system);
     } catch {
       throw new ForbiddenException({
         message: 'Access denied for this water system',
@@ -1378,10 +1369,7 @@ export class TubewellOperatorService {
           }
 
           try {
-            await this.tehsilAccess.assertUserMayLogWaterSystem(
-              opUser!,
-              system,
-            );
+            this.tehsilAccess.assertUserMayLogWaterSystem(opUser!, system);
           } catch {
             errors.push(
               `Row ${i + 1}: this water system is not assigned to your account`,

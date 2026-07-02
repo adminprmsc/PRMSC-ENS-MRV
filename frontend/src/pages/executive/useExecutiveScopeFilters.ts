@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { LOCATION_DATA, TEHSIL_OPTIONS } from "@/utils/locationData";
 import { useAuth } from "@/contexts/AuthContext";
+import { isExecutiveRole } from "@/constants/roles";
 import type { ExecutiveScopeFilters } from "./executiveAnalysisTypes";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
 export function useExecutiveScopeFilters() {
   const { user } = useAuth();
@@ -10,15 +12,21 @@ export function useExecutiveScopeFilters() {
     const t = (user?.tehsils ?? [])
       .map((x) => String(x).trim())
       .filter(Boolean);
+    if (isExecutiveRole(user?.role)) {
+      return t;
+    }
     return t.length ? t : [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+  }, [user?.role, user?.tehsils]);
 
-  const restrictTehsils = (user?.tehsils ?? []).length > 0;
-  const initialTehsil = restrictTehsils
-    ? String(user?.tehsils?.[0] ?? "").trim() ||
-      allowedTehsils[0] ||
-      "All Tehsils"
-    : "All Tehsils";
+  const restrictTehsils =
+    isExecutiveRole(user?.role) || (user?.tehsils ?? []).length > 0;
+
+  const initialTehsil =
+    restrictTehsils && allowedTehsils.length > 1
+      ? ALL_ASSIGNED_TEHSILS
+      : restrictTehsils
+        ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
+        : ALL_ASSIGNED_TEHSILS;
 
   const [filters, setFilters] = useState<ExecutiveScopeFilters>(() => ({
     tehsil: initialTehsil,
@@ -33,37 +41,34 @@ export function useExecutiveScopeFilters() {
     year: "2026",
   }));
 
+  const tehsilOptions = useMemo(() => {
+    if (restrictTehsils) {
+      return allowedTehsils.length > 1
+        ? [ALL_ASSIGNED_TEHSILS, ...allowedTehsils]
+        : allowedTehsils;
+    }
+    return [ALL_ASSIGNED_TEHSILS, ...allowedTehsils];
+  }, [allowedTehsils, restrictTehsils]);
+
   const villageOptions = useMemo(() => {
-    if (filters.tehsil === "All Tehsils") return ["All Villages"];
+    if (filters.tehsil === ALL_ASSIGNED_TEHSILS) {
+      if (restrictTehsils && allowedTehsils.length) {
+        const villages = new Set<string>();
+        for (const tehsil of allowedTehsils) {
+          for (const village of (LOCATION_DATA[tehsil.toUpperCase()] ||
+            []) as string[]) {
+            villages.add(village);
+          }
+        }
+        return ["All Villages", ...[...villages].sort()];
+      }
+      return ["All Villages"];
+    }
     return [
       "All Villages",
       ...((LOCATION_DATA[filters.tehsil.toUpperCase()] || []) as string[]),
     ];
-  }, [filters.tehsil]);
-
-  useEffect(() => {
-    if (!restrictTehsils) return;
-    const first = allowedTehsils[0];
-    if (!first) return;
-    setFilters((prev) => {
-      if (
-        prev.tehsil !== "All Tehsils" &&
-        allowedTehsils.includes(prev.tehsil)
-      ) {
-        return prev;
-      }
-      return { ...prev, tehsil: first, village: "All Villages" };
-    });
-    setActiveFilters((prev) => {
-      if (
-        prev.tehsil !== "All Tehsils" &&
-        allowedTehsils.includes(prev.tehsil)
-      ) {
-        return prev;
-      }
-      return { ...prev, tehsil: first, village: "All Villages" };
-    });
-  }, [allowedTehsils, restrictTehsils]);
+  }, [filters.tehsil, restrictTehsils, allowedTehsils]);
 
   const apiFilters = useMemo(
     () => ({
@@ -79,8 +84,10 @@ export function useExecutiveScopeFilters() {
 
   const activeScopeLabel = useMemo(() => {
     const tehsil =
-      activeFilters.tehsil === "All Tehsils"
-        ? "All tehsils"
+      activeFilters.tehsil === ALL_ASSIGNED_TEHSILS
+        ? restrictTehsils
+          ? `All assigned tehsils (${allowedTehsils.length})`
+          : "All tehsils"
         : activeFilters.tehsil;
     const village =
       activeFilters.village === "All Villages"
@@ -91,7 +98,7 @@ export function useExecutiveScopeFilters() {
         ? "All months"
         : EXECUTIVE_MONTH_LABEL(Number(activeFilters.month));
     return `${tehsil} · ${village} · ${activeFilters.year} · ${month}`;
-  }, [activeFilters]);
+  }, [activeFilters, allowedTehsils.length, restrictTehsils]);
 
   const applyFilters = useCallback(() => {
     setActiveFilters(filters);
@@ -115,6 +122,7 @@ export function useExecutiveScopeFilters() {
     activeScopeLabel,
     allowedTehsils,
     restrictTehsils,
+    tehsilOptions,
     villageOptions,
     applyFilters,
     updateFilter,
