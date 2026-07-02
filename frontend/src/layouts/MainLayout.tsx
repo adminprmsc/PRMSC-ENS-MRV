@@ -60,6 +60,62 @@ const navLinkClass = (isActive: boolean) =>
       : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
   );
 
+function titleCaseLabel(value: string): string {
+  return value
+    .trim()
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatTehsilScope(tehsils: string[] | null | undefined): string {
+  const list = (tehsils ?? []).map((t) => t.trim()).filter(Boolean);
+  if (list.length === 0) return "";
+  if (list.length === 1) return titleCaseLabel(list[0]!);
+  return `${list.length} tehsils`;
+}
+
+function sidebarIdentity(
+  user: {
+    name?: string | null;
+    role?: string | null;
+    tehsils?: string[] | null;
+  } | null | undefined,
+  opts: { tehsilMgr: boolean; exec: boolean; userAdmin: boolean },
+): { primary: string; secondary: string } {
+  const name = user?.name?.trim() || "User";
+  const scope = formatTehsilScope(user?.tehsils);
+
+  if (opts.tehsilMgr) {
+    const scopeKey = scope.replace(/\s/g, "").toUpperCase();
+    const nameLooksLikeRole =
+      /tehsil\s*manager/i.test(name) ||
+      (scopeKey.length > 0 && name.replace(/\s/g, "").toUpperCase().includes(scopeKey));
+
+    if (nameLooksLikeRole && scope) {
+      return { primary: scope, secondary: "Tehsil operator" };
+    }
+    return {
+      primary: name,
+      secondary: scope || "Tehsil operator",
+    };
+  }
+
+  if (opts.exec) {
+    return {
+      primary: name,
+      secondary: scope ? `HQ · ${scope}` : "Manager Operations",
+    };
+  }
+
+  if (opts.userAdmin) {
+    return { primary: name, secondary: "Platform admin" };
+  }
+
+  return { primary: name, secondary: roleDisplayLabel(user?.role) };
+}
+
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [certificateAlertCount, setCertificateAlertCount] = useState(0);
@@ -227,11 +283,12 @@ const MainLayout = () => {
     return sections;
   }, [exec, tehsilMgr, userAdmin, showOnboard, certificateAlertCount]);
 
-  const roleLabel = roleDisplayLabel(user?.role);
-  const roleTitle = tehsilMgr ? "Tehsil Manager Operator" : roleLabel;
-  const primaryTehsil = user?.tehsils?.[0] ?? "";
-  const tehsilLabel = primaryTehsil ? primaryTehsil.toUpperCase() : "";
-  const userInitials = (user?.name ?? "User")
+  const identity = useMemo(
+    () => sidebarIdentity(user, { tehsilMgr, exec, userAdmin }),
+    [user, tehsilMgr, exec, userAdmin],
+  );
+
+  const userInitials = (identity.primary || user?.name || "User")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -344,20 +401,26 @@ const MainLayout = () => {
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4">
-        <div className="mb-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 px-3 py-2.5">
-          <p className="truncate text-sm font-medium text-white">
-            {user?.name ?? "User"}
-          </p>
-          <p className="truncate text-xs text-sidebar-muted">
-            {roleTitle}
-            {tehsilLabel ? ` · ${tehsilLabel}` : ""}
-          </p>
+      <div className="border-t border-sidebar-border p-3">
+        <div className="mb-2 flex items-center gap-2.5 rounded-md px-1 py-1">
+          <Avatar className="size-8 shrink-0">
+            <AvatarFallback className="bg-sidebar-active text-[11px] font-semibold text-white">
+              {userInitials || <UserIcon className="size-3.5" />}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium leading-tight text-white">
+              {identity.primary}
+            </p>
+            <p className="truncate text-[11px] leading-tight text-sidebar-muted">
+              {identity.secondary}
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-[13px] font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
           <LogOut className="size-4 shrink-0" />
           Sign out
@@ -419,7 +482,7 @@ const MainLayout = () => {
               </AvatarFallback>
             </Avatar>
             <span className="hidden max-w-[160px] truncate text-sm font-medium text-foreground sm:inline">
-              {user?.name ?? "User"}
+              {identity.primary}
             </span>
           </div>
         </header>
