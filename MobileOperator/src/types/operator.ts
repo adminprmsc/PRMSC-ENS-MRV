@@ -8,6 +8,8 @@ export type WaterLogInput = {
   tehsil: string
   village: string
   settlement?: string
+  /** Assigned water system — sent as `system_id` so the API resolves the exact facility. */
+  systemId?: string | number
   /** Mirrors assigned system setting where bulk meter is not installed. */
   noBulkMeterInstalled?: boolean
   /** Cumulative bulk-meter reading before pump start (first log only). */
