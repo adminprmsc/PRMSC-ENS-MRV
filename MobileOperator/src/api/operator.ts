@@ -70,15 +70,18 @@ function buildWaterSupplyBody(
     monthRow.pump_end_time = input.pumpEndTime!.trim();
   }
 
+  const row: AnyRecord = {
+    tehsil: String(input.tehsil ?? '').trim(),
+    village: String(input.village ?? '').trim(),
+    settlement: String(input.settlement ?? '').trim(),
+    monthlyData: [monthRow],
+  };
+  if (input.systemId != null && String(input.systemId).trim()) {
+    row.system_id = String(input.systemId).trim();
+  }
+
   const body: AnyRecord = {
-    data: [
-      {
-        tehsil: String(input.tehsil ?? '').trim(),
-        village: String(input.village ?? '').trim(),
-        settlement: String(input.settlement ?? '').trim(),
-        monthlyData: [monthRow],
-      },
-    ],
+    data: [row],
     year: safeInt(input.year, getPakistanYear()),
     status,
   };

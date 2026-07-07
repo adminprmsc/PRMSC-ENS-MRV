@@ -211,6 +211,10 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     return SETTLEMENT_DATA[village] ?? []
   }, [village])
 
+  /** Assigned facility already defines location; static village settlements must not block submit. */
+  const requiresSettlementSelection =
+    !locationLocked && settlementOptions.length > 0
+
   const duplicateIntervalRecordId = useMemo(() => {
     const startKey = normalizeTimeKey(pumpStartTime)
     const endKey = normalizeTimeKey(pumpEndTime)
@@ -237,6 +241,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       tehsil,
       village,
       settlement: settlement || undefined,
+      systemId: systemId ?? undefined,
       noBulkMeterInstalled,
       meterReadingStart: meterReadingStart ? Number(meterReadingStart) : null,
       meterReadingEnd: meterReadingEnd ? Number(meterReadingEnd) : null,
@@ -252,6 +257,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     meterReadingStart,
     meterReadingEnd,
     settlement,
+    systemId,
     tehsil,
     village,
   ])
@@ -635,7 +641,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       )
       return false
     }
-    if (settlementOptions.length > 0 && !settlement) {
+    if (requiresSettlementSelection && !settlement) {
       Alert.alert('Validation', 'Please select settlement.')
       return false
     }
@@ -707,7 +713,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       )
       return
     }
-    if (settlementOptions.length > 0 && !settlement) {
+    if (requiresSettlementSelection && !settlement) {
       Alert.alert('Draft', 'Please choose settlement before saving draft.')
       return
     }

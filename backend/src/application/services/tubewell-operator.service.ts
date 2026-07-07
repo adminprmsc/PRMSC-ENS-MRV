@@ -1309,6 +1309,20 @@ export class TubewellOperatorService {
             settlement = '';
           }
 
+          const systemIdRaw = rowObj.system_id;
+          let systemId = '';
+          if (typeof systemIdRaw === 'string') {
+            systemId = systemIdRaw.trim();
+          } else if (
+            typeof systemIdRaw === 'number' &&
+            Number.isFinite(systemIdRaw)
+          ) {
+            systemId = String(systemIdRaw);
+          } else if (systemIdRaw != null) {
+            errors.push(`Row ${i + 1}: system_id must be a string`);
+            continue;
+          }
+
           const monthlyData = rowObj.monthlyData;
           if (!Array.isArray(monthlyData)) {
             errors.push(`Row ${i + 1}: monthlyData must be an array`);
@@ -1346,7 +1360,9 @@ export class TubewellOperatorService {
           }
 
           let system: WaterSystem | null;
-          if (settlement) {
+          if (systemId) {
+            system = await waterSystemRepo.findOne({ where: { id: systemId } });
+          } else if (settlement) {
             system = await waterSystemRepo.findOne({
               where: { tehsil: ct, village, settlement },
             });
