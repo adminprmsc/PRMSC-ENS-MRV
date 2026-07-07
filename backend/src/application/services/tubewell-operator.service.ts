@@ -316,7 +316,7 @@ export class TubewellOperatorService {
   // ── Tubewell submission detail ─────────────────────────────────────────
 
   async getTubewellWaterSubmissionDetail(userId: string, submissionId: string) {
-    const currentUser = await this.userRepo.findOne({ where: { id: userId } });
+    const currentUser = await this.userService.getUserById(userId);
     if (!currentUser) {
       throw new NotFoundException({ error: 'User not found' });
     }
@@ -346,11 +346,6 @@ export class TubewellOperatorService {
     });
     if (!record) {
       throw new NotFoundException({ error: 'Record not found' });
-    }
-
-    const assignedIds = this.tehsilAccess.assignedWaterSystemIdSet(currentUser);
-    if (!assignedIds.has(String(record.waterSystemId))) {
-      throw new ForbiddenException({ error: 'Access denied' });
     }
 
     return this.waterSubmissionDetailService.buildWaterSubmissionDetailResponse(
