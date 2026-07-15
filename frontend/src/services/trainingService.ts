@@ -67,6 +67,8 @@ export async function uploadTrainingVideoFile(file: File) {
     bucket: string;
   }>("/training/videos/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" },
+    // ~200 MB uploads over slower links can take several minutes.
+    timeout: 10 * 60 * 1000,
   });
   return data;
 }
