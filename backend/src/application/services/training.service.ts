@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { unlink } from 'node:fs/promises';
 import { Repository } from 'typeorm';
 import {
   ADMIN,
@@ -145,7 +146,9 @@ export class TrainingService {
     file: Express.Multer.File | undefined,
   ) {
     assertVideoPublisher(actorRole);
-    if (!file?.buffer?.length) {
+    const hasDiskFile = Boolean(file?.path);
+    const hasMemoryFile = Boolean(file?.buffer?.length);
+    if (!file || (!hasDiskFile && !hasMemoryFile)) {
       throw new BadRequestException({ message: 'Video file is required' });
     }
     if (file.size > MAX_TRAINING_VIDEO_BYTES) {
@@ -160,17 +163,23 @@ export class TrainingService {
       });
     }
 
-    const uploadResult = await this.storageService.uploadFile(
-      file,
-      'training-videos',
-    );
+    try {
+      const uploadResult = await this.storageService.uploadFile(
+        file,
+        'training-videos',
+      );
 
-    return {
-      message: 'Training video uploaded',
-      video_url: uploadResult.public_url,
-      bucket: uploadResult.bucket,
-      object_key: uploadResult.object_key,
-    };
+      return {
+        message: 'Training video uploaded',
+        video_url: uploadResult.public_url,
+        bucket: uploadResult.bucket,
+        object_key: uploadResult.object_key,
+      };
+    } finally {
+      if (file.path) {
+        await unlink(file.path).catch(() => undefined);
+      }
+    }
   }
 
   async createVideo(

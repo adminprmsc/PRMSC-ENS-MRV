@@ -1,12 +1,19 @@
 import { randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 
 function secureFilename(filename: string): string {
   const base = basename(filename).replace(/[^\w.-]+/g, '_');
@@ -15,6 +22,8 @@ function secureFilename(filename: string): string {
 
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name);
+
   constructor(private readonly config: ConfigService) {}
 
   private buildClient(): S3Client {
@@ -24,10 +33,14 @@ export class StorageService {
     const region = this.config.get<string>('app.supabaseS3Region');
 
     if (!accessKey || !secretKey) {
-      throw new Error('Supabase S3 credentials are missing in environment.');
+      throw new InternalServerErrorException({
+        message: 'Supabase S3 credentials are missing in environment.',
+      });
     }
     if (!endpoint) {
-      throw new Error('SUPABASE_S3_ENDPOINT is required.');
+      throw new InternalServerErrorException({
+        message: 'SUPABASE_S3_ENDPOINT is required.',
+      });
     }
 
     return new S3Client({
@@ -38,6 +51,11 @@ export class StorageService {
         secretAccessKey: secretKey,
       },
       forcePathStyle: true,
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 60_000,
+        // Large training videos need a long request timeout.
+        requestTimeout: 10 * 60_000,
+      }),
     });
   }
 
@@ -47,7 +65,10 @@ export class StorageService {
       this.config.get<string>('app.supabaseStoragePublicBaseUrl') ?? ''
     ).replace(/\/+$/, '');
     if (!publicBase) {
-      throw new Error('SUPABASE_STORAGE_PUBLIC_BASE_URL is missing.');
+      throw new InternalServerErrorException({
+        message:
+          'SUPABASE_STORAGE_PUBLIC_BASE_URL is missing (or SUPABASE_URL for fallback).',
+      });
     }
     return `${publicBase}/${bucket}/${objectKey}`;
   }
@@ -65,22 +86,44 @@ export class StorageService {
   ): Promise<{ bucket: string; object_key: string; public_url: string }> {
     const bucket = this.config.get<string>('app.supabaseStorageBucket');
     if (!bucket) {
-      throw new Error('SUPABASE_STORAGE_BUCKET is required.');
+      throw new InternalServerErrorException({
+        message: 'SUPABASE_STORAGE_BUCKET is required.',
+      });
     }
 
     const safeName = secureFilename(file.originalname || 'file');
     const now = new Date();
     const objectKey = `${folder.replace(/^\/+|\/+$/g, '')}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${randomUUID().replace(/-/g, '')}_${safeName}`;
 
-    const client = this.buildClient();
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: objectKey,
-        Body: file.buffer,
-        ContentType: file.mimetype || undefined,
-      }),
-    );
+    // Prefer streaming from disk (training videos) to avoid buffering ~200 MB in RAM.
+    const body =
+      file.path && file.path.length > 0
+        ? createReadStream(file.path)
+        : file.buffer;
+
+    if (!body) {
+      throw new BadRequestException({ message: 'Upload body is empty' });
+    }
+
+    try {
+      const client = this.buildClient();
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: objectKey,
+          Body: body,
+          ContentType: file.mimetype || undefined,
+          ContentLength: file.size > 0 ? file.size : undefined,
+        }),
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Storage upload failed';
+      this.logger.error(`S3 upload failed for ${objectKey}: ${message}`);
+      throw new InternalServerErrorException({
+        message: `File upload to storage failed: ${message}`,
+      });
+    }
 
     return {
       bucket,
