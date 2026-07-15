@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -122,6 +123,9 @@ export default function TrainingVideosPage() {
   const [sourceMode, setSourceMode] = useState<VideoSourceMode>("youtube");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadLoadedMb, setUploadLoadedMb] = useState(0);
+  const [uploadTotalMb, setUploadTotalMb] = useState(0);
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -185,6 +189,9 @@ export default function TrainingVideosPage() {
     setEditing(null);
     setForm(emptyForm());
     setSourceMode("youtube");
+    setUploadPercent(0);
+    setUploadLoadedMb(0);
+    setUploadTotalMb(0);
     setDialogOpen(true);
   };
 
@@ -214,9 +221,22 @@ export default function TrainingVideosPage() {
     event.target.value = "";
     if (!file) return;
 
+    const totalMb = file.size / (1024 * 1024);
     setUploading(true);
+    setUploadPercent(0);
+    setUploadLoadedMb(0);
+    setUploadTotalMb(Number(totalMb.toFixed(1)));
     try {
-      const result = await uploadTrainingVideoFile(file);
+      const result = await uploadTrainingVideoFile(file, (progress) => {
+        setUploadPercent(progress.percent);
+        setUploadLoadedMb(
+          Number((progress.loaded / (1024 * 1024)).toFixed(1)),
+        );
+        setUploadTotalMb(
+          Number((progress.total / (1024 * 1024)).toFixed(1)),
+        );
+      });
+      setUploadPercent(100);
       setForm((current) => ({ ...current, youtube_url: result.video_url }));
       toast.success("Video uploaded — URL filled automatically");
     } catch (err) {
@@ -592,7 +612,7 @@ export default function TrainingVideosPage() {
                   {uploading ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
-                      Uploading…
+                      Uploading {uploadPercent}%
                     </>
                   ) : (
                     <>
@@ -601,6 +621,21 @@ export default function TrainingVideosPage() {
                     </>
                   )}
                 </Button>
+                {uploading ? (
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                      <span>Upload progress</span>
+                      <span className="tabular-nums font-medium text-slate-800">
+                        {uploadPercent}% · {uploadLoadedMb} / {uploadTotalMb}{" "}
+                        MB
+                      </span>
+                    </div>
+                    <Progress value={uploadPercent} className="w-full" />
+                    <p className="text-xs text-slate-500">
+                      Keep this dialog open until the upload finishes.
+                    </p>
+                  </div>
+                ) : null}
                 {form.youtube_url ? (
                   <p className="break-all text-xs text-slate-600">
                     <span className="font-medium text-slate-800">

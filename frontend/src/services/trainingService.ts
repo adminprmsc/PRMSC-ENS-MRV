@@ -58,7 +58,17 @@ export async function deleteTrainingVideo(id: string) {
   await api.delete(`/training/videos/${id}`);
 }
 
-export async function uploadTrainingVideoFile(file: File) {
+export type UploadProgress = {
+  /** 0–100 */
+  percent: number;
+  loaded: number;
+  total: number;
+};
+
+export async function uploadTrainingVideoFile(
+  file: File,
+  onProgress?: (progress: UploadProgress) => void,
+) {
   const formData = new FormData();
   formData.append("file", file);
   const { data } = await api.post<{
@@ -67,6 +77,16 @@ export async function uploadTrainingVideoFile(file: File) {
     bucket: string;
   }>("/training/videos/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" },
+    // ~200 MB uploads over slower links can take several minutes.
+    timeout: 10 * 60 * 1000,
+    onUploadProgress: (event) => {
+      if (!onProgress) return;
+      const total = event.total && event.total > 0 ? event.total : file.size;
+      const loaded = event.loaded ?? 0;
+      const percent =
+        total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+      onProgress({ percent, loaded, total });
+    },
   });
   return data;
 }
