@@ -1,6 +1,7 @@
 export type ExecutiveScopeFilters = {
   tehsil: string;
   village: string;
+  settlement: string;
   month: string;
   year: string;
 };

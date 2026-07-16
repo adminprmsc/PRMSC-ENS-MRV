@@ -9,8 +9,17 @@ export class DashboardController {
   getProgramSummary(
     @Query('tehsil') tehsil?: string,
     @Query('village') village?: string,
+    @Query('settlement') settlement?: string,
+    @Query('month') month?: string,
+    @Query('year') year?: string,
   ) {
-    return this.dashboardService.getProgramSummary(tehsil, village);
+    return this.dashboardService.getProgramSummary(
+      tehsil,
+      village,
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+      settlement,
+    );
   }
 
   @Get('water-supplied')
@@ -77,6 +86,7 @@ export class DashboardController {
   getWaterSystemsDetail(
     @Query('tehsil') tehsil?: string,
     @Query('village') village?: string,
+    @Query('settlement') settlement?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
   ) {
@@ -85,6 +95,7 @@ export class DashboardController {
       village,
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
+      settlement,
     );
   }
 
@@ -92,6 +103,7 @@ export class DashboardController {
   getSolarSystemsDetail(
     @Query('tehsil') tehsil?: string,
     @Query('village') village?: string,
+    @Query('settlement') settlement?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
   ) {
@@ -100,6 +112,7 @@ export class DashboardController {
       village,
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
+      settlement,
     );
   }
 }

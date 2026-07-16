@@ -9,7 +9,7 @@ import DataGridSkeleton, {
   ExecutiveKpiCardsSkeleton,
 } from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { useProgramDashboardApi } from "@/hooks";
+import { useProgramDashboardApi, useTehsilManagerOperatorApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { fetchScopedWaterSystems } from "./fetchExecutiveScopedDashboard";
@@ -17,13 +17,22 @@ import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
 import {
+  fetchRegisteredLocationSites,
+  type RegisteredLocationSite,
+} from "./registeredLocationOptions";
+import {
   latestAcceptedByWaterSystem,
   useHqSubmissions,
 } from "./useHqSubmissions";
 
 const ExecutiveWaterAnalysis = () => {
   const { getDashboardWaterSystemsDetail } = useProgramDashboardApi();
-  const scope = useExecutiveScopeFilters();
+  const { getWaterSystems } = useTehsilManagerOperatorApi();
+  const [locationSites, setLocationSites] = useState<RegisteredLocationSite[]>(
+    [],
+  );
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const scope = useExecutiveScopeFilters(locationSites);
   const baseColumns = useWaterAnalysisColumns();
   const { submissions } = useHqSubmissions();
 
@@ -35,6 +44,31 @@ const ExecutiveWaterAnalysis = () => {
   const [rows, setRows] = useState<WaterSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const allowedTehsilsKey = scope.allowedTehsils.join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocations = async () => {
+      setLocationsLoading(true);
+      try {
+        const sites = await fetchRegisteredLocationSites(
+          getWaterSystems,
+          scope.allowedTehsils,
+        );
+        if (!cancelled) setLocationSites(sites);
+      } catch {
+        if (!cancelled) setLocationSites([]);
+      } finally {
+        if (!cancelled) setLocationsLoading(false);
+      }
+    };
+    void loadLocations();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when assigned tehsils change
+  }, [getWaterSystems, allowedTehsilsKey]);
 
   const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
     () => [
@@ -97,7 +131,9 @@ const ExecutiveWaterAnalysis = () => {
         if (!cancelled) setRows(list);
       } catch (err) {
         if (!cancelled) {
-          setError(getApiErrorMessage(err, "Failed to load water system analysis"));
+          setError(
+            getApiErrorMessage(err, "Failed to load water system analysis"),
+          );
           setRows([]);
         }
       } finally {
@@ -120,7 +156,10 @@ const ExecutiveWaterAnalysis = () => {
     );
   }, [rows]);
 
-  const getRowId = useCallback((row: WaterSystemDetailRow) => row.water_system_id, []);
+  const getRowId = useCallback(
+    (row: WaterSystemDetailRow) => row.water_system_id,
+    [],
+  );
 
   return (
     <PageShell>
@@ -135,6 +174,11 @@ const ExecutiveWaterAnalysis = () => {
         activeScopeLabel={scope.activeScopeLabel}
         tehsilOptions={scope.tehsilOptions}
         villageOptions={scope.villageOptions}
+        settlementOptions={scope.settlementOptions}
+        villageEnabled={scope.villageEnabled}
+        settlementEnabled={scope.settlementEnabled}
+        locationMeta={scope.locationMeta}
+        locationsLoading={locationsLoading}
         onUpdate={scope.updateFilter}
         onApply={scope.applyFilters}
       />
@@ -151,7 +195,11 @@ const ExecutiveWaterAnalysis = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard label="Systems in scope" value={rows.length} accent="blue" />
+            <StatCard
+              label="Systems in scope"
+              value={rows.length}
+              accent="blue"
+            />
             <StatCard
               label="Total pumped (intervals)"
               value={`${totals.water.toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
