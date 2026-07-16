@@ -38,13 +38,12 @@ import OrganizationKpiPanel, {
 } from "./OrganizationKpiPanel";
 import { PageHeader, PageShell } from "@/components/layout";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
-import { fetchScopedProgramDashboard } from "./fetchScopedProgramDashboard";
+import {
+  fetchScopedProgramDashboard,
+  type ProgramSummary,
+} from "./fetchScopedProgramDashboard";
 
-type SummaryData = {
-  ohr_count: number;
-  solar_facilities: number;
-  bulk_meters: number;
-};
+type SummaryData = ProgramSummary;
 type RowData = {
   month: number;
   total_water_pumped?: number;
@@ -175,6 +174,13 @@ const ProgramDashboard = ({
     ohr_count: 0,
     solar_facilities: 0,
     bulk_meters: 0,
+    water_logs_count: 0,
+    solar_logs_count: 0,
+    water_sites_logged: 0,
+    solar_sites_logged: 0,
+    by_tehsil: [],
+    water_systems: [],
+    solar_systems: [],
   });
   const [waterSupplied, setWaterSupplied] = useState<RowData[]>([]);
   const [pumpHours, setPumpHours] = useState<RowData[]>([]);
@@ -392,9 +398,10 @@ const ProgramDashboard = ({
 
         {managementView ? (
           <p className="max-w-3xl border-l-2 border-primary/35 pl-4 text-sm leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">Note:</span> Water is
-            aggregated from daily logs; solar is aggregated from monthly site
-            records.
+            <span className="font-medium text-foreground">How to read this:</span>{" "}
+            Start with status cards (on track / needs attention / behind), then
+            use the map and tehsil table to see where follow-up is needed. Water
+            totals come from daily logs; solar from monthly site records.
           </p>
         ) : null}
 
@@ -431,6 +438,7 @@ const ProgramDashboard = ({
               <SystemsMapCard
                 key={`${activeFilters.tehsil}|${activeFilters.village}`}
                 compact
+                defaultCollapsed
                 scopeLabel={activeScopeLabel}
                 dataSyncing={loading}
                 allowedTehsils={allowedTehsils}
@@ -442,6 +450,8 @@ const ProgramDashboard = ({
                   water: summary.ohr_count,
                   solar: summary.solar_facilities,
                 }}
+                waterCoverage={summary.water_systems ?? []}
+                solarCoverage={summary.solar_systems ?? []}
               />
             ) : undefined
           }
@@ -459,6 +469,9 @@ const ProgramDashboard = ({
                 ? null
                 : { water: summary.ohr_count, solar: summary.solar_facilities }
             }
+            waterCoverage={summary.water_systems ?? []}
+            solarCoverage={summary.solar_systems ?? []}
+            defaultCollapsed
           />
         ) : null}
 

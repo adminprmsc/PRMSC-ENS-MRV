@@ -1,17 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import L from "leaflet";
 import {
   GeoJSON,
   MapContainer,
   Marker,
-  Popup,
   TileLayer,
   useMap,
   ZoomControl,
 } from "react-leaflet";
 import type { FeatureCollection } from "geojson";
-import { Droplets, MapPin, Maximize2, Sun } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Droplets,
+  ExternalLink,
+  MapPin,
+  Maximize2,
+  Sun,
+} from "lucide-react";
 
 import {
   Card,
@@ -29,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
+import { hqRoutes } from "@/constants/routes";
 import { getApiErrorMessage } from "../../lib/api-error";
 import { toast } from "sonner";
 import {
@@ -38,6 +47,15 @@ import {
 import type { QueryFilters } from "../../services/types";
 import type { SolarSystemRow, WaterSystemRow } from "../../types/api";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
+import type {
+  ProgramSolarSystemCoverage,
+  ProgramWaterSystemCoverage,
+} from "./fetchScopedProgramDashboard";
+import {
+  formatAdminDate,
+  formatSolarPeriod,
+} from "./AdminDashboardBlocks";
+import { PAGE_SIZE } from "./useClientPagination";
 
 import pakistanOutlineJson from "../../data/pakistan-outline.json";
 import punjabPkBoundaryJson from "../../data/punjab-pk-boundary.json";
@@ -49,10 +67,12 @@ const punjabPkBoundary = punjabPkBoundaryJson as unknown as FeatureCollection;
 
 type GeoPoint = {
   id: string;
+  systemId: string;
   type: "water" | "solar";
   uid: string;
   tehsil: string;
   village: string;
+  settlement?: string | null;
   latitude: number;
   longitude: number;
   approximate?: boolean;
@@ -210,21 +230,21 @@ function MapLegend({ compact }: { compact?: boolean | undefined }) {
     >
       <span className="flex items-center gap-1 font-medium text-foreground">
         <span className="size-2 rounded-full bg-blue-600" />
-        Water
+        Water system
       </span>
       <span className="flex items-center gap-1 font-medium text-foreground">
         <span className="size-2 rounded-full bg-amber-600" />
-        Solar
+        Solar system
       </span>
       <span className="flex items-center gap-1 text-muted-foreground">
         <span className="size-2 rounded-full border border-dashed border-slate-400 bg-transparent" />
-        Approx.
+        Approx. location
       </span>
     </div>
   );
 }
 
-function SystemsMapCanvas({
+const SystemsMapCanvas = memo(function SystemsMapCanvas({
   mapRef,
   points,
   loading,
@@ -233,6 +253,8 @@ function SystemsMapCanvas({
   scopeLabel,
   compact,
   lightBasemap,
+  selectedId,
+  onSelect,
 }: {
   mapRef: MutableRefObject<L.Map | null>;
   points: GeoPoint[];
@@ -242,6 +264,8 @@ function SystemsMapCanvas({
   scopeLabel?: string | undefined;
   compact?: boolean | undefined;
   lightBasemap?: boolean | undefined;
+  selectedId?: string | null;
+  onSelect?: (point: GeoPoint) => void;
 }) {
   return (
     <div
@@ -310,27 +334,17 @@ function SystemsMapCanvas({
             key={p.id}
             position={[p.latitude, p.longitude]}
             icon={createTeardropPinIcon(p)}
-          >
-            <Popup>
-              <div className="text-sm">
-                <div className="font-semibold">{p.uid}</div>
-                <div className="text-muted-foreground">
-                  {[p.village, p.tehsil].filter(Boolean).join(" · ")}
-                </div>
-                {p.approximate ? (
-                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                    Approximate position — add GPS on the system record.
-                  </p>
-                ) : null}
-              </div>
-            </Popup>
-          </Marker>
+            opacity={selectedId && selectedId !== p.id ? 0.45 : 1}
+            eventHandlers={{
+              click: () => onSelect?.(p),
+            }}
+          />
         ))}
       </MapContainer>
       <MapLegend compact={compact} />
     </div>
   );
-}
+});
 
 type SystemsMapCardProps = {
   mapFilters: SystemsMapFilters;
@@ -342,7 +356,152 @@ type SystemsMapCardProps = {
   scopeLabel?: string | undefined;
   /** Parent KPI reload in progress — badge counts stay on summary values. */
   dataSyncing?: boolean;
+  /** Coverage from program-summary for selected-site analytics. */
+  waterCoverage?: ProgramWaterSystemCoverage[];
+  solarCoverage?: ProgramSolarSystemCoverage[];
+  /** Start collapsed to keep KPI/issues primary (default true for compact). */
+  defaultCollapsed?: boolean;
 };
+
+function SiteDetailPanel({
+  point,
+  waterCoverage,
+  solarCoverage,
+  onClose,
+}: {
+  point: GeoPoint;
+  waterCoverage: ProgramWaterSystemCoverage[];
+  solarCoverage: ProgramSolarSystemCoverage[];
+  onClose: () => void;
+}) {
+  const water = waterCoverage.find((s) => s.id === point.systemId);
+  const solar = solarCoverage.find((s) => s.id === point.systemId);
+  const detailHref =
+    point.type === "water"
+      ? hqRoutes.waterSystem(point.systemId)
+      : hqRoutes.solarSite(point.systemId);
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-background p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <Badge variant="outline" className="mb-1 font-normal capitalize">
+            {point.type === "water" ? "Water system" : "Solar system"}
+          </Badge>
+          <p className="truncate text-sm font-semibold">{point.uid}</p>
+          <p className="text-xs text-muted-foreground">
+            {[point.village, point.settlement, point.tehsil]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="shrink-0"
+          onClick={onClose}
+        >
+          Close
+        </Button>
+      </div>
+
+      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        {point.type === "water" && water ? (
+          <>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Logging status
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {water.logged
+                  ? `Logged · ${water.days_logged} days · ${water.logs_count} logs`
+                  : "No log in selected period"}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Last log received
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {formatAdminDate(
+                  water.last_log_date ?? water.lifetime_last_log_date,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Bulk meter
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {water.bulk_meter_installed ? "Installed" : "Not installed"}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Assigned operator
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {(water.assigned_operators?.length ?? 0) === 0
+                  ? "Unassigned"
+                  : water.assigned_operators.map((o) => o.name).join(", ")}
+              </dd>
+            </div>
+          </>
+        ) : null}
+        {point.type === "solar" && solar ? (
+          <>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Logging status
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {solar.logged
+                  ? `Logged · ${solar.months_logged} months · ${solar.logs_count} records`
+                  : "No log in selected period"}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+                Last log received
+              </dt>
+              <dd className="mt-0.5 text-sm">
+                {formatSolarPeriod(
+                  solar.lifetime_last_log_year,
+                  solar.lifetime_last_log_month,
+                )}
+              </dd>
+            </div>
+          </>
+        ) : null}
+        {point.approximate ? (
+          <div className="sm:col-span-2">
+            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+              Location note
+            </dt>
+            <dd className="mt-0.5 text-sm text-amber-800">
+              Approximate pin — GPS not saved on the system record yet.
+            </dd>
+          </div>
+        ) : null}
+        {!water && !solar ? (
+          <div className="sm:col-span-2 text-sm text-muted-foreground">
+            Registry location only. Open details for full history and records.
+          </div>
+        ) : null}
+      </dl>
+
+      <div className="mt-3 flex justify-end">
+        <Link
+          to={detailHref}
+          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium hover:bg-muted"
+        >
+          Explore more
+          <ExternalLink className="size-3.5" />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function SystemsMapCard({
   mapFilters,
@@ -351,12 +510,20 @@ export default function SystemsMapCard({
   compact = false,
   scopeLabel,
   dataSyncing = false,
+  waterCoverage = [],
+  solarCoverage = [],
+  defaultCollapsed,
 }: SystemsMapCardProps) {
   const mapRef = useRef<L.Map | null>(null);
   const expandedMapRef = useRef<L.Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [mapOpen, setMapOpen] = useState(
+    defaultCollapsed === undefined ? !compact : !defaultCollapsed,
+  );
+  const [selected, setSelected] = useState<GeoPoint | null>(null);
   const [points, setPoints] = useState<GeoPoint[]>([]);
+  const [pointsTruncated, setPointsTruncated] = useState(0);
   const [registryTotals, setRegistryTotals] = useState({ water: 0, solar: 0 });
 
   const load = useCallback(async () => {
@@ -462,14 +629,16 @@ export default function SystemsMapCard({
         const { lat, lng } = rowLatLng(w as unknown as Record<string, unknown>);
         const hasGeo = lat != null && lng != null;
         const { latitude, longitude } = hasGeo
-          ? { latitude: lat, longitude: lng }
+          ? { latitude: lat!, longitude: lng! }
           : approximateLatLng(`water|${w.id}|${w.tehsil}|${w.village}`, "water");
         mapped.push({
           id: `water-${w.id}`,
+          systemId: String(w.id),
           type: "water",
           uid: String(w.unique_identifier ?? w.id),
           tehsil: String(w.tehsil ?? ""),
           village: String(w.village ?? ""),
+          settlement: (w as { settlement?: string | null }).settlement ?? null,
           latitude,
           longitude,
           approximate: !hasGeo,
@@ -480,24 +649,31 @@ export default function SystemsMapCard({
         const { lat, lng } = rowLatLng(s as unknown as Record<string, unknown>);
         const hasGeo = lat != null && lng != null;
         const { latitude, longitude } = hasGeo
-          ? { latitude: lat, longitude: lng }
+          ? { latitude: lat!, longitude: lng! }
           : approximateLatLng(`solar|${s.id}|${s.tehsil}|${s.village}`, "solar");
         mapped.push({
           id: `solar-${s.id}`,
+          systemId: String(s.id),
           type: "solar",
           uid: String(s.unique_identifier ?? s.id),
           tehsil: String(s.tehsil ?? ""),
           village: String(s.village ?? ""),
+          settlement: (s as { settlement?: string | null }).settlement ?? null,
           latitude,
           longitude,
           approximate: !hasGeo,
         });
       }
 
-      setPoints(mapped);
+      // Prefer exact GPS pins when capping for performance.
+      mapped.sort((a, b) => Number(a.approximate) - Number(b.approximate));
+      const capped = mapped.slice(0, PAGE_SIZE.mapMarkers);
+      setPoints(capped);
+      setPointsTruncated(Math.max(0, mapped.length - capped.length));
     } catch (e: unknown) {
       toast.error(getApiErrorMessage(e, "Failed to load systems for map"));
       setPoints([]);
+      setPointsTruncated(0);
       setRegistryTotals({ water: 0, solar: 0 });
     } finally {
       setLoading(false);
@@ -505,23 +681,35 @@ export default function SystemsMapCard({
   }, [mapFilters.tehsil, mapFilters.village, allowedTehsils]);
 
   useEffect(() => {
+    if (!mapOpen && !expanded) return;
     void load();
-  }, [load]);
+  }, [mapOpen, expanded, load]);
 
   useEffect(() => {
-    if (loading) return;
+    if (mapOpen || expanded) return;
+    setPoints([]);
+    setPointsTruncated(0);
+    setSelected(null);
+  }, [mapFilters.tehsil, mapFilters.village, allowedTehsils, mapOpen, expanded]);
+
+  useEffect(() => {
+    if (!mapOpen || loading) return;
     const id = requestAnimationFrame(() => {
       mapRef.current?.invalidateSize();
     });
     return () => cancelAnimationFrame(id);
-  }, [loading]);
+  }, [mapOpen, loading, selected]);
 
   useEffect(() => {
     if (!expanded || loading) return;
-    const id = requestAnimationFrame(() => {
-      expandedMapRef.current?.invalidateSize();
-    });
-    return () => cancelAnimationFrame(id);
+    const timers = [50, 200, 400].map((ms) =>
+      window.setTimeout(() => {
+        expandedMapRef.current?.invalidateSize();
+      }, ms),
+    );
+    return () => {
+      for (const id of timers) window.clearTimeout(id);
+    };
   }, [expanded, loading, points]);
 
   const badgeCounts = useMemo(() => {
@@ -539,28 +727,28 @@ export default function SystemsMapCard({
 
   const onExpandedMapReady = useCallback(() => {
     requestAnimationFrame(() => expandedMapRef.current?.invalidateSize());
+    window.setTimeout(() => expandedMapRef.current?.invalidateSize(), 200);
+    window.setTimeout(() => expandedMapRef.current?.invalidateSize(), 450);
   }, []);
 
-  const previewHeight = compact
-    ? "h-full min-h-[260px] flex-1"
-    : "h-[480px]";
+  const previewHeight = "h-[min(52vh,420px)] min-h-[280px]";
 
   return (
     <>
-      <Card className="flex h-full min-h-[320px] flex-col overflow-hidden border-border/60">
-        <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 border-b border-border/60 py-3">
+      <Card className="flex w-full flex-col gap-0 overflow-hidden py-0 ring-border/50">
+        <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 border-b border-border/60 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
           <div className="flex items-start gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
               <MapPin className="size-4" />
             </div>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-sm font-semibold">
-                {compact ? "Geographic distribution" : "Map of sites"}
+              <CardTitle className="text-sm font-semibold tracking-tight">
+                Facility map
               </CardTitle>
               <CardDescription className="text-xs leading-relaxed">
-                {compact
-                  ? "Sites in selected tehsil / village — counts match footprint panel."
-                  : "Water (blue) and solar (amber) in scope. Dashed pins are approximate until GPS is saved."}
+                {mapOpen
+                  ? "Select a pin for site summary. Use Explore more for full history."
+                  : "Collapsed so status and issues stay primary — expand when you need locations."}
               </CardDescription>
             </div>
           </div>
@@ -570,109 +758,139 @@ export default function SystemsMapCard({
               className={`gap-1 px-2 py-0 text-xs ${mapBusy ? "opacity-60" : ""}`}
             >
               <Droplets className="size-3 text-blue-600" />
-              {mapBusy ? "…" : badgeCounts.water}
+              {mapBusy ? "…" : badgeCounts.water} water
             </Badge>
             <Badge
               variant="outline"
               className={`gap-1 px-2 py-0 text-xs ${mapBusy ? "opacity-60" : ""}`}
             >
               <Sun className="size-3 text-amber-600" />
-              {mapBusy ? "…" : badgeCounts.solar}
+              {mapBusy ? "…" : badgeCounts.solar} solar
             </Badge>
-            {compact ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 px-2"
+              onClick={() => {
+                setMapOpen((v) => !v);
+                if (mapOpen) setSelected(null);
+              }}
+              aria-expanded={mapOpen}
+            >
+              {mapOpen ? (
+                <>
+                  <ChevronUp className="size-3.5" />
+                  <span className="hidden sm:inline">Hide map</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="size-3.5" />
+                  <span className="hidden sm:inline">Show map</span>
+                </>
+              )}
+            </Button>
+            {mapOpen ? (
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1 px-2"
                 onClick={() => setExpanded(true)}
-                aria-label="Expand map"
+                aria-label="Open larger map"
               >
                 <Maximize2 className="size-3.5" />
-                <span className="hidden sm:inline">Expand</span>
+                <span className="hidden sm:inline">Larger</span>
               </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() => void load()}
-                disabled={loading}
-              >
-                Refresh
-              </Button>
-            )}
+            ) : null}
           </div>
         </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col pt-3">
-          <SystemsMapCanvas
-            mapRef={mapRef}
-            points={points}
-            loading={loading}
-            heightClass={previewHeight}
-            onReady={onMapReady}
-            scopeLabel={scopeLabel}
-            compact={compact}
-            lightBasemap={compact}
-          />
-          {!compact ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Basemap © Esri. Boundaries from Natural Earth.
-            </p>
-          ) : null}
-          {!mapBusy && badgeCounts.water + badgeCounts.solar === 0 ? (
-            <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
-              No sites in this scope — adjust tehsil or village in the filter bar
-              above.
-            </p>
-          ) : null}
-        </CardContent>
+        {mapOpen ? (
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
+            <SystemsMapCanvas
+              mapRef={mapRef}
+              points={points}
+              loading={loading}
+              heightClass={previewHeight}
+              onReady={onMapReady}
+              scopeLabel={scopeLabel}
+              compact={compact}
+              lightBasemap={compact}
+              selectedId={selected?.id ?? null}
+              onSelect={setSelected}
+            />
+            {selected ? (
+              <SiteDetailPanel
+                point={selected}
+                waterCoverage={waterCoverage}
+                solarCoverage={solarCoverage}
+                onClose={() => setSelected(null)}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Click a water or solar pin to inspect that site.
+              </p>
+            )}
+            {pointsTruncated > 0 ? (
+              <p className="text-xs text-amber-800">
+                Showing {PAGE_SIZE.mapMarkers} of{" "}
+                {PAGE_SIZE.mapMarkers + pointsTruncated} sites (GPS pins first).
+                Narrow tehsil/village filters to plot the rest.
+              </p>
+            ) : null}
+            {!mapBusy && badgeCounts.water + badgeCounts.solar === 0 ? (
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                No facilities in this area — change tehsil or village in the
+                filters above.
+              </p>
+            ) : null}
+          </CardContent>
+        ) : null}
       </Card>
 
-      {compact ? (
-        <Dialog open={expanded} onOpenChange={setExpanded}>
-          <DialogContent
-            className="flex max-h-[92vh] w-[min(96vw,1100px)] max-w-none flex-col gap-3 p-4 sm:p-5"
-            showCloseButton
-          >
-            <DialogHeader>
-              <DialogTitle>Programme site map</DialogTitle>
-              <DialogDescription>
-                {scopeLabel
-                  ? `Showing ${scopeLabel}. Scroll to zoom · click pins for details.`
-                  : "Water (blue) and solar (amber) for the current scope."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="gap-1">
-                  <Droplets className="size-3.5 text-blue-600" /> Water:{" "}
-                  {badgeCounts.water}
-                </Badge>
-                <Badge variant="outline" className="gap-1">
-                  <Sun className="size-3.5 text-amber-600" /> Solar:{" "}
-                  {badgeCounts.solar}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void load()}
-                  disabled={loading}
-                >
-                  Refresh
-                </Button>
-              </div>
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent
+          className="flex h-[min(94vh,960px)] w-[min(98vw,1600px)] max-w-none flex-col gap-3 overflow-hidden p-4 sm:max-w-none sm:p-5"
+          showCloseButton
+        >
+          <DialogHeader className="shrink-0 space-y-1 pr-8 text-left">
+            <DialogTitle>Facility map — larger view</DialogTitle>
+            <DialogDescription>
+              {scopeLabel
+                ? `Showing ${scopeLabel}. Click a pin for site details.`
+                : "Blue = water systems. Amber = solar systems."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_320px]">
+            <div className="min-h-0 overflow-hidden rounded-lg border border-border/60">
               <SystemsMapCanvas
                 mapRef={expandedMapRef}
                 points={points}
                 loading={loading}
-                heightClass="h-[min(68vh,560px)]"
+                heightClass="h-full min-h-[min(78vh,780px)]"
                 onReady={onExpandedMapReady}
                 scopeLabel={scopeLabel}
+                lightBasemap
+                selectedId={selected?.id ?? null}
+                onSelect={setSelected}
               />
             </div>
-          </DialogContent>
-        </Dialog>
-      ) : null}
+            <div className="min-h-0 overflow-y-auto">
+              {selected ? (
+                <SiteDetailPanel
+                  point={selected}
+                  waterCoverage={waterCoverage}
+                  solarCoverage={solarCoverage}
+                  onClose={() => setSelected(null)}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Select a facility on the map to see logging status, last log,
+                  and assigned operators.
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -13,6 +13,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { extname } from 'node:path';
 import { TrainingService } from '../../application/services/training.service';
 import { CurrentUser } from '../../infrastructure/auth/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/auth/decorators/current-user.decorator';
@@ -44,6 +48,14 @@ export class TrainingController {
   @HttpCode(201)
   @UseInterceptors(
     FileInterceptor('file', {
+      // Disk storage avoids loading ~200 MB videos into Node heap (which causes 500s).
+      storage: diskStorage({
+        destination: tmpdir(),
+        filename: (_req, file, cb) => {
+          const ext = extname(file.originalname || '').slice(0, 16);
+          cb(null, `training-video-${randomUUID()}${ext}`);
+        },
+      }),
       limits: { fileSize: TRAINING_VIDEO_UPLOAD_LIMIT },
     }),
   )

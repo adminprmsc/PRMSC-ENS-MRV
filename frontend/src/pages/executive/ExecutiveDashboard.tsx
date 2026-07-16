@@ -16,9 +16,9 @@ const ExecutiveDashboard = () => {
 
   return (
     <ProgramDashboard
-      headingTitle="Organization overview"
-      headingDescription={`${scope} Signed in as ${subtitle}.`}
-      managementView={false}
+      headingTitle="Operations overview"
+      headingDescription={`${scope} Progress, logging readiness, and tehsil follow-up for your assigned area · ${subtitle}`}
+      managementView
       mapPosition="top"
       showAnomalies={false}
     />

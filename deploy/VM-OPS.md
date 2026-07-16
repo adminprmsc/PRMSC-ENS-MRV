@@ -80,6 +80,21 @@ Rebuild only the frontend:
 docker compose --env-file .env.docker up -d --build frontend
 ```
 
+**After changing `deploy/nginx/default.conf`** (upload size, timeouts), reload or recreate nginx — a bind-mounted config file does not apply until nginx restarts:
+
+```bash
+docker compose --env-file .env.docker exec nginx nginx -s reload
+# or, if reload fails:
+docker compose --env-file .env.docker up -d --force-recreate nginx
+```
+
+Confirm the live limit:
+
+```bash
+docker compose --env-file .env.docker exec nginx nginx -T 2>/dev/null | grep client_max_body_size
+# expect: client_max_body_size 210m;
+```
+
 Restart without rebuild (e.g. after editing `.env.docker`):
 
 ```bash

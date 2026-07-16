@@ -12,6 +12,7 @@ import {
 import { SolarEnergyLoggingMonthly } from '../../infrastructure/database/entities/solar-energy-logging-monthly.entity';
 import { SolarSystem } from '../../infrastructure/database/entities/solar-system.entity';
 import { SystemMeter } from '../../infrastructure/database/entities/system-meter.entity';
+import { UserWaterSystem } from '../../infrastructure/database/entities/user-water-system.entity';
 import { WaterEnergyLoggingDaily } from '../../infrastructure/database/entities/water-energy-logging-daily.entity';
 import { WaterSystem } from '../../infrastructure/database/entities/water-system.entity';
 import { WaterMeterVolumeService } from './water-meter-volume.service';
@@ -29,20 +30,23 @@ export class DashboardService {
     private readonly waterLogRepo: Repository<WaterEnergyLoggingDaily>,
     @InjectRepository(SolarEnergyLoggingMonthly)
     private readonly solarLogRepo: Repository<SolarEnergyLoggingMonthly>,
+    @InjectRepository(UserWaterSystem)
+    private readonly userWaterSystemRepo: Repository<UserWaterSystem>,
     private readonly waterMeterVolume: WaterMeterVolumeService,
   ) {}
 
-  private applyLocationFilters<T extends { tehsil?: string; village?: string }>(
-    items: T[],
-    tehsil?: string,
-    village?: string,
-  ): T[] {
+  private applyLocationFilters<
+    T extends { tehsil?: string; village?: string; settlement?: string | null },
+  >(items: T[], tehsil?: string, village?: string, settlement?: string): T[] {
     let result = items;
     if (tehsil && tehsil !== 'All Tehsils') {
       result = result.filter((i) => i.tehsil === tehsil);
     }
     if (village && village !== 'All Villages') {
       result = result.filter((i) => i.village === village);
+    }
+    if (settlement && settlement !== 'All Settlements') {
+      result = result.filter((i) => (i.settlement ?? '') === settlement);
     }
     return result;
   }
@@ -51,29 +55,362 @@ export class DashboardService {
     return `(${alias}.status IS NULL OR ${alias}.status != '${SUBMISSION_STATUS_REJECTED}')`;
   }
 
-  async getProgramSummary(tehsil?: string, village?: string) {
+  async getProgramSummary(
+    tehsil?: string,
+    village?: string,
+    month?: number,
+    year?: number,
+    settlement?: string,
+  ) {
     let waterSystems = await this.waterSystemRepo.find();
     let solarSystems = await this.solarSystemRepo.find();
-    waterSystems = this.applyLocationFilters(waterSystems, tehsil, village);
-    solarSystems = this.applyLocationFilters(solarSystems, tehsil, village);
+    waterSystems = this.applyLocationFilters(
+      waterSystems,
+      tehsil,
+      village,
+      settlement,
+    );
+    solarSystems = this.applyLocationFilters(
+      solarSystems,
+      tehsil,
+      village,
+      settlement,
+    );
 
     const ohrCount = waterSystems.length;
     const solarFacilities = solarSystems.length;
 
-    const waterIds = new Set(waterSystems.map((ws) => ws.id));
+    const waterIds = waterSystems.map((ws) => String(ws.id));
+    const solarIds = solarSystems.map((ss) => String(ss.id));
+
     const bulkMeters = await this.systemMeterRepo
       .createQueryBuilder('m')
       .where('m.meter_type = :type', { type: METER_TYPE_TUBEWELL })
       .andWhere('m.is_active = true')
       .andWhere('m.water_system_id IN (:...ids)', {
-        ids: [...waterIds].length ? [...waterIds] : [''],
+        ids: waterIds.length ? waterIds : [''],
       })
       .getCount();
+
+    let waterLogQb = this.waterLogRepo
+      .createQueryBuilder('log')
+      .select('log.water_system_id', 'system_id')
+      .addSelect('COUNT(log.id)', 'logs_count')
+      .addSelect('COUNT(DISTINCT log.log_date)', 'days_logged')
+      .addSelect('MAX(log.log_date)', 'last_log_date')
+      .where(this.logNotRejectedQb('log'))
+      .andWhere('log.water_system_id IN (:...ids)', {
+        ids: waterIds.length ? waterIds : [''],
+      })
+      .groupBy('log.water_system_id');
+
+    let fetchEndExclusive: string | null = null;
+    let fetchStart: string | null = null;
+    if (year && month) {
+      fetchStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      fetchEndExclusive =
+        month === 12
+          ? `${year + 1}-01-01`
+          : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    } else if (year) {
+      fetchStart = `${year}-01-01`;
+      fetchEndExclusive = `${year + 1}-01-01`;
+    }
+    if (fetchStart) {
+      waterLogQb = waterLogQb.andWhere('log.log_date >= :start', {
+        start: fetchStart,
+      });
+    }
+    if (fetchEndExclusive) {
+      waterLogQb = waterLogQb.andWhere('log.log_date < :end', {
+        end: fetchEndExclusive,
+      });
+    }
+
+    const waterLogRows = waterIds.length
+      ? await waterLogQb.getRawMany<{
+          system_id: string;
+          logs_count: string;
+          days_logged: string;
+          last_log_date: string | Date | null;
+        }>()
+      : [];
+    const waterStatsBySystem = new Map(
+      waterLogRows.map((r) => [
+        String(r.system_id),
+        {
+          logs_count: parseInt(r.logs_count || '0', 10) || 0,
+          days_logged: parseInt(r.days_logged || '0', 10) || 0,
+          last_log_date: r.last_log_date
+            ? String(r.last_log_date).slice(0, 10)
+            : null,
+        },
+      ]),
+    );
+
+    let solarLogQb = this.solarLogRepo
+      .createQueryBuilder('log')
+      .select('log.solar_system_id', 'system_id')
+      .addSelect('COUNT(log.id)', 'logs_count')
+      .addSelect('COUNT(DISTINCT log.month)', 'months_logged')
+      .where('log.solar_system_id IN (:...ids)', {
+        ids: solarIds.length ? solarIds : [''],
+      })
+      .groupBy('log.solar_system_id');
+    if (year) {
+      solarLogQb = solarLogQb.andWhere('log.year = :year', { year });
+    }
+    if (month) {
+      solarLogQb = solarLogQb.andWhere('log.month = :month', { month });
+    }
+
+    const solarLogRows = solarIds.length
+      ? await solarLogQb.getRawMany<{
+          system_id: string;
+          logs_count: string;
+          months_logged: string;
+        }>()
+      : [];
+    const solarStatsBySystem = new Map(
+      solarLogRows.map((r) => [
+        String(r.system_id),
+        {
+          logs_count: parseInt(r.logs_count || '0', 10) || 0,
+          months_logged: parseInt(r.months_logged || '0', 10) || 0,
+        },
+      ]),
+    );
+
+    // Lifetime last water log (any period) for actionable "Last log received"
+    const waterLifetimeRows = waterIds.length
+      ? await this.waterLogRepo
+          .createQueryBuilder('log')
+          .select('log.water_system_id', 'system_id')
+          .addSelect('MAX(log.log_date)', 'last_log_date')
+          .where(this.logNotRejectedQb('log'))
+          .andWhere('log.water_system_id IN (:...ids)', { ids: waterIds })
+          .groupBy('log.water_system_id')
+          .getRawMany<{
+            system_id: string;
+            last_log_date: string | Date | null;
+          }>()
+      : [];
+    const waterLifetimeLast = new Map(
+      waterLifetimeRows.map((r) => [
+        String(r.system_id),
+        r.last_log_date ? String(r.last_log_date).slice(0, 10) : null,
+      ]),
+    );
+
+    // Lifetime last solar month (any year)
+    const solarLifetimeRows = solarIds.length
+      ? await this.solarLogRepo
+          .createQueryBuilder('log')
+          .select('log.solar_system_id', 'system_id')
+          .addSelect('MAX(log.year * 100 + log.month)', 'last_ym')
+          .where('log.solar_system_id IN (:...ids)', { ids: solarIds })
+          .groupBy('log.solar_system_id')
+          .getRawMany<{ system_id: string; last_ym: string | null }>()
+      : [];
+    const solarLifetimeLast = new Map(
+      solarLifetimeRows.map((r) => {
+        const ym = parseInt(String(r.last_ym || '0'), 10) || 0;
+        return [
+          String(r.system_id),
+          {
+            last_year: ym > 0 ? Math.floor(ym / 100) : null,
+            last_month: ym > 0 ? ym % 100 : null,
+          },
+        ] as const;
+      }),
+    );
+
+    const operatorsByWaterId = new Map<
+      string,
+      { id: string; name: string; email: string; phone: string | null }[]
+    >();
+    for (const id of waterIds) operatorsByWaterId.set(id, []);
+    if (waterIds.length) {
+      const opRows = await this.userWaterSystemRepo
+        .createQueryBuilder('uws')
+        .innerJoinAndSelect('uws.user', 'user')
+        .where('uws.water_system_id IN (:...ids)', { ids: waterIds })
+        .orderBy('user.name', 'ASC')
+        .getMany();
+      for (const row of opRows) {
+        const wid = String(row.waterSystemId);
+        const list = operatorsByWaterId.get(wid) ?? [];
+        if (row.user) {
+          list.push({
+            id: String(row.user.id),
+            name: row.user.name,
+            email: row.user.email,
+            phone: row.user.phone || null,
+          });
+        }
+        operatorsByWaterId.set(wid, list);
+      }
+    }
+
+    type AssignedOperator = {
+      id: string;
+      name: string;
+      email: string;
+      phone: string | null;
+    };
+    type WaterSystemCoverage = {
+      id: string;
+      unique_identifier: string;
+      tehsil: string;
+      village: string;
+      settlement: string | null;
+      bulk_meter_installed: boolean;
+      logs_count: number;
+      days_logged: number;
+      last_log_date: string | null;
+      lifetime_last_log_date: string | null;
+      logged: boolean;
+      assigned_operators: AssignedOperator[];
+    };
+    type SolarSystemCoverage = {
+      id: string;
+      unique_identifier: string;
+      tehsil: string;
+      village: string;
+      settlement: string | null;
+      logs_count: number;
+      months_logged: number;
+      lifetime_last_log_year: number | null;
+      lifetime_last_log_month: number | null;
+      logged: boolean;
+    };
+
+    const waterSystemsCoverage: WaterSystemCoverage[] = waterSystems
+      .map((ws) => {
+        const stats = waterStatsBySystem.get(String(ws.id));
+        const logs = stats?.logs_count ?? 0;
+        return {
+          id: String(ws.id),
+          unique_identifier: ws.uniqueIdentifier,
+          tehsil: ws.tehsil || 'Unknown',
+          village: ws.village || '—',
+          settlement: ws.settlement ?? null,
+          bulk_meter_installed: Boolean(ws.bulkMeterInstalled),
+          logs_count: logs,
+          days_logged: stats?.days_logged ?? 0,
+          last_log_date: stats?.last_log_date ?? null,
+          lifetime_last_log_date: waterLifetimeLast.get(String(ws.id)) ?? null,
+          logged: logs > 0,
+          assigned_operators: operatorsByWaterId.get(String(ws.id)) ?? [],
+        };
+      })
+      .sort((a, b) => {
+        if (a.logged !== b.logged) return a.logged ? 1 : -1;
+        return (
+          a.tehsil.localeCompare(b.tehsil) ||
+          a.village.localeCompare(b.village) ||
+          a.unique_identifier.localeCompare(b.unique_identifier)
+        );
+      });
+
+    const solarSystemsCoverage: SolarSystemCoverage[] = solarSystems
+      .map((ss) => {
+        const stats = solarStatsBySystem.get(String(ss.id));
+        const logs = stats?.logs_count ?? 0;
+        const life = solarLifetimeLast.get(String(ss.id));
+        return {
+          id: String(ss.id),
+          unique_identifier: ss.uniqueIdentifier,
+          tehsil: ss.tehsil || 'Unknown',
+          village: ss.village || '—',
+          settlement: ss.settlement ?? null,
+          logs_count: logs,
+          months_logged: stats?.months_logged ?? 0,
+          lifetime_last_log_year: life?.last_year ?? null,
+          lifetime_last_log_month: life?.last_month ?? null,
+          logged: logs > 0,
+        };
+      })
+      .sort((a, b) => {
+        if (a.logged !== b.logged) return a.logged ? 1 : -1;
+        return (
+          a.tehsil.localeCompare(b.tehsil) ||
+          a.village.localeCompare(b.village) ||
+          a.unique_identifier.localeCompare(b.unique_identifier)
+        );
+      });
+
+    let waterLogsCount = 0;
+    let waterSitesLogged = 0;
+    for (const row of waterSystemsCoverage) {
+      waterLogsCount += row.logs_count;
+      if (row.logged) waterSitesLogged += 1;
+    }
+
+    let solarLogsCount = 0;
+    let solarSitesLogged = 0;
+    for (const row of solarSystemsCoverage) {
+      solarLogsCount += row.logs_count;
+      if (row.logged) solarSitesLogged += 1;
+    }
+
+    type TehsilAgg = {
+      tehsil: string;
+      water_sites: number;
+      solar_sites: number;
+      water_logs: number;
+      solar_logs: number;
+      water_sites_logged: number;
+      solar_sites_logged: number;
+    };
+    const byTehsilMap = new Map<string, TehsilAgg>();
+
+    const ensureTehsil = (name: string): TehsilAgg => {
+      const key = name || 'Unknown';
+      let row = byTehsilMap.get(key);
+      if (!row) {
+        row = {
+          tehsil: key,
+          water_sites: 0,
+          solar_sites: 0,
+          water_logs: 0,
+          solar_logs: 0,
+          water_sites_logged: 0,
+          solar_sites_logged: 0,
+        };
+        byTehsilMap.set(key, row);
+      }
+      return row;
+    };
+
+    for (const ws of waterSystemsCoverage) {
+      const row = ensureTehsil(ws.tehsil);
+      row.water_sites += 1;
+      row.water_logs += ws.logs_count;
+      if (ws.logged) row.water_sites_logged += 1;
+    }
+    for (const ss of solarSystemsCoverage) {
+      const row = ensureTehsil(ss.tehsil);
+      row.solar_sites += 1;
+      row.solar_logs += ss.logs_count;
+      if (ss.logged) row.solar_sites_logged += 1;
+    }
+
+    const byTehsil = [...byTehsilMap.values()].sort((a, b) =>
+      a.tehsil.localeCompare(b.tehsil),
+    );
 
     return {
       ohr_count: ohrCount,
       solar_facilities: solarFacilities,
       bulk_meters: bulkMeters,
+      water_logs_count: waterLogsCount,
+      solar_logs_count: solarLogsCount,
+      water_sites_logged: waterSitesLogged,
+      solar_sites_logged: solarSitesLogged,
+      by_tehsil: byTehsil,
+      water_systems: waterSystemsCoverage,
+      solar_systems: solarSystemsCoverage,
     };
   }
 
@@ -326,6 +663,7 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    settlement?: string,
   ) {
     let rangeStart: string | null = null;
     let rangeEndExclusive: string | null = null;
@@ -347,7 +685,7 @@ export class DashboardService {
     let systems = await this.waterSystemRepo.find({
       order: { tehsil: 'ASC', village: 'ASC', uniqueIdentifier: 'ASC' },
     });
-    systems = this.applyLocationFilters(systems, tehsil, village);
+    systems = this.applyLocationFilters(systems, tehsil, village, settlement);
 
     if (!systems.length) {
       return { rows: [], meta: { month, year } };
@@ -449,6 +787,7 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    settlement?: string,
   ) {
     let qb = this.solarLogRepo
       .createQueryBuilder('log')
@@ -490,6 +829,9 @@ export class DashboardService {
     }
     if (village && village !== 'All Villages') {
       qb = qb.andWhere('ss.village = :village', { village });
+    }
+    if (settlement && settlement !== 'All Settlements') {
+      qb = qb.andWhere('ss.settlement = :settlement', { settlement });
     }
     if (month) {
       qb = qb.andWhere('log.month = :month', { month });

@@ -9,22 +9,56 @@ import DataGridSkeleton, {
   ExecutiveKpiCardsSkeleton,
 } from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { useProgramDashboardApi } from "@/hooks";
+import { useProgramDashboardApi, useTehsilManagerOperatorApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { fetchScopedSolarSystems } from "./fetchExecutiveScopedDashboard";
 import { useSolarAnalysisColumns } from "./executiveAnalysisColumns";
 import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
+import {
+  fetchRegisteredLocationSites,
+  type RegisteredLocationSite,
+} from "./registeredLocationOptions";
 
 const ExecutiveSolarAnalysis = () => {
   const { getDashboardSolarSystemsDetail } = useProgramDashboardApi();
-  const scope = useExecutiveScopeFilters();
+  const { getSolarSystems } = useTehsilManagerOperatorApi();
+  const [locationSites, setLocationSites] = useState<RegisteredLocationSite[]>(
+    [],
+  );
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const scope = useExecutiveScopeFilters(locationSites);
   const baseColumns = useSolarAnalysisColumns();
 
   const [rows, setRows] = useState<SolarSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const allowedTehsilsKey = scope.allowedTehsils.join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocations = async () => {
+      setLocationsLoading(true);
+      try {
+        const sites = await fetchRegisteredLocationSites(
+          getSolarSystems,
+          scope.allowedTehsils,
+        );
+        if (!cancelled) setLocationSites(sites);
+      } catch {
+        if (!cancelled) setLocationSites([]);
+      } finally {
+        if (!cancelled) setLocationsLoading(false);
+      }
+    };
+    void loadLocations();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when assigned tehsils change
+  }, [getSolarSystems, allowedTehsilsKey]);
 
   const columns = useMemo<Array<ColumnDef<SolarSystemDetailRow>>>(
     () => [
@@ -105,6 +139,11 @@ const ExecutiveSolarAnalysis = () => {
         activeScopeLabel={scope.activeScopeLabel}
         tehsilOptions={scope.tehsilOptions}
         villageOptions={scope.villageOptions}
+        settlementOptions={scope.settlementOptions}
+        villageEnabled={scope.villageEnabled}
+        settlementEnabled={scope.settlementEnabled}
+        locationMeta={scope.locationMeta}
+        locationsLoading={locationsLoading}
         onUpdate={scope.updateFilter}
         onApply={scope.applyFilters}
       />
