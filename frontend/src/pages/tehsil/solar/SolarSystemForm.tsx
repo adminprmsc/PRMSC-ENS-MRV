@@ -155,8 +155,7 @@ const SolarSystemForm = () => {
   });
   const [villageSearch, setVillageSearch] = useState("");
   const [settlementSearch, setSettlementSearch] = useState("");
-
-  const [systemExists, setSystemExists] = useState(false);
+  const [locationHasOtherSystems, setLocationHasOtherSystems] = useState(false);
 
   useEffect(() => {
     if (isEditMode || tehsilSelectOptions.length !== 1) return;
@@ -235,17 +234,10 @@ const SolarSystemForm = () => {
           newVillage,
           newSettlement || "",
         );
-        if (result.exists && result.config) {
-          setToast({
-            message: "⚠️ Location already has an active solar site.",
-            type: "error",
-          });
-          setSystemExists(true);
-        } else {
-          setSystemExists(false);
-        }
+        // Multiple solar sites are allowed at the same location.
+        setLocationHasOtherSystems(Boolean(result.exists && result.config));
       } catch (error: unknown) {
-        setSystemExists(false);
+        setLocationHasOtherSystems(false);
         setToast({
           message: getApiErrorMessage(error, "Failed to validate location"),
           type: "error",
@@ -442,20 +434,12 @@ const SolarSystemForm = () => {
         </CardContent>
       </Card>
 
-      {systemExists ? (
-        <Alert variant="destructive">
-          <AlertTitle>Location already registered</AlertTitle>
+      {locationHasOtherSystems ? (
+        <Alert>
+          <AlertTitle>Other sites already at this location</AlertTitle>
           <AlertDescription>
-            Choose a different tehsil, village, or settlement — or open the
-            existing site from{" "}
-            <button
-              type="button"
-              className="font-semibold underline underline-offset-4"
-              onClick={() => navigate(tehsilRoutes.solarSites)}
-            >
-              Solar sites
-            </button>
-            .
+            You can register another solar site for the same tehsil, village,
+            and settlement. Each site gets its own unique ID.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -873,7 +857,6 @@ const SolarSystemForm = () => {
                   onClick={() => void handleSubmit()}
                   disabled={
                     loading ||
-                    systemExists ||
                     !formData.tehsil ||
                     !formData.village
                   }

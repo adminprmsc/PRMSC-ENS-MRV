@@ -401,8 +401,5 @@ mrv-logs
 ## Related docs
 
 - [README.md](./README.md) — first-time VM setup, Supabase migration, TLS
+- [docs/DAILY-OPS.md](./docs/DAILY-OPS.md) — backup to Mac + daily deploy
 - [../backend/docs/DOCKER.md](../backend/docs/DOCKER.md) — local Docker dev
-  Prm $ c@ 12345! WorldB@nk
-
-mkdir -p ~/Downloads/prmsc-backups
-scp adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc*mrv*\*.dump ~/Downloads/prmsc-backups/
