@@ -145,8 +145,7 @@ const WaterSystemForm = () => {
   });
   const [villageSearch, setVillageSearch] = useState("");
   const [settlementSearch, setSettlementSearch] = useState("");
-
-  const [systemExists, setSystemExists] = useState(false);
+  const [locationHasOtherSystems, setLocationHasOtherSystems] = useState(false);
 
   useEffect(() => {
     if (isEditMode || tehsilSelectOptions.length !== 1) return;
@@ -216,17 +215,12 @@ const WaterSystemForm = () => {
           newVillage,
           newSettlement || "",
         );
-        if (!isEditMode && result.exists && result.config) {
-          setToast({
-            message: "⚠️ This location is already registered.",
-            type: "error",
-          });
-          setSystemExists(true);
-        } else {
-          setSystemExists(false);
-        }
+        // Multiple water systems are allowed at the same location.
+        setLocationHasOtherSystems(
+          !isEditMode && Boolean(result.exists && result.config),
+        );
       } catch (error: unknown) {
-        setSystemExists(false);
+        setLocationHasOtherSystems(false);
         setToast({
           message: getApiErrorMessage(error, "Failed to validate location"),
           type: "error",
@@ -422,11 +416,12 @@ const WaterSystemForm = () => {
         </CardContent>
       </Card>
 
-      {systemExists ? (
-        <Alert variant="destructive">
-          <AlertTitle>Location already registered</AlertTitle>
+      {locationHasOtherSystems ? (
+        <Alert>
+          <AlertTitle>Other systems already at this location</AlertTitle>
           <AlertDescription>
-            Choose a different tehsil, village, or settlement.
+            You can register another water system for the same tehsil, village,
+            and settlement. Each system gets its own unique ID.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -910,7 +905,6 @@ const WaterSystemForm = () => {
                       onClick={() => void handleSubmit("submitted")}
                       disabled={
                         loading ||
-                        systemExists ||
                         !formData.tehsil ||
                         !formData.village
                       }
