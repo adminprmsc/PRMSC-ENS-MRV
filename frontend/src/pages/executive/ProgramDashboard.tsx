@@ -135,7 +135,7 @@ type ProgramDashboardProps = {
 
 const ProgramDashboard = ({
   headingTitle = "Program Dashboard",
-  headingDescription = "Water and solar performance by area and time period.",
+  headingDescription = "Water and solar by area and period.",
   managementView = true,
   mapPosition = "inline",
   showAnomalies = false,
@@ -397,11 +397,10 @@ const ProgramDashboard = ({
       />
 
         {managementView ? (
-          <p className="max-w-3xl border-l-2 border-primary/35 pl-4 text-sm leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">How to read this:</span>{" "}
-            Start with status cards (on track / needs attention / behind), then
-            use the map and tehsil table to see where follow-up is needed. Water
-            totals come from daily logs; solar from monthly site records.
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Map → health → performance. Open{" "}
+            <span className="font-medium text-foreground">Attention needed</span>{" "}
+            for follow-ups.
           </p>
         ) : null}
 
@@ -437,8 +436,7 @@ const ProgramDashboard = ({
             showSystemsMap && mapPosition === "top" ? (
               <SystemsMapCard
                 key={`${activeFilters.tehsil}|${activeFilters.village}`}
-                compact
-                defaultCollapsed
+                variant="hero"
                 scopeLabel={activeScopeLabel}
                 dataSyncing={loading}
                 allowedTehsils={allowedTehsils}

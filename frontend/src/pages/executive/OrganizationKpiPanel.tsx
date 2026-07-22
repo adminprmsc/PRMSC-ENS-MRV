@@ -1,30 +1,29 @@
 import { memo, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Area,
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
-  Pie,
-  PieChart,
   XAxis,
   YAxis,
 } from "recharts";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Clock,
   Droplets,
   Gauge,
   MapPin,
-  Search,
   SlidersHorizontal,
   Sun,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hqRoutes } from "@/constants/routes";
 import { StatCard } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,11 +38,6 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -60,7 +54,10 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LivePulseBadge } from "@/components/LivePulseBadge";
+import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import type {
   ProgramSolarSystemCoverage,
@@ -68,11 +65,11 @@ import type {
   ProgramWaterSystemCoverage,
 } from "./fetchScopedProgramDashboard";
 import {
-  AdminIssuesPanel,
   InfoSectionHeader,
-  TehsilCoveragePanel,
   buildAdminIssues,
+  buildRankedTehsilCoverage,
 } from "./AdminDashboardBlocks";
+import { CoverageDemographicsCharts } from "./CoverageDemographicsCharts";
 import { PAGE_SIZE } from "./useClientPagination";
 
 type SummaryData = {
@@ -125,11 +122,6 @@ type OrganizationKpiPanelProps = {
   scopeFilterYears?: number[];
   scopeFilterMonths?: string[];
 };
-
-const portfolioConfig = {
-  water: { label: "Water systems", color: "#2563eb" },
-  solar: { label: "Solar systems", color: "#d97706" },
-} satisfies ChartConfig;
 
 const waterDeliveryConfig = {
   monthly: { label: "Monthly delivery", color: "#3b82f6" },
@@ -227,8 +219,9 @@ function HealthMetricCard({
   progress?: number | null;
 }) {
   return (
-    <Card className="gap-0 overflow-hidden py-0 ring-border/50">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
+    <Card className="relative gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-foreground/10">
+      <div className="absolute inset-y-0 left-0 w-1 bg-primary/70" />
+      <CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-border/50 bg-muted/20 py-3.5 pl-5 [.border-b]:pb-3.5">
         <div className="flex items-center gap-2.5">
           <div className="flex size-8 items-center justify-center rounded-lg border border-border/60 bg-background text-muted-foreground">
             {icon}
@@ -239,7 +232,7 @@ function HealthMetricCard({
         </div>
         <ProgressStatusBadge loading={loading === true} tone={tone} />
       </CardHeader>
-      <CardContent className="space-y-3 py-4">
+      <CardContent className="space-y-3 py-4 pl-5">
         <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
           {loading ? "—" : value}
         </p>
@@ -382,7 +375,6 @@ function ScopeFilterControls({
   months: string[];
   scopeLabel: string;
 }) {
-  const [villageQuery, setVillageQuery] = useState("");
   const tehsilOptions = useMemo(
     () =>
       restrictTehsils
@@ -393,35 +385,22 @@ function ScopeFilterControls({
     [restrictTehsils, allowedTehsils],
   );
 
-  const villageChoices = useMemo(() => {
-    const q = villageQuery.trim().toLowerCase();
-    const withoutAll = villageOptions.filter((v) => v !== "All Villages");
-    const matched = q
-      ? withoutAll.filter((v) => v.toLowerCase().includes(q))
-      : withoutAll;
-    const capped = matched.slice(0, PAGE_SIZE.villages);
-    return {
-      items: ["All Villages", ...capped],
-      truncated: matched.length > PAGE_SIZE.villages,
-      matchCount: matched.length,
-      total: withoutAll.length,
-    };
-  }, [villageOptions, villageQuery]);
-
   return (
-    <Card className="gap-0 overflow-hidden py-0 ring-border/50">
+    <Card className="gap-0 overflow-visible py-0 ring-border/50">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border/60 bg-muted/30 py-4 [.border-b]:pb-4">
         <div className="flex items-start gap-2.5">
           <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
             <SlidersHorizontal className="size-4" />
           </div>
           <div className="min-w-0 space-y-1">
-            <CardTitle className="text-base font-semibold tracking-tight">
-              View settings
-            </CardTitle>
-            <CardDescription className="text-xs leading-relaxed">
-              Choose area and reporting period — status, issues, map, and trends
-              update together.
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base font-semibold tracking-tight">
+                Scope
+              </CardTitle>
+              <LivePulseBadge />
+            </div>
+            <CardDescription className="text-xs">
+              Area and reporting period for this view.
             </CardDescription>
           </div>
         </div>
@@ -441,7 +420,9 @@ function ScopeFilterControls({
             </FieldLabel>
             <Select
               value={filters.tehsil}
-              onValueChange={(v) => onChange({ tehsil: v ?? filters.tehsil })}
+              onValueChange={(v) =>
+                onChange({ tehsil: v ?? filters.tehsil })
+              }
             >
               <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
                 <SelectValue placeholder="Tehsil" />
@@ -455,54 +436,15 @@ function ScopeFilterControls({
               </SelectContent>
             </Select>
           </Field>
-          <Field>
-            <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Village
-              {villageChoices.total > PAGE_SIZE.villages ? (
-                <span className="ml-1 font-normal normal-case tracking-normal">
-                  ({villageChoices.total})
-                </span>
-              ) : null}
-            </FieldLabel>
-            <div className="space-y-1.5">
-              {villageChoices.total > 40 ? (
-                <InputGroup className="h-8 bg-background">
-                  <InputGroupAddon align="inline-start">
-                    <Search className="size-3.5" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    value={villageQuery}
-                    onChange={(e) => setVillageQuery(e.target.value)}
-                    placeholder="Search villages…"
-                    className="text-xs"
-                  />
-                </InputGroup>
-              ) : null}
-              <Select
-                value={filters.village}
-                onValueChange={(v) =>
-                  onChange({ village: v ?? filters.village })
-                }
-              >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
-                  <SelectValue placeholder="Village" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {villageChoices.items.map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                  {villageChoices.truncated ? (
-                    <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                      Showing {PAGE_SIZE.villages} of {villageChoices.matchCount}{" "}
-                      matches — refine search.
-                    </div>
-                  ) : null}
-                </SelectContent>
-              </Select>
-            </div>
-          </Field>
+
+          <SearchableOptionField
+            label="Village"
+            value={filters.village}
+            options={villageOptions}
+            allValue="All Villages"
+            maxResults={PAGE_SIZE.villages}
+            onChange={(village) => onChange({ village })}
+          />
           <Field>
             <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Year
@@ -574,7 +516,6 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
 }: OrganizationKpiPanelProps) {
   const waterSystemsAll = summary.water_systems;
   const solarSystemsAll = summary.solar_systems;
-  const tehsilRows = summary.by_tehsil;
 
   const periodHint = useMemo(() => {
     if (scopeFilters?.month && scopeFilters.month !== "All Months") {
@@ -585,10 +526,6 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
 
   const derived = useMemo(() => {
     const totalSites = summary.ohr_count + summary.solar_facilities;
-    const portfolioData = [
-      { key: "water", name: "Water systems", value: summary.ohr_count },
-      { key: "solar", name: "Solar systems", value: summary.solar_facilities },
-    ].filter((d) => d.value > 0);
     const waterShare =
       totalSites > 0 ? Math.round((100 * summary.ohr_count) / totalSites) : 0;
     const solarShare = totalSites > 0 ? 100 - waterShare : 0;
@@ -607,61 +544,15 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
 
     const waterList = waterSystemsAll ?? [];
     const solarList = solarSystemsAll ?? [];
-    const tehsilList = tehsilRows ?? [];
-
-    const waterByTehsil = new Map<string, ProgramWaterSystemCoverage[]>();
-    for (const s of waterList) {
-      const list = waterByTehsil.get(s.tehsil) ?? [];
-      list.push(s);
-      waterByTehsil.set(s.tehsil, list);
-    }
-    const solarByTehsil = new Map<string, ProgramSolarSystemCoverage[]>();
-    for (const s of solarList) {
-      const list = solarByTehsil.get(s.tehsil) ?? [];
-      list.push(s);
-      solarByTehsil.set(s.tehsil, list);
-    }
-
-    const rankedTehsils = tehsilList
-      .map((row) => {
-        const waterPct =
-          row.water_sites > 0
-            ? Math.round((100 * row.water_sites_logged) / row.water_sites)
-            : null;
-        const solarPct =
-          row.solar_sites > 0
-            ? Math.round((100 * row.solar_sites_logged) / row.solar_sites)
-            : null;
-        const scores = [waterPct, solarPct].filter(
-          (v): v is number => v != null,
-        );
-        const avg =
-          scores.length > 0
-            ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-            : 0;
-        const waterSystems = waterByTehsil.get(row.tehsil) ?? [];
-        const solarSystems = solarByTehsil.get(row.tehsil) ?? [];
-        return {
-          ...row,
-          waterPct,
-          solarPct,
-          avg,
-          tone: progressTone(avg),
-          waterSystems,
-          solarSystems,
-          waterMissing: waterSystems.filter((s) => !s.logged),
-          waterLogged: waterSystems.filter((s) => s.logged),
-          solarMissing: solarSystems.filter((s) => !s.logged),
-          solarLogged: solarSystems.filter((s) => s.logged),
-        };
-      })
-      .sort((a, b) => a.avg - b.avg);
-
     const adminIssues = buildAdminIssues(waterList, solarList, periodHint);
+    const rankedTehsils = buildRankedTehsilCoverage(
+      summary.by_tehsil ?? [],
+      waterList,
+      solarList,
+    );
 
     return {
       totalSites,
-      portfolioData,
       waterShare,
       solarShare,
       waterLogs,
@@ -682,14 +573,10 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
         0,
         summary.solar_facilities - solarSitesLogged,
       ),
-      rankedTehsils,
-      tehsilsBehind: rankedTehsils.filter((r) => r.tone === "risk").length,
-      tehsilsWatch: rankedTehsils.filter((r) => r.tone === "watch").length,
       adminIssues,
+      rankedTehsils,
       highPriorityCount: adminIssues.filter((i) => i.priority === "high")
         .length,
-      showTehsilDemo:
-        tehsilList.length > 0 || waterList.length > 0 || solarList.length > 0,
       scopePhrase:
         scopeFilters?.tehsil === ALL_ASSIGNED_TEHSILS
           ? restrictTehsils
@@ -705,7 +592,6 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
     summary,
     waterSystemsAll,
     solarSystemsAll,
-    tehsilRows,
     periodHint,
     meterCoveragePct,
     scopeFilters?.tehsil,
@@ -716,7 +602,6 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
 
   const {
     totalSites,
-    portfolioData,
     waterShare,
     solarShare,
     waterLogs,
@@ -730,18 +615,15 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
     meterTone,
     waterNotLogged,
     solarNotLogged,
-    rankedTehsils,
-    tehsilsBehind,
-    tehsilsWatch,
     adminIssues,
+    rankedTehsils,
     highPriorityCount,
-    showTehsilDemo,
     scopePhrase,
     villagePhrase,
   } = derived;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in-up">
       {scopeFilters && onScopeChange ? (
         <ScopeFilterControls
           filters={scopeFilters}
@@ -755,12 +637,72 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
         />
       ) : null}
 
-      {/* 1. STATUS */}
-      <section>
+      {/* 1. LIVE FOOTPRINT (map-first) */}
+      {mapSlot ? (
+        <section className="hq-section space-y-3">
+          <InfoSectionHeader
+            kind="map"
+            title="Programme footprint"
+            description={`${scopePhrase}${villagePhrase ? ` · ${villagePhrase}` : ""} · ${periodHint}`}
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <LivePulseBadge syncing={loading} />
+                <Link
+                  to={hqRoutes.sitesProgress}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:underline"
+                >
+                  Sites Progress
+                  <ArrowRight className="size-3" />
+                </Link>
+              </div>
+            }
+          />
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Facility mix
+            </span>
+            <Separator orientation="vertical" className="hidden h-4 sm:block" />
+            <Badge variant="outline" className="gap-1.5 font-normal">
+              <span className="size-2 rounded-full bg-[#2563eb]" />
+              {loading ? "…" : formatExecutiveMetric(summary.ohr_count)} water
+              {!loading && totalSites > 0 ? (
+                <span className="text-muted-foreground">({waterShare}%)</span>
+              ) : null}
+            </Badge>
+            <Badge variant="outline" className="gap-1.5 font-normal">
+              <span className="size-2 rounded-full bg-[#d97706]" />
+              {loading
+                ? "…"
+                : formatExecutiveMetric(summary.solar_facilities)}{" "}
+              solar
+              {!loading && totalSites > 0 ? (
+                <span className="text-muted-foreground">({solarShare}%)</span>
+              ) : null}
+            </Badge>
+            <Badge variant="secondary" className="font-normal">
+              {loading ? "…" : formatExecutiveMetric(totalSites)} total
+            </Badge>
+            {!loading && highPriorityCount > 0 ? (
+              <Badge
+                variant="outline"
+                className="border-rose-200 bg-rose-50 font-normal text-rose-800"
+              >
+                {highPriorityCount} high priority
+              </Badge>
+            ) : null}
+          </div>
+          <div className="w-full">{mapSlot}</div>
+        </section>
+      ) : null}
+
+      <Separator />
+
+      {/* 2. STATUS */}
+      <section className="hq-section">
         <InfoSectionHeader
           kind="status"
-          title="Programme health at a glance"
-          description={`Coverage for ${periodHint}. Open Issues below for system-level follow-up.`}
+          title="Programme health"
+          description={`Logging coverage · ${periodHint}`}
         />
         <div className="grid gap-3 sm:grid-cols-3">
           <HealthMetricCard
@@ -774,10 +716,10 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
               loading
                 ? "Loading…"
                 : waterNotLogged > 0
-                  ? `${formatExecutiveMetric(waterSitesLogged)} of ${formatExecutiveMetric(summary.ohr_count)} systems logged · ${formatExecutiveMetric(waterNotLogged)} open in Issues`
+                  ? `${formatExecutiveMetric(waterSitesLogged)}/${formatExecutiveMetric(summary.ohr_count)} logged · ${formatExecutiveMetric(waterNotLogged)} open`
                   : summary.ohr_count === 0
-                    ? "No water systems in this view"
-                    : "All water systems have submitted a daily log"
+                    ? "No water systems in view"
+                    : "All water systems logged"
             }
           />
           <HealthMetricCard
@@ -791,10 +733,10 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
               loading
                 ? "Loading…"
                 : solarNotLogged > 0
-                  ? `${formatExecutiveMetric(solarSitesLogged)} of ${formatExecutiveMetric(summary.solar_facilities)} systems logged · ${formatExecutiveMetric(solarNotLogged)} open in Issues`
+                  ? `${formatExecutiveMetric(solarSitesLogged)}/${formatExecutiveMetric(summary.solar_facilities)} logged · ${formatExecutiveMetric(solarNotLogged)} open`
                   : summary.solar_facilities === 0
-                    ? "No solar systems in this view"
-                    : "All solar systems have submitted a monthly log"
+                    ? "No solar systems in view"
+                    : "All solar systems logged"
             }
           />
           <HealthMetricCard
@@ -809,151 +751,112 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
             detail={
               loading
                 ? "Loading…"
-                : `${formatExecutiveMetric(summary.bulk_meters)} of ${formatExecutiveMetric(summary.ohr_count)} water systems have an active bulk meter`
+                : `${formatExecutiveMetric(summary.bulk_meters)}/${formatExecutiveMetric(summary.ohr_count)} with active meter`
             }
           />
         </div>
       </section>
 
-      {/* 2. ISSUES */}
-      <AdminIssuesPanel
-        issues={adminIssues}
-        loading={loading}
-        periodHint={periodHint}
-      />
-
-      {/* 3. FOOTPRINT */}
-      <section>
+      {/* 3. ATTENTION SUMMARY */}
+      <section className="hq-section space-y-3">
         <InfoSectionHeader
-          kind="map"
-          title="Programme footprint"
-          description={`Map and facility mix for ${scopePhrase}${villagePhrase ? ` · ${villagePhrase}` : ""} · ${periodHint}. Expand the map only when you need location context.`}
+          kind="issues"
+          title="Attention needed"
+          description={`${periodHint} · sites missing logs`}
+          actions={
+            !loading && adminIssues.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {highPriorityCount > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="border-rose-300 bg-rose-50 font-normal text-rose-800"
+                  >
+                    {highPriorityCount} high
+                  </Badge>
+                ) : null}
+                <Badge variant="outline" className="font-normal">
+                  {adminIssues.length} open
+                </Badge>
+              </div>
+            ) : null
+          }
         />
-        <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
-          {mapSlot ? <div className="lg:col-span-7">{mapSlot}</div> : null}
-
-          <div className={mapSlot ? "lg:col-span-5" : "lg:col-span-12"}>
-            <Card className="gap-0 overflow-hidden py-0 ring-border/50">
-              <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
-                <CardTitle className="text-sm font-semibold">Facility mix</CardTitle>
-                <CardDescription className="text-xs">
-                  Registered water and solar systems in this view
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col justify-center gap-6 py-5">
-                <div className="flex items-center gap-5">
-                  <div className="shrink-0">
-                    {loading ? (
-                      <Skeleton className="size-28 rounded-full" />
-                    ) : totalSites === 0 ? (
-                      <div className="flex size-28 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                        Empty
-                      </div>
-                    ) : (
-                      <ChartContainer
-                        config={portfolioConfig}
-                        className="aspect-square h-[120px] w-[120px]"
-                      >
-                        <PieChart>
-                          <ChartTooltip
-                            content={
-                              <ChartTooltipContent
-                                hideLabel
-                                formatter={(value, name) => (
-                                  <span className="font-medium">
-                                    {String(name)}:{" "}
-                                    {formatKpiValue(Number(value))}
-                                  </span>
-                                )}
-                              />
-                            }
-                          />
-                          <Pie
-                            data={portfolioData}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={34}
-                            outerRadius={48}
-                            paddingAngle={portfolioData.length > 1 ? 3 : 0}
-                            strokeWidth={2}
-                          >
-                            {portfolioData.map((entry) => (
-                              <Cell
-                                key={entry.key}
-                                fill={
-                                  portfolioConfig[
-                                    entry.key as keyof typeof portfolioConfig
-                                  ].color
-                                }
-                              />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ChartContainer>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
-                      {loading ? "—" : formatExecutiveMetric(totalSites)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Total facilities in this view
-                    </p>
-                    {!loading && highPriorityCount > 0 ? (
-                      <p className="text-xs text-rose-700">
-                        {highPriorityCount} high-priority issue
-                        {highPriorityCount === 1 ? "" : "s"} need attention
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="size-2.5 rounded-full bg-[#2563eb]" />
-                      <span className="text-sm font-medium">Water systems</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-base font-semibold tabular-nums">
-                        {loading
-                          ? "—"
-                          : formatExecutiveMetric(summary.ohr_count)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {loading ? "" : `${waterShare}%`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="size-2.5 rounded-full bg-[#d97706]" />
-                      <span className="text-sm font-medium">Solar systems</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-base font-semibold tabular-nums">
-                        {loading
-                          ? "—"
-                          : formatExecutiveMetric(summary.solar_facilities)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {loading ? "" : `${solarShare}%`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        <Card className="gap-0 overflow-hidden py-0 ring-border/50 transition-shadow duration-300 hover:shadow-md">
+          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-lg border",
+                  !loading && adminIssues.length === 0
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700",
+                )}
+              >
+                {!loading && adminIssues.length === 0 ? (
+                  <CheckCircle2 className="size-5" />
+                ) : (
+                  <AlertTriangle className="size-5" />
+                )}
+              </div>
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold tracking-tight">
+                  {loading
+                    ? "Checking open items…"
+                    : adminIssues.length === 0
+                      ? "No open logging issues"
+                      : `${formatExecutiveMetric(adminIssues.length)} sites need follow-up`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {loading
+                    ? "Syncing programme data"
+                    : adminIssues.length === 0
+                      ? "Water and solar logging is complete for this scope."
+                      : `${formatExecutiveMetric(waterNotLogged)} water · ${formatExecutiveMetric(solarNotLogged)} solar · open full register for chase list.`}
+                </p>
+              </div>
+            </div>
+            <Link
+              to={hqRoutes.attention}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Open register
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
       </section>
 
-      {/* 4. PERFORMANCE */}
-      <section>
+      <Separator />
+
+      {/* 4. COVERAGE DEMOGRAPHICS */}
+      <CoverageDemographicsCharts
+        rows={rankedTehsils}
+        loading={loading}
+        waterLogged={waterSitesLogged}
+        waterTotal={summary.ohr_count}
+        solarLogged={solarSitesLogged}
+        solarTotal={summary.solar_facilities}
+        periodHint={periodHint}
+        scope={
+          scopeFilters
+            ? {
+                tehsil: scopeFilters.tehsil,
+                village: scopeFilters.village,
+                year: scopeFilters.year,
+                month: scopeFilters.month,
+              }
+            : { year }
+        }
+      />
+
+      <Separator />
+
+      {/* 5. PERFORMANCE */}
+      <section className="hq-section">
         <InfoSectionHeader
           kind="performance"
           title="Period performance"
-          description={`Submitted logs and coverage rates · ${periodHint}`}
+          description={periodHint}
         />
         <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <ExecutiveKpiRow loading={loading} periodTotals={periodTotals} />
@@ -961,9 +864,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
         <Card className="gap-0 overflow-hidden py-0 ring-border/50">
           <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
             <CardTitle className="text-base font-semibold">Logging progress</CardTitle>
-            <CardDescription>
-              Share of facilities that submitted at least one log
-            </CardDescription>
+            <CardDescription>Share of facilities with at least one log</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-8 py-5 lg:grid-cols-2">
             {loading ? (
@@ -976,10 +877,10 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">Water — daily logs</p>
+                      <p className="text-sm font-medium">Water — daily</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {formatExecutiveMetric(waterSitesLogged)} of{" "}
-                        {formatExecutiveMetric(summary.ohr_count)} systems logged
+                        {formatExecutiveMetric(summary.ohr_count)} logged
                       </p>
                     </div>
                     <ProgressStatusBadge tone={waterTone} />
@@ -987,7 +888,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                   <Progress value={waterLoggedPct} className="h-2" />
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>
-                      {formatExecutiveMetric(waterLogs)} daily logs received
+                      {formatExecutiveMetric(waterLogs)} logs received
                     </span>
                     <span className="font-mono tabular-nums text-foreground">
                       {waterLoggedPct}%
@@ -997,11 +898,10 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">Solar — monthly logs</p>
+                      <p className="text-sm font-medium">Solar — monthly</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {formatExecutiveMetric(solarSitesLogged)} of{" "}
-                        {formatExecutiveMetric(summary.solar_facilities)} systems
-                        logged
+                        {formatExecutiveMetric(summary.solar_facilities)} logged
                       </p>
                     </div>
                     <ProgressStatusBadge tone={solarTone} />
@@ -1009,7 +909,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                   <Progress value={solarLoggedPct} className="h-2" />
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>
-                      {formatExecutiveMetric(solarLogs)} monthly logs received
+                      {formatExecutiveMetric(solarLogs)} logs received
                     </span>
                     <span className="font-mono tabular-nums text-foreground">
                       {solarLoggedPct}%
@@ -1022,23 +922,14 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
         </Card>
       </section>
 
-      {/* 5. COVERAGE BY TEHSIL */}
-      {showTehsilDemo ? (
-        <TehsilCoveragePanel
-          rows={rankedTehsils}
-          loading={loading}
-          periodHint={periodHint}
-          behindCount={tehsilsBehind}
-          watchCount={tehsilsWatch}
-        />
-      ) : null}
+      <Separator />
 
       {/* 6. TRENDS */}
-      <section>
+      <section className="hq-section">
         <InfoSectionHeader
           kind="trends"
           title="Monthly trends"
-          description={`How delivery and energy change month by month in ${year}`}
+          description={year}
         />
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1046,7 +937,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
             <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
               <CardTitle className="text-base font-semibold">Water delivery</CardTitle>
               <CardDescription className="text-xs">
-                Monthly volume (m³) with cumulative year-to-date
+                Volume (m³) and year-to-date
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto py-4">
@@ -1128,7 +1019,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
             <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
               <CardTitle className="text-base font-semibold">Pump runtime</CardTitle>
               <CardDescription className="text-xs">
-                Monthly operating hours across tube wells
+                Operating hours
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto py-4">
@@ -1185,7 +1076,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
           <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
             <CardTitle className="text-base font-semibold">Solar energy balance</CardTitle>
             <CardDescription className="text-xs">
-              Monthly grid export vs import (kWh)
+              Grid export vs import (kWh)
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto py-4">

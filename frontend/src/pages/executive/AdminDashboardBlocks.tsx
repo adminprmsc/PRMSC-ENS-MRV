@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import DataGrid, { type DataGridColumnMeta } from "@/components/DataGrid";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
+import { DetailTile } from "@/components/common/DetailTile";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -178,7 +179,7 @@ const MONTH_SHORT = [
 ];
 
 export function formatAdminDate(iso: string | null | undefined): string {
-  if (!iso) return "Never received";
+  if (!iso) return "—";
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
@@ -192,7 +193,7 @@ export function formatSolarPeriod(
   year: number | null | undefined,
   month: number | null | undefined,
 ): string {
-  if (!year || !month || month < 1 || month > 12) return "Never received";
+  if (!year || !month || month < 1 || month > 12) return "—";
   return `${MONTH_SHORT[month - 1]} ${year}`;
 }
 
@@ -237,10 +238,10 @@ export function buildAdminIssues(
         : operators.map((o) => o.name).join(", ");
     const summary =
       age == null
-        ? `No operational daily log has ever been submitted for this water system.`
+        ? `No daily log on record · ${periodHint}`
         : age >= 7
-          ? `No operational daily log has been submitted in the last ${age} days (period: ${periodHint}).`
-          : `No operational daily log has been submitted in ${periodHint}.`;
+          ? `No daily log · ${age}d since last · ${periodHint}`
+          : `No daily log · ${periodHint}`;
 
     const priority = waterPriority(s);
     issues.push({
@@ -273,7 +274,7 @@ export function buildAdminIssues(
       kind: "solar",
       typeLabel: "Solar",
       title: s.unique_identifier,
-      summary: `No monthly solar energy log has been submitted for ${periodHint}.`,
+      summary: `No monthly log · ${periodHint}`,
       tehsil: s.tehsil || "Unknown",
       village: s.village || "—",
       settlement: s.settlement || "",
@@ -284,7 +285,7 @@ export function buildAdminIssues(
         s.lifetime_last_log_year,
         s.lifetime_last_log_month,
       ),
-      assignedLabel: "Not applicable (solar)",
+      assignedLabel: "—",
       priority,
       priorityLabel:
         priority === "high" ? "High" : priority === "medium" ? "Medium" : "Low",
@@ -338,42 +339,20 @@ function priorityBadge(priority: IssuePriority) {
 
 function IssueRowDetails({ issue }: { issue: AdminIssue }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-      <div className="space-y-3">
-        <p className="text-sm leading-relaxed text-foreground/90">
-          {issue.summary}
-        </p>
-        <dl className="grid gap-3 text-xs sm:grid-cols-3">
-          <div>
-            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
-              Affected area
-            </dt>
-            <dd className="mt-0.5 text-sm">{issue.affectedArea || "—"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
-              Last log received
-            </dt>
-            <dd className="mt-0.5 text-sm">{issue.lastLogLabel}</dd>
-          </div>
-          <div>
-            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
-              Assigned operator
-            </dt>
-            <dd className="mt-0.5 text-sm">{issue.assignedLabel}</dd>
-          </div>
-        </dl>
-      </div>
-      <div className="flex items-start justify-end">
-        <Link
-          to={issue.detailHref}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
-        >
-          View details
-          <ArrowRight className="size-3.5" />
-        </Link>
-      </div>
-    </div>
+    <DetailTile
+      title={issue.kind === "water" ? "Water logging gap" : "Solar logging gap"}
+      summary={issue.summary}
+      actionHref={issue.detailHref}
+      actionLabel="Open site"
+      fields={[
+        { label: "Area", value: issue.affectedArea || "—" },
+        { label: "Last log", value: issue.lastLogLabel },
+        {
+          label: "Operator",
+          value: issue.kind === "solar" ? "—" : issue.assignedLabel,
+        },
+      ]}
+    />
   );
 }
 
@@ -456,7 +435,7 @@ function useIssueGridColumns(): Array<ColumnDef<IssueGridRow, unknown>> {
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
-            Explore
+            Open
             <ArrowRight className="size-3" />
           </Link>
         ),
@@ -498,8 +477,8 @@ export const AdminIssuesPanel = memo(function AdminIssuesPanel({
     <section className="space-y-3">
       <InfoSectionHeader
         kind="issues"
-        title="Action required"
-        description={`Dense issue register for ${periodHint}. Search, filter by tehsil/village, sort, and page — expand a row only when you need the full case.`}
+        title="Attention needed"
+        description={`${periodHint} · sites missing logs`}
         actions={
           !loading && issues.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -536,8 +515,7 @@ export const AdminIssuesPanel = memo(function AdminIssuesPanel({
               </EmptyMedia>
               <EmptyTitle>No open logging issues</EmptyTitle>
               <EmptyDescription>
-                Every water and solar system in this view has at least one log
-                for {periodHint}.
+                All systems logged for {periodHint}.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -545,7 +523,7 @@ export const AdminIssuesPanel = memo(function AdminIssuesPanel({
       ) : (
         <DataGrid
           title="Issue register"
-          description="One row per site needing follow-up. Use village/tehsil filters when the list is large. Export Excel for offline chase lists."
+          description="One row per site. Filter, sort, export."
           rows={gridRows}
           columns={columns}
           exportFileName={`issues-${periodHint.replace(/\s+/g, "-")}`}
@@ -577,6 +555,74 @@ export type TehsilCoverageInput = {
   solarMissing: ProgramSolarSystemCoverage[];
   solarLogged: ProgramSolarSystemCoverage[];
 };
+
+function coverageTone(pct: number | null): TehsilCoverageTone {
+  if (pct == null || !Number.isFinite(pct)) return "neutral";
+  if (pct >= 70) return "good";
+  if (pct >= 40) return "watch";
+  return "risk";
+}
+
+/** Rank tehsils by logging coverage for Sites Progress / coverage grids. */
+export function buildRankedTehsilCoverage(
+  tehsilRows: Array<{
+    tehsil: string;
+    water_sites: number;
+    solar_sites: number;
+    water_logs: number;
+    solar_logs: number;
+    water_sites_logged: number;
+    solar_sites_logged: number;
+  }>,
+  waterSystems: ProgramWaterSystemCoverage[],
+  solarSystems: ProgramSolarSystemCoverage[],
+): TehsilCoverageInput[] {
+  const waterByTehsil = new Map<string, ProgramWaterSystemCoverage[]>();
+  for (const s of waterSystems) {
+    const list = waterByTehsil.get(s.tehsil) ?? [];
+    list.push(s);
+    waterByTehsil.set(s.tehsil, list);
+  }
+  const solarByTehsil = new Map<string, ProgramSolarSystemCoverage[]>();
+  for (const s of solarSystems) {
+    const list = solarByTehsil.get(s.tehsil) ?? [];
+    list.push(s);
+    solarByTehsil.set(s.tehsil, list);
+  }
+
+  return tehsilRows
+    .map((row) => {
+      const waterPct =
+        row.water_sites > 0
+          ? Math.round((100 * row.water_sites_logged) / row.water_sites)
+          : null;
+      const solarPct =
+        row.solar_sites > 0
+          ? Math.round((100 * row.solar_sites_logged) / row.solar_sites)
+          : null;
+      const scores = [waterPct, solarPct].filter(
+        (v): v is number => v != null,
+      );
+      const avg =
+        scores.length > 0
+          ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+          : 0;
+      const waterList = waterByTehsil.get(row.tehsil) ?? [];
+      const solarList = solarByTehsil.get(row.tehsil) ?? [];
+      return {
+        ...row,
+        waterPct,
+        solarPct,
+        avg,
+        tone: coverageTone(avg),
+        waterMissing: waterList.filter((s) => !s.logged),
+        waterLogged: waterList.filter((s) => s.logged),
+        solarMissing: solarList.filter((s) => !s.logged),
+        solarLogged: solarList.filter((s) => s.logged),
+      };
+    })
+    .sort((a, b) => a.avg - b.avg);
+}
 
 type TehsilGridRow = {
   id: string;
@@ -692,66 +738,77 @@ function SystemIdLinks({
 
 function TehsilRowDetails({ row }: { row: TehsilGridRow }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Water systems
-          </p>
-          <Badge variant="outline" className="font-normal">
-            {row.waterMissing.length} missing · {row.waterLogged.length} logged
-          </Badge>
-        </div>
-        {row.waterMissing.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-rose-800">Did not log</p>
-            <SystemIdLinks systems={row.waterMissing} kind="water" />
-          </div>
-        ) : null}
-        {row.waterLogged.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-emerald-800">
-              Logged this period
+    <DetailTile
+      title={row.tehsil}
+      summary={`${row.waterMissing.length + row.solarMissing.length} sites missing · avg ${row.avg}%`}
+      fields={[
+        {
+          label: "Water",
+          value: `${row.waterLogged.length} logged · ${row.waterMissing.length} missing`,
+        },
+        {
+          label: "Solar",
+          value: `${row.solarLogged.length} logged · ${row.solarMissing.length} missing`,
+        },
+        {
+          label: "Coverage",
+          value: `${row.avg}% average`,
+        },
+      ]}
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Water systems
             </p>
-            <SystemIdLinks systems={row.waterLogged} kind="water" />
+            <Badge variant="outline" className="font-normal">
+              {row.waterMissing.length} open
+            </Badge>
           </div>
-        ) : null}
-        {row.water_sites === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No water systems in this tehsil.
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Solar systems
-          </p>
-          <Badge variant="outline" className="font-normal">
-            {row.solarMissing.length} missing · {row.solarLogged.length} logged
-          </Badge>
+          {row.waterMissing.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-rose-800">Missing</p>
+              <SystemIdLinks systems={row.waterMissing} kind="water" />
+            </div>
+          ) : null}
+          {row.waterLogged.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-emerald-800">Logged</p>
+              <SystemIdLinks systems={row.waterLogged} kind="water" />
+            </div>
+          ) : null}
+          {row.water_sites === 0 ? (
+            <p className="text-xs text-muted-foreground">No water systems</p>
+          ) : null}
         </div>
-        {row.solarMissing.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-rose-800">Did not log</p>
-            <SystemIdLinks systems={row.solarMissing} kind="solar" />
-          </div>
-        ) : null}
-        {row.solarLogged.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-emerald-800">
-              Logged this period
+        <div className="space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Solar systems
             </p>
-            <SystemIdLinks systems={row.solarLogged} kind="solar" />
+            <Badge variant="outline" className="font-normal">
+              {row.solarMissing.length} open
+            </Badge>
           </div>
-        ) : null}
-        {row.solar_sites === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No solar systems in this tehsil.
-          </p>
-        ) : null}
+          {row.solarMissing.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-rose-800">Missing</p>
+              <SystemIdLinks systems={row.solarMissing} kind="solar" />
+            </div>
+          ) : null}
+          {row.solarLogged.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-emerald-800">Logged</p>
+              <SystemIdLinks systems={row.solarLogged} kind="solar" />
+            </div>
+          ) : null}
+          {row.solar_sites === 0 ? (
+            <p className="text-xs text-muted-foreground">No solar systems</p>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </DetailTile>
   );
 }
 
@@ -890,7 +947,7 @@ export const TehsilCoveragePanel = memo(function TehsilCoveragePanel({
       <InfoSectionHeader
         kind="demographics"
         title="Coverage by tehsil"
-        description={`Searchable register of logging coverage per tehsil for ${periodHint}. Expand a row for system IDs — use filters and paging when the list is large.`}
+        description={`${periodHint} · logging rate by area`}
         actions={
           !loading && rows.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -937,8 +994,8 @@ export const TehsilCoveragePanel = memo(function TehsilCoveragePanel({
         </Card>
       ) : (
         <DataGrid
-          title="Tehsil coverage register"
-          description="One row per tehsil. Sort by missing or avg % to find lagging areas first. Export Excel for offline reviews."
+          title="Tehsil coverage"
+          description="One row per tehsil. Sort by missing or avg %."
           rows={gridRows}
           columns={columns}
           exportFileName={`tehsil-coverage-${periodHint.replace(/\s+/g, "-")}`}

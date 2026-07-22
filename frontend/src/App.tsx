@@ -44,6 +44,8 @@ import TubewellSubmissionsHub from "./pages/tehsil/submissions/TubewellSubmissio
 import WaterSubmissionDetailsPage from "./pages/tehsil/submissions/WaterSubmissionDetailsPage";
 
 import ExecutiveDashboard from "./pages/executive/ExecutiveDashboard";
+import ExecutiveSitesProgress from "./pages/executive/ExecutiveSitesProgress";
+import ExecutiveAttentionPage from "./pages/executive/ExecutiveAttentionPage";
 import ExecutiveWaterAnalysis from "./pages/executive/ExecutiveWaterAnalysis";
 import ExecutiveSolarAnalysis from "./pages/executive/ExecutiveSolarAnalysis";
 import HqSolarRecordViewPage from "./pages/executive/HqSolarRecordViewPage";
@@ -79,10 +81,7 @@ const VerificationsRedirect = () => {
 const LegacyOperatorSolarRecordRedirect = () => {
   const { recordId } = useParams();
   return (
-    <Navigate
-      to={`/tehsil/solar-energy-data/${recordId ?? ""}`}
-      replace
-    />
+    <Navigate to={`/tehsil/solar-energy-data/${recordId ?? ""}`} replace />
   );
 };
 
@@ -174,6 +173,22 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
                   <ExecutiveDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/sites"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <ExecutiveSitesProgress />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/attention"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <ExecutiveAttentionPage />
                 </ProtectedRoute>
               }
             />

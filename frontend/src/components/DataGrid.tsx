@@ -39,7 +39,7 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Card,
@@ -49,14 +49,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Empty,
   EmptyDescription,
@@ -72,6 +65,13 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -265,8 +265,8 @@ export default function DataGrid<T extends Record<string, unknown>>({
 
   return (
     <TooltipProvider>
-      <Card className="gap-0 py-0 ring-border/50">
-        <CardHeader className="gap-4 border-b border-border/60 bg-muted/30 py-4 [.border-b]:pb-4">
+      <Card className="gap-0 overflow-hidden py-0 shadow-sm">
+        <CardHeader className="gap-4 border-b bg-muted/20 py-4 [.border-b]:pb-4">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-base font-semibold tracking-tight">
@@ -331,39 +331,44 @@ export default function DataGrid<T extends Record<string, unknown>>({
                 </Button>
               ) : null}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 gap-1.5 bg-background"
-                    >
-                      <SlidersHorizontal className="size-3.5" />
-                      Columns
-                      <ChevronDown className="size-3.5 opacity-60" />
-                    </Button>
-                  }
-                />
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="max-h-64 overflow-y-auto">
-                    {leafColumns.map((col) => (
-                      <DropdownMenuCheckboxItem
-                        key={col.id}
-                        checked={col.getIsVisible()}
-                        onCheckedChange={(checked) => {
-                          col.toggleVisibility(checked === true);
-                        }}
-                      >
-                        {getColumnLabel(col)}
-                      </DropdownMenuCheckboxItem>
-                    ))}
+              <Popover>
+                <PopoverTrigger
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "h-9 gap-1.5 bg-background",
+                  )}
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                  Columns
+                  <ChevronDown className="size-3.5 opacity-60" />
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-56 p-2">
+                  <PopoverHeader className="px-1.5 pb-1.5">
+                    <PopoverTitle className="text-xs font-medium text-muted-foreground">
+                      Toggle columns
+                    </PopoverTitle>
+                  </PopoverHeader>
+                  <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                    {leafColumns.map((col) => {
+                      const visible = col.getIsVisible();
+                      return (
+                        <label
+                          key={col.id}
+                          className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted"
+                        >
+                          <Checkbox
+                            checked={visible}
+                            onCheckedChange={(checked) => {
+                              col.toggleVisibility(checked === true);
+                            }}
+                          />
+                          <span className="truncate">{getColumnLabel(col)}</span>
+                        </label>
+                      );
+                    })}
                   </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </PopoverContent>
+              </Popover>
 
               <Button
                 type="button"
@@ -451,8 +456,8 @@ export default function DataGrid<T extends Record<string, unknown>>({
           </div>
         ) : null}
 
-        <Table className="min-w-[960px]">
-          <TableHeader className="sticky top-0 z-10 bg-muted/40 [&_tr]:border-border/60">
+        <Table className="enterprise-table min-w-[960px]">
+          <TableHeader className="sticky top-0 z-10 bg-muted/60 [&_tr]:border-border/60">
             {table.getHeaderGroups().map((hg) => (
               <TableRow
                 key={hg.id}
@@ -466,7 +471,7 @@ export default function DataGrid<T extends Record<string, unknown>>({
                   return (
                     <TableHead
                       key={h.id}
-                      className="h-11 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      className="h-10 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       {h.isPlaceholder ? null : (
                         <button
@@ -496,7 +501,7 @@ export default function DataGrid<T extends Record<string, unknown>>({
                   <TableRow
                     data-state={isExpanded ? "selected" : undefined}
                     className={cn(
-                      "border-border/50",
+                      "border-border/50 transition-colors duration-200",
                       isExpanded && "bg-primary/[0.04]",
                     )}
                   >
@@ -536,7 +541,7 @@ export default function DataGrid<T extends Record<string, unknown>>({
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
                         key={cell.id}
-                        className="px-3 py-2.5 text-xs text-foreground/90"
+                        className="px-3 py-3 text-sm text-foreground/90"
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
@@ -546,10 +551,10 @@ export default function DataGrid<T extends Record<string, unknown>>({
                     ))}
                   </TableRow>
                   {renderRowDetails && isExpanded ? (
-                    <TableRow className="hover:bg-transparent">
+                    <TableRow className="border-border/40 hover:bg-transparent">
                       <TableCell
                         colSpan={row.getVisibleCells().length + 1}
-                        className="bg-muted/30 px-4 py-4 whitespace-normal"
+                        className="bg-muted/25 px-3 py-3 whitespace-normal"
                       >
                         {renderRowDetails(row.original)}
                       </TableCell>

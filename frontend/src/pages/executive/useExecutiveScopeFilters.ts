@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { TEHSIL_OPTIONS } from "@/utils/locationData";
 import { useAuth } from "@/contexts/AuthContext";
 import { isExecutiveRole } from "@/constants/roles";
@@ -15,6 +16,7 @@ export function useExecutiveScopeFilters(
   locationSites: RegisteredLocationSite[] = [],
 ) {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const allowedTehsils = useMemo(() => {
     const t = (user?.tehsils ?? [])
@@ -36,22 +38,27 @@ export function useExecutiveScopeFilters(
         ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
         : ALL_ASSIGNED_TEHSILS;
 
-  const [filters, setFilters] = useState<ExecutiveScopeFilters>(() => ({
-    tehsil: initialTehsil,
-    village: ALL_VILLAGES,
-    settlement: ALL_SETTLEMENTS,
-    month: "All Months",
-    year: "2026",
-  }));
-  const [activeFilters, setActiveFilters] = useState<ExecutiveScopeFilters>(
-    () => ({
-      tehsil: initialTehsil,
-      village: ALL_VILLAGES,
+  const seedFilters = useMemo((): ExecutiveScopeFilters => {
+    const urlTehsil = searchParams.get("tehsil")?.trim() || "";
+    const urlVillage = searchParams.get("village")?.trim() || "";
+    const urlYear = searchParams.get("year")?.trim() || "";
+    const urlMonth = searchParams.get("month")?.trim() || "";
+    const tehsilOk =
+      urlTehsil === ALL_ASSIGNED_TEHSILS ||
+      allowedTehsils.includes(urlTehsil) ||
+      (!restrictTehsils && urlTehsil.length > 0);
+    return {
+      tehsil: tehsilOk ? urlTehsil : initialTehsil,
+      village: urlVillage || ALL_VILLAGES,
       settlement: ALL_SETTLEMENTS,
-      month: "All Months",
-      year: "2026",
-    }),
-  );
+      month: urlMonth || "All Months",
+      year: urlYear || "2026",
+    };
+  }, [searchParams, allowedTehsils, restrictTehsils, initialTehsil]);
+
+  const [filters, setFilters] = useState<ExecutiveScopeFilters>(seedFilters);
+  const [activeFilters, setActiveFilters] =
+    useState<ExecutiveScopeFilters>(seedFilters);
 
   const cascade = useMemo(
     () =>

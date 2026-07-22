@@ -21,6 +21,7 @@ import {
   Sun,
 } from "lucide-react";
 
+import { LivePulseBadge } from "@/components/LivePulseBadge";
 import {
   Card,
   CardContent,
@@ -352,6 +353,11 @@ type SystemsMapCardProps = {
   summaryCounts?: { water: number; solar: number } | null | undefined;
   /** Shorter preview with expand-to-fullscreen option (COO dashboard). */
   compact?: boolean;
+  /**
+   * `hero` — full-width Command Center map (always open, taller, live pulse).
+   * Default / compact — collapsible inline map.
+   */
+  variant?: "default" | "hero";
   /** Human-readable scope — shown on map and kept in sync with KPI filters. */
   scopeLabel?: string | undefined;
   /** Parent KPI reload in progress — badge counts stay on summary values. */
@@ -508,19 +514,23 @@ export default function SystemsMapCard({
   allowedTehsils = [],
   summaryCounts,
   compact = false,
+  variant = "default",
   scopeLabel,
   dataSyncing = false,
   waterCoverage = [],
   solarCoverage = [],
   defaultCollapsed,
 }: SystemsMapCardProps) {
+  const isHero = variant === "hero";
   const mapRef = useRef<L.Map | null>(null);
   const expandedMapRef = useRef<L.Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [mapOpen, setMapOpen] = useState(
-    defaultCollapsed === undefined ? !compact : !defaultCollapsed,
-  );
+  const [mapOpen, setMapOpen] = useState(() => {
+    if (isHero) return true;
+    if (defaultCollapsed === undefined) return !compact;
+    return !defaultCollapsed;
+  });
   const [selected, setSelected] = useState<GeoPoint | null>(null);
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [pointsTruncated, setPointsTruncated] = useState(0);
@@ -731,7 +741,9 @@ export default function SystemsMapCard({
     window.setTimeout(() => expandedMapRef.current?.invalidateSize(), 450);
   }, []);
 
-  const previewHeight = "h-[min(52vh,420px)] min-h-[280px]";
+  const previewHeight = isHero
+    ? "h-[min(58vh,520px)] min-h-[360px]"
+    : "h-[min(52vh,420px)] min-h-[280px]";
 
   return (
     <>
@@ -742,13 +754,20 @@ export default function SystemsMapCard({
               <MapPin className="size-4" />
             </div>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-sm font-semibold tracking-tight">
-                Facility map
-              </CardTitle>
-              <CardDescription className="text-xs leading-relaxed">
-                {mapOpen
-                  ? "Select a pin for site summary. Use Explore more for full history."
-                  : "Collapsed so status and issues stay primary — expand when you need locations."}
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-sm font-semibold tracking-tight">
+                  {isHero ? "Live footprint" : "Facility map"}
+                </CardTitle>
+                {isHero ? (
+                  <LivePulseBadge syncing={mapBusy} />
+                ) : null}
+              </div>
+              <CardDescription className="text-xs">
+                {isHero
+                  ? "Select a pin for status, then open the site."
+                  : mapOpen
+                    ? "Select a pin for site summary."
+                    : "Expand to view facility locations."}
               </CardDescription>
             </div>
           </div>
@@ -767,28 +786,30 @@ export default function SystemsMapCard({
               <Sun className="size-3 text-amber-600" />
               {mapBusy ? "…" : badgeCounts.solar} solar
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1 px-2"
-              onClick={() => {
-                setMapOpen((v) => !v);
-                if (mapOpen) setSelected(null);
-              }}
-              aria-expanded={mapOpen}
-            >
-              {mapOpen ? (
-                <>
-                  <ChevronUp className="size-3.5" />
-                  <span className="hidden sm:inline">Hide map</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="size-3.5" />
-                  <span className="hidden sm:inline">Show map</span>
-                </>
-              )}
-            </Button>
+            {!isHero ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 px-2"
+                onClick={() => {
+                  setMapOpen((v) => !v);
+                  if (mapOpen) setSelected(null);
+                }}
+                aria-expanded={mapOpen}
+              >
+                {mapOpen ? (
+                  <>
+                    <ChevronUp className="size-3.5" />
+                    <span className="hidden sm:inline">Hide map</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="size-3.5" />
+                    <span className="hidden sm:inline">Show map</span>
+                  </>
+                )}
+              </Button>
+            ) : null}
             {mapOpen ? (
               <Button
                 variant="outline"
@@ -812,8 +833,8 @@ export default function SystemsMapCard({
               heightClass={previewHeight}
               onReady={onMapReady}
               scopeLabel={scopeLabel}
-              compact={compact}
-              lightBasemap={compact}
+              compact={compact && !isHero}
+              lightBasemap={compact || isHero}
               selectedId={selected?.id ?? null}
               onSelect={setSelected}
             />

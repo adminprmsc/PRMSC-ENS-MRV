@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
-  BarChart3,
   CalendarClock,
   ClipboardList,
   Droplets,
@@ -12,10 +11,13 @@ import {
   GraduationCap,
   KeyRound,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Menu,
+  PanelLeft,
+  Radio,
+  ShieldAlert,
   Sun,
-  Table2,
   UserPlus,
   Users,
   User as UserIcon,
@@ -25,8 +27,22 @@ import {
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { HQ_DASHBOARD, adminRoutes, hqRoutes, tehsilRoutes, trainingRoutes } from "../constants/routes";
-import { accountRoutes } from "../constants/routes";
+import { Separator } from "../components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
+import { AppBreadcrumbs } from "../components/layout/AppBreadcrumbs";
+import {
+  HQ_DASHBOARD,
+  accountRoutes,
+  adminRoutes,
+  hqRoutes,
+  tehsilRoutes,
+  trainingRoutes,
+} from "../constants/routes";
 import {
   canOnboardOperators,
   isExecutiveRole,
@@ -51,14 +67,26 @@ type NavItem = {
 type NavSection = {
   title: string;
   items: NavItem[];
+  /** Visual emphasis for operational callouts (e.g. Attention). */
+  emphasis?: "alert";
 };
 
-const navLinkClass = (isActive: boolean) =>
+const SIDEBAR_EXPANDED = 272;
+const SIDEBAR_RAIL = 72;
+
+const navLinkClass = (isActive: boolean, alert = false, collapsed = false) =>
   cn(
-    "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+    "relative flex items-center rounded-md text-[13px] font-medium transition-all duration-200",
+    collapsed
+      ? "justify-center px-0 py-2.5"
+      : "gap-2.5 px-3 py-2",
     isActive
-      ? "bg-sidebar-active text-white"
-      : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
+      ? alert
+        ? "bg-rose-500/20 font-medium text-rose-100 ring-1 ring-rose-400/30"
+        : "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+      : alert
+        ? "text-rose-100/85 hover:bg-rose-500/15 hover:text-rose-50"
+        : "text-sidebar-muted hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
   );
 
 function titleCaseLabel(value: string): string {
@@ -92,7 +120,8 @@ function sidebarIdentity(
     const scopeKey = scope.replace(/\s/g, "").toUpperCase();
     const nameLooksLikeRole =
       /tehsil\s*manager/i.test(name) ||
-      (scopeKey.length > 0 && name.replace(/\s/g, "").toUpperCase().includes(scopeKey));
+      (scopeKey.length > 0 &&
+        name.replace(/\s/g, "").toUpperCase().includes(scopeKey));
 
     if (nameLooksLikeRole && scope) {
       return { primary: scope, secondary: "Tehsil operator" };
@@ -122,6 +151,7 @@ const MainLayout = () => {
   const [certificateAlertCount, setCertificateAlertCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -142,28 +172,44 @@ const MainLayout = () => {
         items: [
           {
             path: HQ_DASHBOARD,
-            icon: <BarChart3 className="size-4 shrink-0 opacity-90" />,
-            label: "Organization KPI",
+            icon: <Radio className="size-4 shrink-0 opacity-90" />,
+            label: "Command Center",
             end: true,
           },
         ],
       });
       sections.push({
-        title: "Water",
+        title: "Attention",
+        emphasis: "alert",
         items: [
           {
-            path: hqRoutes.waterAnalysis,
-            icon: <Table2 className="size-4 shrink-0 opacity-90" />,
-            label: "Water analysis",
+            path: hqRoutes.attention,
+            icon: <ShieldAlert className="size-4 shrink-0 opacity-90" />,
+            label: "Attention needed",
           },
         ],
       });
       sections.push({
-        title: "Solar",
+        title: "Monitoring",
         items: [
           {
+            path: hqRoutes.sitesProgress,
+            icon: <ListChecks className="size-4 shrink-0 opacity-90" />,
+            label: "Sites Progress",
+          },
+        ],
+      });
+      sections.push({
+        title: "Analysis",
+        items: [
+          {
+            path: hqRoutes.waterAnalysis,
+            icon: <Droplets className="size-4 shrink-0 opacity-90" />,
+            label: "Water analysis",
+          },
+          {
             path: hqRoutes.solarAnalysis,
-            icon: <Table2 className="size-4 shrink-0 opacity-90" />,
+            icon: <Sun className="size-4 shrink-0 opacity-90" />,
             label: "Solar analysis",
           },
         ],
@@ -359,153 +405,278 @@ const MainLayout = () => {
     };
   }, [tehsilMgr]);
 
-  const sidebarContent = (
+  const renderSidebar = (collapsed: boolean) => (
     <>
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
-        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1">
+      <div
+        className={cn(
+          "flex items-center border-b border-sidebar-border py-4",
+          collapsed ? "justify-center px-2" : "gap-3 px-5",
+        )}
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sidebar-accent p-1 ring-1 ring-sidebar-border/50">
           <img
             src={companyLogo}
             alt="MRV"
             className="h-full w-full object-contain"
           />
         </div>
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold tracking-tight text-white">
-            MRV System
-          </h2>
-          <p className="truncate text-[11px] text-sidebar-muted">
-            Monitoring & Verification
-          </p>
-        </div>
+        {!collapsed ? (
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+              MRV System
+            </h2>
+            <p className="truncate text-[11px] text-sidebar-foreground/65">
+              Monitoring & Verification
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+      <nav
+        className={cn(
+          "flex flex-1 flex-col overflow-y-auto py-3",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
         {navSections.map((section, sectionIdx) => (
           <div
             key={section.title}
-            className={cn(sectionIdx > 0 && "mt-5")}
+            className={cn(
+              sectionIdx > 0 && (collapsed ? "mt-3" : "mt-5"),
+              section.emphasis === "alert" &&
+                (collapsed
+                  ? "rounded-lg bg-rose-500/10 py-1"
+                  : "rounded-lg border border-rose-400/25 bg-rose-500/10 px-1.5 py-2.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"),
+            )}
           >
-            <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted/80">
-              {section.title}
-            </p>
+            {!collapsed ? (
+              <p
+                className={cn(
+                  "mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider",
+                  section.emphasis === "alert"
+                    ? "text-rose-200/80"
+                    : "text-sidebar-foreground/50",
+                )}
+              >
+                {section.title}
+              </p>
+            ) : sectionIdx > 0 ? (
+              <Separator className="mb-2 bg-sidebar-border/80" />
+            ) : null}
             <div className="flex flex-col gap-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={`${section.title}-${item.path}`}
-                  to={item.path}
-                  end={item.end ?? false}
-                  className={({ isActive }) => navLinkClass(isActive)}
-                >
-                  {item.icon}
-                  <span className="truncate">{item.label}</span>
-                  {item.badge ? (
-                    <Badge
-                      variant="destructive"
-                      className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
+              {section.items.map((item) => {
+                if (!collapsed) {
+                  return (
+                    <NavLink
+                      key={`${section.title}-${item.path}`}
+                      to={item.path}
+                      end={item.end ?? false}
+                      className={({ isActive }) =>
+                        navLinkClass(isActive, section.emphasis === "alert", false)
+                      }
                     >
-                      {item.badge}
-                    </Badge>
-                  ) : null}
-                </NavLink>
-              ))}
+                      {item.icon}
+                      <span className="truncate">{item.label}</span>
+                      {item.badge ? (
+                        <Badge
+                          variant="destructive"
+                          className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
+                        >
+                          {item.badge}
+                        </Badge>
+                      ) : null}
+                    </NavLink>
+                  );
+                }
+
+                return (
+                  <Tooltip key={`${section.title}-${item.path}`}>
+                    <TooltipTrigger
+                      render={
+                        <NavLink
+                          to={item.path}
+                          end={item.end ?? false}
+                          className={({ isActive }) =>
+                            navLinkClass(
+                              isActive,
+                              section.emphasis === "alert",
+                              true,
+                            )
+                          }
+                        />
+                      }
+                    >
+                      {item.icon}
+                      {item.badge ? (
+                        <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
+                      ) : null}
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={10}>
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
             </div>
           </div>
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
-        <div className="mb-2 flex items-center gap-2.5 rounded-md px-1 py-1">
-          <Avatar className="size-8 shrink-0">
-            <AvatarFallback className="bg-sidebar-active text-[11px] font-semibold text-white">
-              {userInitials || <UserIcon className="size-3.5" />}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-tight text-white">
-              {identity.primary}
-            </p>
-            <p className="truncate text-[11px] leading-tight text-sidebar-muted">
-              {identity.secondary}
-            </p>
+      <div
+        className={cn(
+          "border-t border-sidebar-border",
+          collapsed ? "p-2" : "p-3",
+        )}
+      >
+        {!collapsed ? (
+          <div className="mb-2 flex items-center gap-2.5 rounded-md px-1 py-1">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-sidebar-primary text-[11px] font-semibold text-sidebar-primary-foreground">
+                {userInitials || <UserIcon className="size-3.5" />}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium leading-tight text-sidebar-foreground">
+                {identity.primary}
+              </p>
+              <p className="truncate text-[11px] leading-tight text-sidebar-muted">
+                {identity.secondary}
+              </p>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-[13px] font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
-          <LogOut className="size-4 shrink-0" />
-          Sign out
-        </button>
+        ) : (
+          <div className="mb-2 flex justify-center">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-sidebar-primary text-[11px] font-semibold text-sidebar-primary-foreground">
+                {userInitials || <UserIcon className="size-3.5" />}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        )}
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center justify-center rounded-md px-2 py-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  aria-label="Sign out"
+                />
+              }
+            >
+              <LogOut className="size-4 shrink-0" />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={10}>
+              Sign out
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-[13px] font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <LogOut className="size-4 shrink-0" />
+            Sign out
+          </button>
+        )}
       </div>
     </>
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-muted/40">
-      <AnimatePresence mode="wait">
-        {isSidebarOpen && (
-          <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 272, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            className="relative hidden h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
-          >
-            {sidebarContent}
-          </motion.aside>
-        )}
-      </AnimatePresence>
+    <TooltipProvider>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Desktop: expanded or icon rail */}
+        <motion.aside
+          initial={false}
+          animate={{ width: isSidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_RAIL }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="relative hidden h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
+        >
+          {renderSidebar(!isSidebarOpen)}
+        </motion.aside>
 
-      {/* Mobile drawer */}
-      {isSidebarOpen ? (
-        <aside className="fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:hidden">
-          {sidebarContent}
-        </aside>
-      ) : null}
-      {isSidebarOpen ? (
-        <button
-          type="button"
-          aria-label="Close menu"
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border/80 bg-card px-4 md:px-6">
-          <Button
+        {/* Mobile drawer */}
+        {isSidebarOpen ? (
+          <aside className="fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:hidden">
+            {renderSidebar(false)}
+          </aside>
+        ) : null}
+        {isSidebarOpen ? (
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            {isSidebarOpen ? (
-              <X className="size-4" />
-            ) : (
-              <Menu className="size-4" />
-            )}
-          </Button>
+            aria-label="Close menu"
+            className="fixed inset-0 z-30 bg-black/40 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        ) : null}
 
-          <div className="flex items-center gap-2 rounded-full border border-border bg-muted/40 py-1 pr-3 pl-1">
-            <Avatar size="sm">
-              <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-                {userInitials || <UserIcon className="size-3" />}
-              </AvatarFallback>
-            </Avatar>
-            <span className="hidden max-w-[160px] truncate text-sm font-medium text-foreground sm:inline">
-              {identity.primary}
-            </span>
-          </div>
-        </header>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border/80 bg-background/80 px-4 backdrop-blur-md md:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen((prev) => !prev)}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label={
+                  isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"
+                }
+              >
+                <span className="md:hidden">
+                  {isSidebarOpen ? (
+                    <X className="size-4" />
+                  ) : (
+                    <Menu className="size-4" />
+                  )}
+                </span>
+                <PanelLeft className="hidden size-4 md:block" />
+              </Button>
 
-        <main className="flex-1 overflow-y-auto bg-muted/30 p-5 md:p-8">
-          <div className="mx-auto w-full max-w-[1600px]">
-            <Outlet />
-          </div>
-        </main>
+              <Separator
+                orientation="vertical"
+                className="hidden h-4 sm:block"
+              />
+
+              <AppBreadcrumbs
+                sections={navSections}
+                className="min-w-0 flex-1 overflow-hidden"
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border/80 bg-card py-1 pr-3 pl-1 shadow-sm">
+              <Avatar size="sm">
+                <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+                  {userInitials || <UserIcon className="size-3" />}
+                </AvatarFallback>
+              </Avatar>
+              <span className="hidden max-w-[160px] truncate text-sm font-medium text-foreground sm:inline">
+                {identity.primary}
+              </span>
+            </div>
+          </header>
+
+          <main className="app-shell-bg flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-7xl">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <Outlet />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 
