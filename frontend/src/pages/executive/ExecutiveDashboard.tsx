@@ -3,7 +3,7 @@ import { roleDisplayLabel } from "../../constants/roles";
 import { useAuth } from "../../contexts/AuthContext";
 
 /**
- * Manager Operations (SUPER_ADMIN) — HQ KPI for assigned review tehsils only.
+ * Manager Operations (SUPER_ADMIN) — HQ Command Center for assigned review tehsils.
  */
 const ExecutiveDashboard = () => {
   const { user } = useAuth();
@@ -11,13 +11,13 @@ const ExecutiveDashboard = () => {
   const tehsilCount = user?.tehsils?.length ?? 0;
   const scope =
     tehsilCount > 0
-      ? `${tehsilCount} assigned tehsil${tehsilCount === 1 ? "" : "s"}.`
-      : "No review tehsils assigned yet — contact your platform administrator.";
+      ? `${tehsilCount} tehsil${tehsilCount === 1 ? "" : "s"} assigned`
+      : "No tehsils assigned";
 
   return (
     <ProgramDashboard
-      headingTitle="Operations overview"
-      headingDescription={`${scope} Progress, logging readiness, and tehsil follow-up for your assigned area · ${subtitle}`}
+      headingTitle="Command Center"
+      headingDescription={`${scope} · ${subtitle}`}
       managementView
       mapPosition="top"
       showAnomalies={false}

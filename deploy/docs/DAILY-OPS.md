@@ -32,7 +32,35 @@ cd ~/PRMSC-ENS-MRV
 
 ## 2. Take a DB backup on the VM, then copy it to your Mac
 
-### Step A — create the dump (on the VM)
+### Which terminal am I in?
+
+| Prompt looks like | You are on | Safe for `scp` to Mac? |
+| --- | --- | --- |
+| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | Yes |
+| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | **No** — `~/Downloads` is on the server |
+
+If you run `scp` after the `adminprms98@prmsc-ens-mrv` prompt, the file stays on the VM. Your Mac Finder will still show old Jul 16 files.
+
+### Easiest way (Mac only)
+
+From your **Mac** project folder (not inside SSH):
+
+```bash
+cd /path/to/PRMSC-MRV
+chmod +x deploy/scripts/pull-backup-to-mac.sh
+./deploy/scripts/pull-backup-to-mac.sh
+```
+
+This downloads the newest dump to `~/Downloads/prmsc-backups/` and opens Finder.
+
+### Manual way (two terminals)
+
+| Where | What to do |
+| --- | --- |
+| **Terminal A (SSH → VM)** | Create the dump |
+| **Terminal B (Mac only)** | Download the dump |
+
+**Step A — VM**
 
 ```bash
 cd ~/PRMSC-ENS-MRV
@@ -40,32 +68,22 @@ cd ~/PRMSC-ENS-MRV
 ls -lh backups/
 ```
 
-File name looks like: `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump`
+You should see a new file like `prmsc_mrv_20260721_071840.dump` (~400KB+ is normal — custom format is compressed).
 
-### Step B — download to your Mac (run on the Mac, not the VM)
-
-> **zsh note:** quote the remote path so `*` is not expanded locally.
-
-```bash
-mkdir -p ~/Downloads/prmsc-backups
-
-scp 'adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump' ~/Downloads/prmsc-backups/
-```
-
-Download only the newest dump:
+**Step B — Mac** (type `exit` first if you are still in SSH)
 
 ```bash
 mkdir -p ~/Downloads/prmsc-backups
 
 LATEST=$(ssh adminprms98@101.50.86.169 'ls -1t ~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump | head -1')
+echo "Downloading: $LATEST"
 scp "adminprms98@101.50.86.169:$LATEST" ~/Downloads/prmsc-backups/
-```
 
-Confirm on Mac:
-
-```bash
 ls -lh ~/Downloads/prmsc-backups/
+open ~/Downloads/prmsc-backups
 ```
+
+You should see today’s file (e.g. `prmsc_mrv_20260721_....dump`). ~400–450 KB is normal for this database.
 
 ---
 
@@ -127,14 +145,14 @@ docker compose --env-file .env.docker up -d --build frontend
 ssh adminprms98@101.50.86.169
 ```
 
-**Backup on VM + pull dump to Mac** (two terminals / two steps)
+**Backup on VM + pull dump to Mac**
 
 ```bash
 # VM
 cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
 
-# Mac
-mkdir -p ~/Downloads/prmsc-backups && scp 'adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump' ~/Downloads/prmsc-backups/
+# Mac (exit SSH first)
+./deploy/scripts/pull-backup-to-mac.sh
 ```
 
 **Daily deploy on VM**
@@ -155,40 +173,3 @@ alias mrv-deploy='cd ~/PRMSC-ENS-MRV && git pull origin main && docker compose -
 
 - [../VM-OPS.md](../VM-OPS.md) — full production operations
 - [../README.md](../README.md) — first-time VM setup
-
-cd ~/PRMSC-ENS-MRV
-git pull origin main
-docker compose --env-file .env.docker up -d --build
-curl -s http://localhost/api/health
-
-mkdir -p ~/Downloads/prmsc-backups
-
-scp 'adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc*mrv*\*.dump' ~/Downloads/prmsc-backups/
-
-ls -lh ~/Downloads/prmsc-backups/
-
-zsh is expanding the \* on your Mac before scp runs. Quote the remote path, and run scp only from your Mac.
-
-> **zsh note:** quote the remote path so `*` is not expanded locally.
-
-```bash
-
-# Mac
-mkdir -p ~/Downloads/prmsc-backups && scp adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump ~/Downloads/prmsc-backups/
-mkdir -p ~/Downloads/prmsc-backups && scp 'adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump' ~/Downloads/prmsc-backups/
-```
-
-Two separate issues:
-
-Mac (zsh) — _ was expanded locally → quote the remote path
-VM — scp must run on your Mac, not inside the SSH session
-On your Mac only (terminal 6)
-mkdir -p ~/Downloads/prmsc-backups
-scp 'adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc*mrv*_.dump' ~/Downloads/prmsc-backups/
-ls -lh ~/Downloads/prmsc-backups/
-Or just the newest file:
-
-mkdir -p ~/Downloads/prmsc-backups
-LATEST=$(ssh adminprms98@101.50.86.169 'ls -1t ~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump | head -1')
-scp "adminprms98@101.50.86.169:$LATEST" ~/Downloads/prmsc-backups/
-You can leave the VM SSH session open; download from a local Mac terminal.

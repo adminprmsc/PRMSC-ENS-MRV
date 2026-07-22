@@ -1,3 +1,4 @@
+export { AppBreadcrumbs } from "./AppBreadcrumbs";
 export { AppLoading } from "./AppLoading";
 export { AuthBrandingPanel, AuthLayout, AuthMobileBrand } from "./AuthLayout";
 export { PageHeader } from "./PageHeader";

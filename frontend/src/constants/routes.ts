@@ -49,6 +49,8 @@ export const HQ_DASHBOARD = "/hq";
 
 export const hqRoutes = {
   dashboard: HQ_DASHBOARD,
+  sitesProgress: `${HQ_DASHBOARD}/sites`,
+  attention: `${HQ_DASHBOARD}/attention`,
   waterAnalysis: `${HQ_DASHBOARD}/water`,
   solarAnalysis: `${HQ_DASHBOARD}/solar`,
   waterSystem: (id: string) =>

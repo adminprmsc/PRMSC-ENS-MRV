@@ -1,40 +1,17 @@
 import type { ReactNode } from "react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type StatAccent = "blue" | "green" | "amber" | "slate" | "violet";
 
-const accentStyles: Record<
-  StatAccent,
-  { border: string; iconBg: string; iconText: string }
-> = {
-  blue: {
-    border: "border-l-blue-500",
-    iconBg: "bg-blue-50",
-    iconText: "text-blue-600",
-  },
-  green: {
-    border: "border-l-emerald-500",
-    iconBg: "bg-emerald-50",
-    iconText: "text-emerald-600",
-  },
-  amber: {
-    border: "border-l-amber-500",
-    iconBg: "bg-amber-50",
-    iconText: "text-amber-600",
-  },
-  slate: {
-    border: "border-l-slate-400",
-    iconBg: "bg-slate-100",
-    iconText: "text-slate-600",
-  },
-  violet: {
-    border: "border-l-violet-500",
-    iconBg: "bg-violet-50",
-    iconText: "text-violet-600",
-  },
+const accentStyles: Record<StatAccent, string> = {
+  blue: "bg-blue-500/10 text-blue-700",
+  green: "bg-emerald-500/10 text-emerald-700",
+  amber: "bg-amber-500/10 text-amber-700",
+  slate: "bg-primary/10 text-primary",
+  violet: "bg-violet-500/10 text-violet-700",
 };
 
 type StatCardProps = {
@@ -48,6 +25,7 @@ type StatCardProps = {
   accent?: StatAccent;
 };
 
+/** WFM-style KPI tile: left primary rail, uppercase label, compact icon chip. */
 export function StatCard({
   label,
   value,
@@ -58,47 +36,44 @@ export function StatCard({
   className,
   accent = "slate",
 }: StatCardProps) {
-  const styles = accentStyles[accent];
-
   return (
     <Card
       className={cn(
-        "enterprise-card-shadow border-l-4",
-        styles.border,
+        "relative overflow-hidden shadow-sm ring-1 ring-border/80",
         className,
       )}
     >
-      <CardContent className="flex items-start justify-between gap-4 p-5">
-        <div className="min-w-0 space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </p>
-          {loading ? (
-            <Skeleton className="mt-2 h-8 w-16" />
-          ) : (
-            <div
-              className={cn(
-                "text-3xl font-semibold tabular-nums tracking-tight text-foreground",
-                valueClassName,
-              )}
-            >
-              {value}
-            </div>
-          )}
-          {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          ) : null}
-        </div>
+      <div className="absolute inset-y-0 left-0 w-1 bg-primary/70" />
+      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-2 pl-5">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </CardTitle>
         {icon ? (
           <div
             className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-lg",
-              styles.iconBg,
-              styles.iconText,
+              "flex size-9 shrink-0 items-center justify-center rounded-lg",
+              accentStyles[accent],
             )}
           >
             {icon}
           </div>
+        ) : null}
+      </CardHeader>
+      <CardContent className="pl-5 pt-0">
+        {loading ? (
+          <Skeleton className="mt-1 h-8 w-16" />
+        ) : (
+          <div
+            className={cn(
+              "text-3xl font-semibold tabular-nums tracking-tight text-foreground",
+              valueClassName,
+            )}
+          >
+            {value}
+          </div>
+        )}
+        {description ? (
+          <p className="mt-1.5 text-xs text-muted-foreground">{description}</p>
         ) : null}
       </CardContent>
     </Card>

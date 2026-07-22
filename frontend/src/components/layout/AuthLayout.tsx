@@ -45,7 +45,7 @@ export function AuthLayout({ children, className }: AuthLayoutProps) {
   return (
     <div className={cn("flex min-h-screen bg-background", className)}>
       {/* Left — enterprise branding */}
-      <div className="relative hidden w-[44%] shrink-0 flex-col justify-between overflow-hidden bg-sidebar lg:flex xl:w-[46%]">
+      <div className="relative hidden w-[44%] shrink-0 flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0a2e55] via-[#0d3a6b] to-[#08243f] lg:flex xl:w-[46%]">
         <div
           aria-hidden
           className="enterprise-grid-bg pointer-events-none absolute inset-0 opacity-50"
@@ -147,7 +147,7 @@ export function AuthLayout({ children, className }: AuthLayoutProps) {
       <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-12 sm:px-8">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--muted))_0%,transparent_55%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--muted)_0%,transparent_55%)]"
         />
 
         <div className="relative w-full max-w-[400px]">

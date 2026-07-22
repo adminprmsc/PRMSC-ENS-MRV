@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo } from "react";
 import { MapPin, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import {
   EXECUTIVE_MONTHS,
   EXECUTIVE_YEARS,
@@ -81,15 +81,23 @@ function FilterSelect({
   searchable?: boolean;
   onChange: (value: string) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const filtered = useMemo(() => {
-    if (!searchable) return options;
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    const [first, ...rest] = options;
-    const matched = rest.filter((o) => o.toLowerCase().includes(q));
-    return first ? [first, ...matched] : matched;
-  }, [options, query, searchable]);
+  if (searchable && !disabled && options.length > 12) {
+    const allValue = options[0] ?? "All";
+    return (
+      <SearchableOptionField
+        label={label}
+        {...(hint ? { hint } : {})}
+        value={value}
+        options={options}
+        allValue={allValue}
+        allLabel={optionLabel ? optionLabel(allValue) : allValue}
+        {...(disabled ? { disabled: true } : {})}
+        placeholder={placeholder}
+        onChange={onChange}
+        {...(optionLabel ? { optionLabel } : {})}
+      />
+    );
+  }
 
   return (
     <Field className="min-w-0">
@@ -101,43 +109,27 @@ function FilterSelect({
           </span>
         ) : null}
       </FieldLabel>
-      <div className="space-y-1.5">
-        {searchable && !disabled && options.length > 12 ? (
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${label.toLowerCase()}…`}
-            className="h-8 bg-background text-xs"
-            disabled={disabled}
-          />
-        ) : null}
-        <Select
-          value={value}
-          onValueChange={(v) => onChange(v ?? value)}
-          disabled={disabled}
-        >
-          <SelectTrigger className="h-9 w-full bg-background text-sm">
-            <SelectValue placeholder={placeholder} />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            {filtered.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {optionLabel ? optionLabel(opt) : opt}
-              </SelectItem>
-            ))}
-            {filtered.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                No matches
-              </div>
-            ) : null}
-          </SelectContent>
-        </Select>
-      </div>
+      <Select
+        value={value}
+        onValueChange={(v) => onChange(v ?? value)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="h-9 w-full bg-background text-sm">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {options.map((opt) => (
+            <SelectItem key={opt} value={opt}>
+              {optionLabel ? optionLabel(opt) : opt}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </Field>
   );
 }
 
-function ExecutiveScopeFiltersCard({
+const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   filters,
   activeScopeLabel,
   tehsilOptions,
@@ -150,10 +142,12 @@ function ExecutiveScopeFiltersCard({
   onUpdate,
   onApply,
 }: ExecutiveScopeFiltersCardProps) {
-  const assignedCount = Math.max(0, tehsilOptions.length - (tehsilOptions.includes(ALL_ASSIGNED_TEHSILS) ? 1 : 0));
+  const assignedCount = tehsilOptions.filter(
+    (t) => t !== ALL_ASSIGNED_TEHSILS,
+  ).length;
 
   return (
-    <Card className="overflow-hidden border-border/60 shadow-sm">
+    <Card className="gap-0 overflow-visible py-0 ring-border/50">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
         <div className="flex items-start gap-2.5">
           <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -210,9 +204,7 @@ function ExecutiveScopeFiltersCard({
             placeholder={
               villageEnabled ? "Select village" : "Select a tehsil first"
             }
-            options={
-              villageEnabled ? villageOptions : [ALL_VILLAGES]
-            }
+            options={villageEnabled ? villageOptions : [ALL_VILLAGES]}
             searchable
             onChange={(v) => onUpdate("village", v)}
           />
@@ -239,22 +231,6 @@ function ExecutiveScopeFiltersCard({
           />
 
           <FilterSelect
-            label="Month"
-            value={filters.month}
-            placeholder="Month"
-            options={[
-              "All Months",
-              ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
-            ]}
-            optionLabel={(v) =>
-              v === "All Months"
-                ? "All months"
-                : EXECUTIVE_MONTHS[Number(v) - 1] ?? v
-            }
-            onChange={(v) => onUpdate("month", v)}
-          />
-
-          <FilterSelect
             label="Year"
             value={filters.year}
             placeholder="Year"
@@ -262,32 +238,42 @@ function ExecutiveScopeFiltersCard({
             onChange={(v) => onUpdate("year", v)}
           />
 
-          <Field className="flex min-w-0 flex-col justify-end">
-            <Button onClick={onApply} className="h-9 w-full">
+          <FilterSelect
+            label="Month"
+            value={filters.month}
+            placeholder="Month"
+            options={["All Months", ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1))]}
+            optionLabel={(v) =>
+              v === "All Months"
+                ? "All Months"
+                : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
+            }
+            onChange={(v) => onUpdate("month", v)}
+          />
+
+          <div className="flex items-end">
+            <Button type="button" className="h-9 w-full" onClick={onApply}>
               Apply filters
             </Button>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Results update after Apply
-            </p>
-          </Field>
+          </div>
         </FieldGroup>
 
         {!villageEnabled ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Pick a specific tehsil to unlock village and settlement filters for
-            registered sites in that area.
+            registered sites.
           </p>
         ) : villageEnabled &&
-          !locationsLoading &&
           locationMeta &&
+          !locationsLoading &&
           locationMeta.villageCount === 0 ? (
           <p className="mt-3 text-xs text-amber-800">
-            No registered sites found in this tehsil for this programme view.
+            No registered sites found for this tehsil in the current catalogue.
           </p>
         ) : null}
       </CardContent>
     </Card>
   );
-}
+});
 
-export default memo(ExecutiveScopeFiltersCard);
+export default ExecutiveScopeFiltersCard;

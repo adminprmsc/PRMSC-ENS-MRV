@@ -13,7 +13,7 @@ export function PageShell({ children, className, narrow }: PageShellProps) {
   return (
     <div
       className={cn(
-        "flex w-full flex-col gap-6",
+        "flex w-full flex-col space-y-6",
         narrow && "mx-auto max-w-2xl",
         className,
       )}
