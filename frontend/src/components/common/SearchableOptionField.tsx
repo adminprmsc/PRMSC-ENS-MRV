@@ -22,13 +22,17 @@ import {
 type SearchableOptionFieldProps = {
   label: string;
   hint?: string;
+  /** Hide built-in label when wrapped in an external FormField. */
+  hideLabel?: boolean;
   value: string;
   options: string[];
-  allValue: string;
+  /** When set (including `""`), shows an “all / clear / none” row. Omit for required pickers. */
+  allValue?: string;
   allLabel?: string;
   disabled?: boolean;
   placeholder?: string;
   maxResults?: number;
+  className?: string;
   onChange: (value: string) => void;
   optionLabel?: (value: string) => string;
 };
@@ -37,6 +41,7 @@ type SearchableOptionFieldProps = {
 export function SearchableOptionField({
   label,
   hint,
+  hideLabel = false,
   value,
   options,
   allValue,
@@ -44,6 +49,7 @@ export function SearchableOptionField({
   disabled,
   placeholder,
   maxResults = 80,
+  className,
   onChange,
   optionLabel,
 }: SearchableOptionFieldProps) {
@@ -54,8 +60,13 @@ export function SearchableOptionField({
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
+  const emptyValue = allValue ?? "";
+  const hasAllOption = allValue !== undefined;
+
   const choices = useMemo(() => {
-    const rest = options.filter((o) => o !== allValue);
+    const rest = hasAllOption
+      ? options.filter((o) => o !== allValue)
+      : options;
     const q = query.trim().toLowerCase();
     const matched = q
       ? rest
@@ -73,7 +84,7 @@ export function SearchableOptionField({
       truncated: matched.length > maxResults,
       total: rest.length,
     };
-  }, [options, allValue, query, maxResults]);
+  }, [options, allValue, hasAllOption, query, maxResults]);
 
   const syncRect = () => {
     const el = anchorRef.current;
@@ -81,7 +92,6 @@ export function SearchableOptionField({
     setRect(el.getBoundingClientRect());
   };
 
-  // External value changes (e.g. tehsil reset) should clear the search box.
   useEffect(() => {
     setQuery("");
   }, [value, allValue]);
@@ -121,7 +131,8 @@ export function SearchableOptionField({
   }, [open]);
 
   const display = (v: string) => (optionLabel ? optionLabel(v) : v);
-  const allText = allLabel ?? allValue;
+  const allText = allLabel ?? allValue ?? "All";
+  const hasSelection = Boolean(value) && value !== emptyValue;
 
   const selectValue = (next: string) => {
     onChange(next);
@@ -144,17 +155,19 @@ export function SearchableOptionField({
         }}
         className="max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
       >
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted",
-            value === allValue && "bg-muted font-medium",
-          )}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => selectValue(allValue)}
-        >
-          {allText}
-        </button>
+        {hasAllOption ? (
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted",
+              value === allValue && "bg-muted font-medium",
+            )}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => selectValue(allValue as string)}
+          >
+            {allText}
+          </button>
+        ) : null}
         {choices.items.map((item) => (
           <button
             key={item}
@@ -184,6 +197,71 @@ export function SearchableOptionField({
     );
   }
 
+  const control = (
+    <div className={cn("space-y-1.5", className)}>
+      <div ref={anchorRef}>
+        <InputGroup
+          className={cn(
+            "h-10 w-full bg-background",
+            disabled && "pointer-events-none opacity-60",
+          )}
+        >
+          <InputGroupAddon align="inline-start">
+            <Search className="size-3.5" />
+          </InputGroupAddon>
+          <InputGroupInput
+            ref={inputRef}
+            value={query}
+            disabled={disabled}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => {
+              setOpen(true);
+              syncRect();
+            }}
+            onClick={() => {
+              setOpen(true);
+              syncRect();
+            }}
+            placeholder={
+              hasSelection
+                ? display(value)
+                : (placeholder ?? `Type to find a ${label.toLowerCase()}…`)
+            }
+            className="text-sm"
+            autoComplete="off"
+            aria-expanded={open}
+            aria-autocomplete="list"
+          />
+        </InputGroup>
+      </div>
+
+      {hasSelection ? (
+        <div className="flex items-center justify-between gap-2">
+          <Badge
+            variant="secondary"
+            className="max-w-full truncate font-normal"
+          >
+            {display(value)}
+          </Badge>
+          <button
+            type="button"
+            className="shrink-0 text-[11px] font-medium text-primary hover:underline"
+            onClick={() => selectValue(emptyValue)}
+            disabled={disabled}
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
+      {menu}
+    </div>
+  );
+
+  if (hideLabel) return control;
+
   return (
     <Field className="min-w-0">
       <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -198,66 +276,7 @@ export function SearchableOptionField({
           </span>
         ) : null}
       </FieldLabel>
-      <div className="space-y-1.5">
-        <div ref={anchorRef}>
-          <InputGroup
-            className={cn(
-              "h-9 w-full bg-background",
-              disabled && "pointer-events-none opacity-60",
-            )}
-          >
-            <InputGroupAddon align="inline-start">
-              <Search className="size-3.5" />
-            </InputGroupAddon>
-            <InputGroupInput
-              ref={inputRef}
-              value={query}
-              disabled={disabled}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setOpen(true);
-              }}
-              onFocus={() => {
-                setOpen(true);
-                syncRect();
-              }}
-              onClick={() => {
-                setOpen(true);
-                syncRect();
-              }}
-              placeholder={
-                value !== allValue
-                  ? display(value)
-                  : (placeholder ?? `Type to find a ${label.toLowerCase()}…`)
-              }
-              className="text-sm"
-              autoComplete="off"
-              aria-expanded={open}
-              aria-autocomplete="list"
-            />
-          </InputGroup>
-        </div>
-
-        {value !== allValue ? (
-          <div className="flex items-center justify-between gap-2">
-            <Badge
-              variant="secondary"
-              className="max-w-full truncate font-normal"
-            >
-              {display(value)}
-            </Badge>
-            <button
-              type="button"
-              className="shrink-0 text-[11px] font-medium text-primary hover:underline"
-              onClick={() => selectValue(allValue)}
-              disabled={disabled}
-            >
-              Clear
-            </button>
-          </div>
-        ) : null}
-      </div>
-      {menu}
+      {control}
     </Field>
   );
 }

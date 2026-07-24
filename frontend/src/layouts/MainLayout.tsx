@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,12 +18,14 @@ import {
   Radio,
   ShieldAlert,
   Sun,
+  Trash2,
   UserPlus,
   Users,
   User as UserIcon,
   X,
 } from "lucide-react";
 
+import { PendingSiteDeleteRequestsPrompt } from "../components/PendingSiteDeleteRequestsPrompt";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -149,6 +151,7 @@ function sidebarIdentity(
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [certificateAlertCount, setCertificateAlertCount] = useState(0);
+  const [deleteRequestCount, setDeleteRequestCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -162,6 +165,10 @@ const MainLayout = () => {
   const tehsilMgr = user ? isTehsilManager(user.role) : false;
   const userAdmin = user ? isUserAdminRole(user.role) : false;
   const showOnboard = user ? canOnboardOperators(user.role) : false;
+
+  const onDeleteRequestCountChange = useCallback((count: number) => {
+    setDeleteRequestCount(count);
+  }, []);
 
   const navSections: NavSection[] = useMemo(() => {
     const sections: NavSection[] = [];
@@ -186,6 +193,12 @@ const MainLayout = () => {
             path: hqRoutes.attention,
             icon: <ShieldAlert className="size-4 shrink-0 opacity-90" />,
             label: "Attention needed",
+          },
+          {
+            path: hqRoutes.deleteRequests,
+            icon: <Trash2 className="size-4 shrink-0 opacity-90" />,
+            label: "Delete requests",
+            ...(deleteRequestCount > 0 ? { badge: deleteRequestCount } : {}),
           },
         ],
       });
@@ -339,7 +352,14 @@ const MainLayout = () => {
     });
 
     return sections;
-  }, [exec, tehsilMgr, userAdmin, showOnboard, certificateAlertCount]);
+  }, [
+    exec,
+    tehsilMgr,
+    userAdmin,
+    showOnboard,
+    certificateAlertCount,
+    deleteRequestCount,
+  ]);
 
   const identity = useMemo(
     () => sidebarIdentity(user, { tehsilMgr, exec, userAdmin }),
@@ -587,6 +607,10 @@ const MainLayout = () => {
 
   return (
     <TooltipProvider>
+      <PendingSiteDeleteRequestsPrompt
+        enabled={exec}
+        onCountChange={onDeleteRequestCountChange}
+      />
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop: expanded or icon rail */}
         <motion.aside

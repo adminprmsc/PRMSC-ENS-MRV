@@ -185,13 +185,76 @@ export const getWaterAnomalies = async (filters: QueryFilters = {}) => {
   return response.data;
 };
 
-export const deleteWaterSystem = async (systemId: string | number) => {
-  const response = await api.delete(`/operator/water-system/${systemId}`);
+export const deleteWaterSystem = async (
+  systemId: string | number,
+  reason: string,
+) => {
+  const response = await api.delete(`/operator/water-system/${systemId}`, {
+    data: { reason },
+  });
   return response.data;
 };
 
-export const deleteSolarSystem = async (systemId: string | number) => {
-  const response = await api.delete(`/operator/solar-system/${systemId}`);
+export const deleteSolarSystem = async (
+  systemId: string | number,
+  reason: string,
+) => {
+  const response = await api.delete(`/operator/solar-system/${systemId}`, {
+    data: { reason },
+  });
+  return response.data;
+};
+
+export type SiteDeleteRequestRow = {
+  id: string;
+  resource_type: "water" | "solar" | string;
+  resource_id: string;
+  tehsil: string;
+  village?: string | null;
+  settlement?: string | null;
+  unique_identifier: string;
+  status: string;
+  requested_by: string;
+  requested_at?: string | null;
+  request_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_remarks?: string | null;
+};
+
+export const listSiteDeleteRequests = async (status = "pending") => {
+  const response = await api.get(
+    `/operator/site-delete-requests${buildQueryString({ status })}`,
+  );
+  return response.data as { requests: SiteDeleteRequestRow[] };
+};
+
+export const approveSiteDeleteRequest = async (
+  requestId: string,
+  remarks?: string,
+) => {
+  const response = await api.post(
+    `/operator/site-delete-requests/${encodeURIComponent(requestId)}/approve`,
+    remarks ? { remarks } : {},
+  );
+  return response.data;
+};
+
+export const rejectSiteDeleteRequest = async (
+  requestId: string,
+  remarks?: string,
+) => {
+  const response = await api.post(
+    `/operator/site-delete-requests/${encodeURIComponent(requestId)}/reject`,
+    remarks ? { remarks } : {},
+  );
+  return response.data;
+};
+
+export const cancelSiteDeleteRequest = async (requestId: string) => {
+  const response = await api.post(
+    `/operator/site-delete-requests/${encodeURIComponent(requestId)}/cancel`,
+  );
   return response.data;
 };
 

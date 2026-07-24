@@ -58,10 +58,22 @@ export function useTehsilManagerOperatorApi() {
     mutationFn: (filters?: QueryFilters) => getWaterSystemsService(filters ?? {}),
   });
   const deleteSolarSystemMutation = useMutation({
-    mutationFn: (systemId: string | number) => deleteSolarSystemService(systemId),
+    mutationFn: ({
+      systemId,
+      reason,
+    }: {
+      systemId: string | number;
+      reason: string;
+    }) => deleteSolarSystemService(systemId, reason),
   });
   const deleteWaterSystemMutation = useMutation({
-    mutationFn: (systemId: string | number) => deleteWaterSystemService(systemId),
+    mutationFn: ({
+      systemId,
+      reason,
+    }: {
+      systemId: string | number;
+      reason: string;
+    }) => deleteWaterSystemService(systemId, reason),
   });
   const getMySubmissionsMutation = useMutation({
     mutationFn: (status?: string) => getMySubmissionsService(status),
@@ -224,6 +236,17 @@ export function useTehsilManagerOperatorApi() {
     [revertWaterSubmissionMutation.mutateAsync],
   );
 
+  const deleteSolarSystem = useCallback(
+    (systemId: string | number, reason: string) =>
+      deleteSolarSystemMutation.mutateAsync({ systemId, reason }),
+    [deleteSolarSystemMutation.mutateAsync],
+  );
+  const deleteWaterSystem = useCallback(
+    (systemId: string | number, reason: string) =>
+      deleteWaterSystemMutation.mutateAsync({ systemId, reason }),
+    [deleteWaterSystemMutation.mutateAsync],
+  );
+
   return {
     createSolarSystem: createSolarSystemMutation.mutateAsync,
     createWaterSystem: createWaterSystemMutation.mutateAsync,
@@ -231,8 +254,8 @@ export function useTehsilManagerOperatorApi() {
     updateWaterSystem,
     getSolarSystems: getSolarSystemsMutation.mutateAsync,
     getWaterSystems: getWaterSystemsMutation.mutateAsync,
-    deleteSolarSystem: deleteSolarSystemMutation.mutateAsync,
-    deleteWaterSystem: deleteWaterSystemMutation.mutateAsync,
+    deleteSolarSystem,
+    deleteWaterSystem,
     getMySubmissions: getMySubmissionsMutation.mutateAsync,
     getSolarSystemConfig,
     getWaterSystemConfig,

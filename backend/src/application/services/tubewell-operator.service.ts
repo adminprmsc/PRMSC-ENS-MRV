@@ -124,6 +124,10 @@ export class TubewellOperatorService {
       throw new NotFoundException({ error: 'Water data record not found' });
     }
 
+    await this.tehsilAccess.assertWaterSystemNotPendingDelete(
+      record.waterSystemId,
+    );
+
     record.signed = true;
     record.signatureSvgSnapshot = this.signatureSvgOrNone(currentUser);
 
@@ -523,7 +527,14 @@ export class TubewellOperatorService {
       systems = systems.filter((s) => s.village === filterVillage);
     }
 
-    return systems.map((s) => this.waterSystemToJson(s));
+    const pendingDeletes = await this.tehsilAccess.pendingWaterDeleteResourceIds(
+      systems.map((s) => String(s.id)),
+    );
+
+    return systems.map((s) => ({
+      ...this.waterSystemToJson(s),
+      delete_request_pending: pendingDeletes.has(String(s.id)),
+    }));
   }
 
   // ── Water system config ────────────────────────────────────────────────
@@ -588,6 +599,8 @@ export class TubewellOperatorService {
       const activeMeter = this.getActiveMeter(system);
       return {
         exists: true,
+        delete_request_pending:
+          await this.tehsilAccess.isWaterSystemPendingDelete(String(system.id)),
         config: {
           pump_model: system.pumpModel,
           pump_serial_number: system.pumpSerialNumber,
@@ -842,6 +855,10 @@ export class TubewellOperatorService {
       throw new ForbiddenException({ error: 'Access denied' });
     }
 
+    await this.tehsilAccess.assertWaterSystemNotPendingDelete(
+      record.waterSystemId,
+    );
+
     this.pumpTimesService.applyPumpTimeFieldsFromPayload(record, data);
 
     const noBulkMeter = system!.bulkMeterInstalled === false;
@@ -991,6 +1008,10 @@ export class TubewellOperatorService {
     } catch {
       throw new ForbiddenException({ error: 'Access denied' });
     }
+
+    await this.tehsilAccess.assertWaterSystemNotPendingDelete(
+      record.waterSystemId,
+    );
 
     const noBulkMeter = system!.bulkMeterInstalled === false;
     if (!noBulkMeter) {
@@ -1384,6 +1405,15 @@ export class TubewellOperatorService {
           } catch {
             errors.push(
               `Row ${i + 1}: this water system is not assigned to your account`,
+            );
+            continue;
+          }
+
+          if (
+            await this.tehsilAccess.isWaterSystemPendingDelete(String(system.id))
+          ) {
+            errors.push(
+              `Row ${i + 1}: this water system has a pending delete request — logging and submissions are blocked`,
             );
             continue;
           }

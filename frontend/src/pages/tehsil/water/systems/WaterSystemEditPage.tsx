@@ -11,9 +11,11 @@ import {
   Upload,
   FileText,
   BadgeCheck,
+  Trash2,
 } from "lucide-react";
 
 import Toast from "../../../../components/Toast";
+import { TypeToConfirmDeleteDialog } from "../../../../components/TypeToConfirmDeleteDialog";
 import { Button } from "../../../../components/ui/button";
 import {
   Card,
@@ -52,6 +54,7 @@ import {
   getWaterSystems,
   getWaterSystem,
   updateWaterSystem,
+  deleteWaterSystem,
   getWaterSystemCalibrationCertificate,
   putWaterSystemCalibrationCertificate,
   uploadImage,
@@ -77,6 +80,8 @@ export default function WaterSystemEditPage() {
   });
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [system, setSystem] = useState<WaterSystemRow | null>(null);
   const [systemId, setSystemId] = useState<string>("");
   const [detailsLoaded, setDetailsLoaded] = useState(false);
@@ -292,6 +297,28 @@ export default function WaterSystemEditPage() {
     }
   };
 
+  const remove = async (reason: string) => {
+    if (!isResolved) return;
+    setDeleting(true);
+    try {
+      await deleteWaterSystem(systemId, reason);
+      setDeleteDialogOpen(false);
+      setToast({
+        message:
+          "Delete request submitted. Waiting for Manager Operations approval.",
+        type: "success",
+      });
+      setTimeout(() => navigate(tehsilRoutes.waterSystems), 900);
+    } catch (e: unknown) {
+      setToast({
+        message: getApiErrorMessage(e, "Delete failed"),
+        type: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const saveCertificate = async () => {
     if (!isResolved) return;
     if (!certFile) {
@@ -367,6 +394,20 @@ export default function WaterSystemEditPage() {
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ message: "", type: "success" })}
+      />
+
+      <TypeToConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        resourceKind="water system"
+        confirmSiteId={String(system?.unique_identifier || "")}
+        resourceName={
+          system?.unique_identifier
+            ? String(system.unique_identifier)
+            : "this water system"
+        }
+        confirming={deleting}
+        onConfirm={(reason) => void remove(reason)}
       />
 
       <div className="mx-auto w-full max-w-6xl">
@@ -1052,23 +1093,40 @@ export default function WaterSystemEditPage() {
                 <Button
                   variant="outline"
                   onClick={() => navigate(tehsilRoutes.waterSystems)}
-                  disabled={saving}
+                  disabled={saving || deleting}
                 >
                   <Lock className="size-4" />
                   Back to water systems
                 </Button>
-                <Button
-                  onClick={() => void save()}
-                  disabled={saving || !isResolved || !canSave}
-                  className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  {saving ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Save className="size-4" />
-                  )}
-                  Save changes
-                </Button>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={saving || deleting || !isResolved}
+                    title="Delete this water system and all related submissions"
+                  >
+                    {deleting ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
+                    Delete
+                  </Button>
+                  <Button
+                    onClick={() => void save()}
+                    disabled={saving || deleting || !isResolved || !canSave}
+                    className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {saving ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Save className="size-4" />
+                    )}
+                    Save changes
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

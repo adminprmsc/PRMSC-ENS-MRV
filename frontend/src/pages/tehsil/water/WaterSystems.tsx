@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Droplets, Eye, Pencil, Plus, RefreshCcw } from "lucide-react";
+import { Droplets, Eye, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 
 import {
   DataListCard,
@@ -17,29 +17,49 @@ import {
   TableCell,
   TableRow,
 } from "../../../components/layout";
+import { TypeToConfirmDeleteDialog } from "../../../components/TypeToConfirmDeleteDialog";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { tehsilRoutes } from "../../../constants/routes";
 import { getApiErrorMessage } from "../../../lib/api-error";
+import {
+  listSiteDeleteRequests,
+  type SiteDeleteRequestRow,
+} from "../../../services/tehsilManagerOperatorService";
 import type { WaterSystemRow } from "../../../types/api";
 import { formatPakistanDateTime } from "../../../utils/pakistanTime";
 
 export default function WaterSystems() {
   const navigate = useNavigate();
-  const { getWaterSystems } = useTehsilManagerOperatorApi();
+  const { getWaterSystems, deleteWaterSystem } = useTehsilManagerOperatorApi();
 
   const [systems, setSystems] = useState<WaterSystemRow[]>([]);
+  const [pendingDeletes, setPendingDeletes] = useState<
+    Record<string, SiteDeleteRequestRow>
+  >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<WaterSystemRow | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState(false);
 
   const load = async (soft = false) => {
     try {
       if (soft) setRefreshing(true);
       else setLoading(true);
-      const data = await getWaterSystems({ page: 1, limit: 100 });
+      const [data, reqs] = await Promise.all([
+        getWaterSystems({ page: 1, limit: 100 }),
+        listSiteDeleteRequests("pending").catch(() => ({ requests: [] })),
+      ]);
       setSystems(Array.isArray(data) ? (data as WaterSystemRow[]) : []);
+      const map: Record<string, SiteDeleteRequestRow> = {};
+      for (const r of reqs.requests ?? []) {
+        if (r.resource_type === "water") map[r.resource_id] = r;
+      }
+      setPendingDeletes(map);
     } catch (e: unknown) {
       toast.error(getApiErrorMessage(e, "Could not load water systems"));
     } finally {
@@ -68,6 +88,23 @@ export default function WaterSystems() {
     [filtered],
   );
 
+  const confirmDelete = async (reason: string) => {
+    if (!pendingDelete?.id) return;
+    setDeleting(true);
+    try {
+      await deleteWaterSystem(pendingDelete.id, reason);
+      setPendingDelete(null);
+      toast.success(
+        "Delete request submitted. Waiting for Manager Operations approval.",
+      );
+      await load(true);
+    } catch (e: unknown) {
+      toast.error(getApiErrorMessage(e, "Delete failed"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <PageShell>
       <PageHeader
@@ -93,6 +130,22 @@ export default function WaterSystems() {
             </Button>
           </div>
         }
+      />
+
+      <TypeToConfirmDeleteDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+        resourceKind="water system"
+        confirmSiteId={String(pendingDelete?.unique_identifier || "")}
+        resourceName={String(
+          pendingDelete?.unique_identifier ||
+            pendingDelete?.village ||
+            "this water system",
+        )}
+        confirming={deleting}
+        onConfirm={(reason) => void confirmDelete(reason)}
       />
 
       <DataListCard
@@ -126,7 +179,17 @@ export default function WaterSystems() {
                       </p>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {kv(s.unique_identifier)}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{kv(s.unique_identifier)}</span>
+                        {pendingDeletes[String(s.id)] ? (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 bg-amber-50 text-[10px] text-amber-900"
+                          >
+                            Delete pending
+                          </Badge>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -166,6 +229,26 @@ export default function WaterSystems() {
                           }}
                         >
                           <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                          disabled={deleting || Boolean(pendingDeletes[String(s.id)])}
+                          title={
+                            pendingDeletes[String(s.id)]
+                              ? "Delete already pending approval"
+                              : "Request site deletion"
+                          }
+                          onClick={() => {
+                            if (!s.unique_identifier) {
+                              toast.error("No UID — cannot delete.");
+                              return;
+                            }
+                            setPendingDelete(s);
+                          }}
+                        >
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
