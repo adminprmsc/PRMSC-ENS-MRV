@@ -1,4 +1,9 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  forwardRef,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
@@ -9,6 +14,11 @@ import {
   isExecutiveReviewerRole,
   isUserAdminRole,
 } from '../../domain/constants/roles';
+import {
+  SITE_DELETE_RESOURCE_WATER,
+  SITE_DELETE_STATUS_PENDING,
+  SiteDeleteRequest,
+} from '../../infrastructure/database/entities/site-delete-request.entity';
 import { SolarSystem } from '../../infrastructure/database/entities/solar-system.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
 import { WaterSystem } from '../../infrastructure/database/entities/water-system.entity';
@@ -30,7 +40,56 @@ export class TehsilAccessService {
     private readonly waterSystemRepo: Repository<WaterSystem>,
     @InjectRepository(SolarSystem)
     private readonly solarSystemRepo: Repository<SolarSystem>,
+    @InjectRepository(SiteDeleteRequest)
+    private readonly siteDeleteRequestRepo: Repository<SiteDeleteRequest>,
   ) {}
+
+  /** Resource IDs with a pending water-system delete request. */
+  async pendingWaterDeleteResourceIds(
+    waterSystemIds: string[],
+  ): Promise<Set<string>> {
+    const ids = [
+      ...new Set(waterSystemIds.map((id) => String(id).trim()).filter(Boolean)),
+    ];
+    if (!ids.length) {
+      return new Set();
+    }
+    const rows = await this.siteDeleteRequestRepo.find({
+      where: {
+        resourceType: SITE_DELETE_RESOURCE_WATER,
+        resourceId: In(ids),
+        status: SITE_DELETE_STATUS_PENDING,
+      },
+      select: { resourceId: true },
+    });
+    return new Set(rows.map((r) => r.resourceId));
+  }
+
+  async isWaterSystemPendingDelete(
+    waterSystemId: string | null | undefined,
+  ): Promise<boolean> {
+    if (!waterSystemId) {
+      return false;
+    }
+    const pending = await this.pendingWaterDeleteResourceIds([
+      String(waterSystemId),
+    ]);
+    return pending.has(String(waterSystemId));
+  }
+
+  /** Block new logs / submissions while a delete request is awaiting MO decision. */
+  async assertWaterSystemNotPendingDelete(
+    waterSystemId: string | null | undefined,
+  ): Promise<void> {
+    if (!(await this.isWaterSystemPendingDelete(waterSystemId))) {
+      return;
+    }
+    throw new ConflictException({
+      message:
+        'This water system has a pending delete request. Logging and submissions are blocked until Manager Operations approve or reject the request.',
+      error: 'water_system_delete_pending',
+    });
+  }
 
   assignedTehsilSet(user: User): Set<string> {
     return new Set((user.tehsilLinks ?? []).map((link) => link.tehsil));

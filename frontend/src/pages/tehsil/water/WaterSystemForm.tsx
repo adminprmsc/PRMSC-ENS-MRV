@@ -49,6 +49,7 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip";
 import { getApiErrorMessage } from "../../../lib/api-error";
+import { SearchableOptionField } from "../../../components/common/SearchableOptionField";
 import {
   TEHSIL_OPTIONS,
   LOCATION_DATA,
@@ -143,8 +144,6 @@ const WaterSystemForm = () => {
     meter_accuracy_class: "",
     installation_date: "",
   });
-  const [villageSearch, setVillageSearch] = useState("");
-  const [settlementSearch, setSettlementSearch] = useState("");
   const [locationHasOtherSystems, setLocationHasOtherSystems] = useState(false);
 
   useEffect(() => {
@@ -158,28 +157,15 @@ const WaterSystemForm = () => {
     );
   }, [isEditMode, tehsilSelectOptions]);
 
-  useEffect(() => {
-    setVillageSearch("");
-    setSettlementSearch("");
-  }, [formData.tehsil]);
+  const villageOptions = useMemo(
+    () => LOCATION_DATA[formData.tehsil] || [],
+    [formData.tehsil],
+  );
 
-  useEffect(() => {
-    setSettlementSearch("");
-  }, [formData.village]);
-
-  const filteredVillages = useMemo(() => {
-    const villages = LOCATION_DATA[formData.tehsil] || [];
-    const query = villageSearch.trim().toLowerCase();
-    if (!query) return villages;
-    return villages.filter((v) => v.toLowerCase().includes(query));
-  }, [formData.tehsil, villageSearch]);
-
-  const filteredSettlements = useMemo(() => {
-    const settlements = SETTLEMENT_DATA[formData.village] || [];
-    const query = settlementSearch.trim().toLowerCase();
-    if (!query) return settlements;
-    return settlements.filter((s) => s.toLowerCase().includes(query));
-  }, [formData.village, settlementSearch]);
+  const settlementOptions = useMemo(
+    () => SETTLEMENT_DATA[formData.village] || [],
+    [formData.village],
+  );
 
   const handleFieldChange = async (name: string, value: string) => {
     let newTehsil = formData.tehsil;
@@ -261,9 +247,7 @@ const WaterSystemForm = () => {
         message: "✅ Registration complete!",
         type: "success",
       });
-      if (status === "submitted") {
-        setTimeout(() => navigate(tehsilRoutes.dashboard), 1200);
-      }
+      setTimeout(() => navigate(tehsilRoutes.waterSystems), 1200);
     } catch (err: unknown) {
       setToast({
         message: getApiErrorMessage(err, "Submission failed"),
@@ -478,113 +462,44 @@ const WaterSystemForm = () => {
                     required
                     description="Filtered by selected tehsil."
                   >
-                    <Select
-                      value={formData.village || undefined}
-                      onValueChange={(v) => {
-                        if (v) void handleFieldChange("village", v);
+                    <SearchableOptionField
+                      hideLabel
+                      label="Village"
+                      value={formData.village}
+                      options={villageOptions}
+                      disabled={!formData.tehsil || isEditMode}
+                      placeholder={
+                        formData.tehsil
+                          ? "Type to find a village…"
+                          : "Select a tehsil first"
+                      }
+                      onChange={(v) => {
+                        void handleFieldChange("village", v);
                       }}
-                    >
-                      <SelectTrigger
-                        className={cn("w-full", inputClass)}
-                        disabled={!formData.tehsil || isEditMode}
-                      >
-                        <SelectValue placeholder="Select village" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
-                          <Input
-                            value={villageSearch}
-                            onChange={(e) => setVillageSearch(e.target.value)}
-                            onKeyDownCapture={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (
-                                e.key === "ArrowDown" ||
-                                e.key === "ArrowUp" ||
-                                e.key === "Enter" ||
-                                e.key === "Tab"
-                              ) {
-                                e.preventDefault();
-                              }
-                            }}
-                            onKeyUp={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={(e) => e.stopPropagation()}
-                            placeholder="Search village…"
-                            className="h-9"
-                          />
-                        </div>
-                        {filteredVillages.map((v) => (
-                          <SelectItem key={v} value={v}>
-                            {v}
-                          </SelectItem>
-                        ))}
-                        {filteredVillages.length === 0 ? (
-                          <p className="px-2 py-2 text-xs text-muted-foreground">
-                            No villages match.
-                          </p>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
+                    />
                   </FormField>
 
                   <FormField
                     label="Settlement"
                     description="Optional — leave blank if not mapped."
                   >
-                    <Select
-                      value={formData.settlement || undefined}
-                      onValueChange={(v) => {
-                        void handleFieldChange("settlement", v ?? "");
+                    <SearchableOptionField
+                      hideLabel
+                      label="Settlement"
+                      value={formData.settlement}
+                      options={settlementOptions}
+                      allValue=""
+                      allLabel="None"
+                      disabled={!formData.village || isEditMode}
+                      placeholder={
+                        formData.village
+                          ? "Type to find a settlement…"
+                          : "Select a village first"
+                      }
+                      onChange={(v) => {
+                        void handleFieldChange("settlement", v);
                       }}
-                    >
-                      <SelectTrigger
-                        className={cn("w-full", inputClass)}
-                        disabled={!formData.village || isEditMode}
-                      >
-                        <SelectValue placeholder="Select settlement" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <div className="sticky top-0 z-10 border-b bg-popover p-2">
-                          <Input
-                            value={settlementSearch}
-                            onChange={(e) =>
-                              setSettlementSearch(e.target.value)
-                            }
-                            onKeyDownCapture={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (
-                                e.key === "ArrowDown" ||
-                                e.key === "ArrowUp" ||
-                                e.key === "Enter" ||
-                                e.key === "Tab"
-                              ) {
-                                e.preventDefault();
-                              }
-                            }}
-                            onKeyUp={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={(e) => e.stopPropagation()}
-                            placeholder="Search settlement…"
-                            className="h-9"
-                          />
-                        </div>
-                        <SelectItem value="">None</SelectItem>
-                        {filteredSettlements.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                        {filteredSettlements.length === 0 ? (
-                          <p className="px-2 py-2 text-xs text-muted-foreground">
-                            No settlements match.
-                          </p>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
+                    />
                   </FormField>
 
                   <div className="col-span-full grid grid-cols-1 gap-5 sm:grid-cols-2">

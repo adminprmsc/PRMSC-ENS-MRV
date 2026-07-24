@@ -46,6 +46,7 @@ import WaterSubmissionDetailsPage from "./pages/tehsil/submissions/WaterSubmissi
 import ExecutiveDashboard from "./pages/executive/ExecutiveDashboard";
 import ExecutiveSitesProgress from "./pages/executive/ExecutiveSitesProgress";
 import ExecutiveAttentionPage from "./pages/executive/ExecutiveAttentionPage";
+import ExecutiveSiteDeleteRequestsPage from "./pages/executive/ExecutiveSiteDeleteRequestsPage";
 import ExecutiveWaterAnalysis from "./pages/executive/ExecutiveWaterAnalysis";
 import ExecutiveSolarAnalysis from "./pages/executive/ExecutiveSolarAnalysis";
 import HqSolarRecordViewPage from "./pages/executive/HqSolarRecordViewPage";
@@ -189,6 +190,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
                   <ExecutiveAttentionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/delete-requests"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <ExecutiveSiteDeleteRequestsPage />
                 </ProtectedRoute>
               }
             />

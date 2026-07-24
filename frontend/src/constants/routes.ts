@@ -51,6 +51,7 @@ export const hqRoutes = {
   dashboard: HQ_DASHBOARD,
   sitesProgress: `${HQ_DASHBOARD}/sites`,
   attention: `${HQ_DASHBOARD}/attention`,
+  deleteRequests: `${HQ_DASHBOARD}/delete-requests`,
   waterAnalysis: `${HQ_DASHBOARD}/water`,
   solarAnalysis: `${HQ_DASHBOARD}/solar`,
   waterSystem: (id: string) =>

@@ -26,8 +26,18 @@ import { SolarEnergyLoggingMonthly } from '../../infrastructure/database/entitie
 import { Notification } from '../../infrastructure/database/entities/notification.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
 import { UserWaterSystem } from '../../infrastructure/database/entities/user-water-system.entity';
+import { UserManagerOperation } from '../../infrastructure/database/entities/user-manager-operation.entity';
 import { Submission } from '../../infrastructure/database/entities/submission.entity';
 import { VerificationLog } from '../../infrastructure/database/entities/verification-log.entity';
+import {
+  SITE_DELETE_RESOURCE_SOLAR,
+  SITE_DELETE_RESOURCE_WATER,
+  SITE_DELETE_STATUS_APPROVED,
+  SITE_DELETE_STATUS_CANCELLED,
+  SITE_DELETE_STATUS_PENDING,
+  SITE_DELETE_STATUS_REJECTED,
+  SiteDeleteRequest,
+} from '../../infrastructure/database/entities/site-delete-request.entity';
 import { UserService } from './user.service';
 import { StorageService } from './storage.service';
 import { WorkflowService } from './workflow.service';
@@ -77,6 +87,10 @@ export class TehsilManagerService {
     private readonly submissionRepo: Repository<Submission>,
     @InjectRepository(VerificationLog)
     private readonly verificationLogRepo: Repository<VerificationLog>,
+    @InjectRepository(SiteDeleteRequest)
+    private readonly siteDeleteRequestRepo: Repository<SiteDeleteRequest>,
+    @InjectRepository(UserManagerOperation)
+    private readonly managerOpRepo: Repository<UserManagerOperation>,
     private readonly userService: UserService,
     private readonly storageService: StorageService,
     private readonly workflowService: WorkflowService,
@@ -1851,9 +1865,208 @@ export class TehsilManagerService {
     return { statusCode: 200, body: out as unknown as Record<string, unknown> };
   }
 
+  /** Remove verification graph for energy-log `record_id`s (no DB FK). */
+  private async purgeSubmissionsForRecordIds(
+    recordIds: string[],
+  ): Promise<void> {
+    if (!recordIds.length) return;
+    const submissions = await this.submissionRepo.find({
+      where: { recordId: In(recordIds) },
+    });
+    if (!submissions.length) return;
+    const submissionIds = submissions.map((s) => s.id);
+    await this.verificationLogRepo.delete({
+      submissionId: In(submissionIds),
+    });
+    await this.notificationRepo.delete({ submissionId: In(submissionIds) });
+    await this.submissionRepo.delete({ id: In(submissionIds) });
+  }
+
+  private async notifyManagerOperationsForTehsil(
+    tehsil: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
+    const c = canonicalTehsil(tehsil);
+    if (!c) return;
+
+    const links = await this.managerOpRepo.find({ where: { tehsil: c } });
+    const seen = new Set<string>();
+    for (const row of links) {
+      const uid = String(row.userId);
+      if (seen.has(uid)) continue;
+      seen.add(uid);
+      const u = await this.userRepo.findOne({
+        where: { id: uid },
+        relations: { assignedRole: true },
+      });
+      if (!u || this.rbac.userRoleCode(u) !== SUPER_ADMIN) continue;
+      await this.workflowService.createNotification(u.id, title, message);
+    }
+  }
+
+  private serializeDeleteRequest(
+    row: SiteDeleteRequest,
+  ): Record<string, unknown> {
+    return {
+      id: row.id,
+      resource_type: row.resourceType,
+      resource_id: row.resourceId,
+      tehsil: row.tehsil,
+      village: row.village,
+      settlement: row.settlement,
+      unique_identifier: row.uniqueIdentifier,
+      status: row.status,
+      requested_by: row.requestedBy,
+      requested_at: toIsoDateTimeString(row.requestedAt),
+      request_reason: row.requestReason,
+      reviewed_by: row.reviewedBy,
+      reviewed_at: row.reviewedAt ? toIsoDateTimeString(row.reviewedAt) : null,
+      review_remarks: row.reviewRemarks,
+      created_at: toIsoDateTimeString(row.createdAt),
+      updated_at: toIsoDateTimeString(row.updatedAt),
+    };
+  }
+
+  private async executeWaterSystemHardDelete(systemId: string): Promise<void> {
+    const dailyLogs = await this.waterDailyRepo.find({
+      where: { waterSystemId: systemId },
+    });
+    for (const log of dailyLogs) {
+      await this.storageService.tryDeletePublicObject(log.bulkMeterImageUrl);
+    }
+    await this.purgeSubmissionsForRecordIds(
+      dailyLogs.map((log) => String(log.id)),
+    );
+
+    const certs = await this.calibrationCertRepo.find({
+      where: { waterSystemId: systemId },
+    });
+    for (const cert of certs) {
+      await this.storageService.tryDeletePublicObject(cert.fileUrl);
+    }
+
+    if (dailyLogs.length) {
+      await this.waterDailyRepo.delete({ waterSystemId: systemId });
+    }
+    await this.waterSystemRepo.delete({ id: systemId });
+  }
+
+  private async executeSolarSystemHardDelete(systemId: string): Promise<void> {
+    const monthlyLogs = await this.solarMonthlyRepo.find({
+      where: { solarSystemId: systemId },
+    });
+    for (const log of monthlyLogs) {
+      await this.storageService.tryDeletePublicObject(
+        log.electricityBillImageUrl,
+      );
+    }
+    await this.purgeSubmissionsForRecordIds(
+      monthlyLogs.map((log) => String(log.id)),
+    );
+    if (monthlyLogs.length) {
+      await this.solarMonthlyRepo.delete({ solarSystemId: systemId });
+    }
+    await this.solarSystemRepo.delete({ id: systemId });
+  }
+
+  private async createSiteDeleteRequest(params: {
+    jwt: JwtContext;
+    resourceType:
+      typeof SITE_DELETE_RESOURCE_WATER | typeof SITE_DELETE_RESOURCE_SOLAR;
+    resourceId: string;
+    tehsil: string;
+    village: string | null;
+    settlement: string | null;
+    uniqueIdentifier: string;
+    reason?: string | null;
+  }): Promise<ServiceResult> {
+    const denied = this.assertMinRole(params.jwt, ADMIN);
+    if (denied) return denied;
+
+    const reason = (params.reason ?? '').trim();
+    if (reason.length < 10) {
+      return {
+        statusCode: 400,
+        body: {
+          message:
+            'A reason is required (at least 10 characters) so Manager Operations can understand this delete request.',
+        },
+      };
+    }
+
+    const user = await this.loadActor(params.jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+    if (this.rbac.userRoleCode(user) !== ADMIN) {
+      return {
+        statusCode: 403,
+        body: {
+          message:
+            'Only Tehsil Managers can request site deletion. Manager Operations approve requests.',
+        },
+      };
+    }
+
+    const existing = await this.siteDeleteRequestRepo.findOne({
+      where: {
+        resourceType: params.resourceType,
+        resourceId: params.resourceId,
+        status: SITE_DELETE_STATUS_PENDING,
+      },
+    });
+    if (existing) {
+      return {
+        statusCode: 409,
+        body: {
+          message:
+            'A delete request for this site is already pending Manager Operations approval.',
+          request: this.serializeDeleteRequest(existing),
+        },
+      };
+    }
+
+    const tehsil = canonicalTehsil(params.tehsil) || params.tehsil;
+    const row = this.siteDeleteRequestRepo.create({
+      resourceType: params.resourceType,
+      resourceId: params.resourceId,
+      tehsil,
+      village: params.village,
+      settlement: params.settlement,
+      uniqueIdentifier: params.uniqueIdentifier,
+      status: SITE_DELETE_STATUS_PENDING,
+      requestedBy: String(user.id),
+      requestedAt: new Date(),
+      requestReason: reason,
+    });
+    const saved = await this.siteDeleteRequestRepo.save(row);
+
+    const kind =
+      params.resourceType === SITE_DELETE_RESOURCE_WATER
+        ? 'water system'
+        : 'solar site';
+    const reasonPreview =
+      reason.length > 180 ? `${reason.slice(0, 177)}…` : reason;
+    await this.notifyManagerOperationsForTehsil(
+      tehsil,
+      'Site delete request',
+      `Tehsil Manager requested deletion of ${kind} ${params.uniqueIdentifier} (${tehsil}${params.village ? ` · ${params.village}` : ''}).\nReason: ${reasonPreview}\nApprove or reject in HQ → Delete requests.`,
+    );
+
+    return {
+      statusCode: 200,
+      body: {
+        message:
+          'Delete request submitted. Manager Operations must approve before the site is removed.',
+        request: this.serializeDeleteRequest(saved),
+      },
+    };
+  }
+
+  /** Tehsil Manager: request deletion (does not delete until MO approves). */
   async deleteWaterSystem(
     jwt: JwtContext,
     systemId: string,
+    body?: { reason?: string },
   ): Promise<ServiceResult> {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
@@ -1876,12 +2089,16 @@ export class TehsilManagerService {
       };
     }
 
-    await this.waterDailyRepo.delete({ waterSystemId: systemId });
-    await this.waterSystemRepo.delete({ id: systemId });
-    return {
-      statusCode: 200,
-      body: { message: 'Water system deleted successfully' },
-    };
+    return this.createSiteDeleteRequest({
+      jwt,
+      resourceType: SITE_DELETE_RESOURCE_WATER,
+      resourceId: String(system.id),
+      tehsil: system.tehsil,
+      village: system.village ?? null,
+      settlement: system.settlement ?? null,
+      uniqueIdentifier: system.uniqueIdentifier || String(system.id),
+      reason: body?.reason,
+    });
   }
 
   async getSolarSystems(
@@ -1930,6 +2147,17 @@ export class TehsilManagerService {
       }
     }
 
+    const pendingDeletes = systemIds.length
+      ? await this.siteDeleteRequestRepo.find({
+          where: {
+            resourceType: SITE_DELETE_RESOURCE_SOLAR,
+            resourceId: In(systemIds),
+            status: SITE_DELETE_STATUS_PENDING,
+          },
+        })
+      : [];
+    const pendingById = new Set(pendingDeletes.map((r) => r.resourceId));
+
     const result: Record<string, unknown>[] = [];
     for (const s of systems) {
       const activeMeter = await this.getActiveMeter(s);
@@ -1972,6 +2200,7 @@ export class TehsilManagerService {
         created_at: toIsoDateTimeString(s.createdAt),
         updated_at: toIsoDateTimeString(s.updatedAt),
         monthly_log_count: monthlyCounts[String(s.id)] || 0,
+        delete_request_pending: pendingById.has(String(s.id)),
       });
     }
 
@@ -1981,9 +2210,11 @@ export class TehsilManagerService {
     };
   }
 
+  /** Tehsil Manager: request deletion (does not delete until MO approves). */
   async deleteSolarSystem(
     jwt: JwtContext,
     systemId: string,
+    body?: { reason?: string },
   ): Promise<ServiceResult> {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
@@ -2006,23 +2237,283 @@ export class TehsilManagerService {
       };
     }
 
-    const logCount = await this.solarMonthlyRepo.count({
-      where: { solarSystemId: systemId },
+    return this.createSiteDeleteRequest({
+      jwt,
+      resourceType: SITE_DELETE_RESOURCE_SOLAR,
+      resourceId: String(system.id),
+      tehsil: system.tehsil,
+      village: system.village ?? null,
+      settlement: system.settlement ?? null,
+      uniqueIdentifier: system.uniqueIdentifier || String(system.id),
+      reason: body?.reason,
     });
-    if (logCount > 0) {
+  }
+
+  async listSiteDeleteRequests(
+    jwt: JwtContext,
+    query: { status?: string },
+  ): Promise<ServiceResult> {
+    const denied = this.assertMinRole(jwt, ADMIN);
+    if (denied) return denied;
+
+    const user = await this.loadActor(jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+
+    const role = this.rbac.userRoleCode(user);
+    if (role !== ADMIN && role !== SUPER_ADMIN) {
+      return { statusCode: 403, body: { message: 'Access denied' } };
+    }
+
+    const status = (query.status || SITE_DELETE_STATUS_PENDING).trim();
+
+    // Prefer assigned tehsils from DB relations; fall back to JWT scope.
+    const fromDb = [...(await this.rbac.userAssignedTehsils(user))];
+    const fromJwt = this.scopeTehsilsFromJwt(jwt);
+    const rawTehsils = fromDb.length ? fromDb : fromJwt;
+    const tehsils = [
+      ...new Set(
+        rawTehsils
+          .map((t) => canonicalTehsil(t) || String(t).trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!tehsils.length) {
       return {
-        statusCode: 409,
+        statusCode: 200,
+        body: { requests: [] } as unknown as Record<string, unknown>,
+      };
+    }
+
+    try {
+      const rows = await this.siteDeleteRequestRepo.find({
+        where: {
+          status,
+          tehsil: In(tehsils),
+        },
+        order: { requestedAt: 'DESC' },
+      });
+
+      return {
+        statusCode: 200,
         body: {
-          message:
-            'This solar site has monthly energy submissions and cannot be deleted. Remove those monthly records first if your process allows it, or contact operations.',
+          requests: rows.map((r) => this.serializeDeleteRequest(r)),
+        } as unknown as Record<string, unknown>,
+      };
+    } catch (err) {
+      return {
+        statusCode: 500,
+        body: {
+          message: `Failed to load delete requests: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        },
+      };
+    }
+  }
+
+  async approveSiteDeleteRequest(
+    jwt: JwtContext,
+    requestId: string,
+    body?: { remarks?: string },
+  ): Promise<ServiceResult> {
+    const denied = this.assertMinRole(jwt, SUPER_ADMIN);
+    if (denied) return denied;
+
+    const user = await this.loadActor(jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+    if (this.rbac.userRoleCode(user) !== SUPER_ADMIN) {
+      return {
+        statusCode: 403,
+        body: {
+          message: 'Only Manager Operations can approve delete requests',
         },
       };
     }
 
-    await this.solarSystemRepo.delete({ id: systemId });
+    const row = await this.siteDeleteRequestRepo.findOne({
+      where: { id: requestId },
+    });
+    if (!row) {
+      return { statusCode: 404, body: { message: 'Delete request not found' } };
+    }
+    if (row.status !== SITE_DELETE_STATUS_PENDING) {
+      return {
+        statusCode: 409,
+        body: { message: `Request is already ${row.status}` },
+      };
+    }
+
+    const moTehsils = this.rbac.managerOperationTehsilSet(user);
+    const tehsil = canonicalTehsil(row.tehsil) || row.tehsil;
+    if (!moTehsils.has(tehsil)) {
+      return {
+        statusCode: 403,
+        body: {
+          message: 'You do not have Manager Operations access for this tehsil',
+        },
+      };
+    }
+
+    try {
+      if (row.resourceType === SITE_DELETE_RESOURCE_WATER) {
+        const stillThere = await this.waterSystemRepo.findOne({
+          where: { id: row.resourceId },
+        });
+        if (stillThere) {
+          await this.executeWaterSystemHardDelete(row.resourceId);
+        }
+      } else if (row.resourceType === SITE_DELETE_RESOURCE_SOLAR) {
+        const stillThere = await this.solarSystemRepo.findOne({
+          where: { id: row.resourceId },
+        });
+        if (stillThere) {
+          await this.executeSolarSystemHardDelete(row.resourceId);
+        }
+      } else {
+        return {
+          statusCode: 400,
+          body: { message: 'Unknown resource type on delete request' },
+        };
+      }
+    } catch (err) {
+      return {
+        statusCode: 500,
+        body: {
+          message: `Failed to delete site: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      };
+    }
+
+    row.status = SITE_DELETE_STATUS_APPROVED;
+    row.reviewedBy = String(user.id);
+    row.reviewedAt = new Date();
+    row.reviewRemarks = body?.remarks?.trim() || null;
+    const saved = await this.siteDeleteRequestRepo.save(row);
+
+    await this.workflowService.notifyOperator(
+      row.requestedBy,
+      'Delete request approved',
+      `Your delete request for ${row.uniqueIdentifier} (${row.tehsil}) was approved. The site and related submissions have been removed.`,
+    );
+
     return {
       statusCode: 200,
-      body: { message: 'Solar system deleted successfully' },
+      body: {
+        message: 'Delete request approved and site removed.',
+        request: this.serializeDeleteRequest(saved),
+      },
+    };
+  }
+
+  async rejectSiteDeleteRequest(
+    jwt: JwtContext,
+    requestId: string,
+    body?: { remarks?: string },
+  ): Promise<ServiceResult> {
+    const denied = this.assertMinRole(jwt, SUPER_ADMIN);
+    if (denied) return denied;
+
+    const user = await this.loadActor(jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+    if (this.rbac.userRoleCode(user) !== SUPER_ADMIN) {
+      return {
+        statusCode: 403,
+        body: { message: 'Only Manager Operations can reject delete requests' },
+      };
+    }
+
+    const row = await this.siteDeleteRequestRepo.findOne({
+      where: { id: requestId },
+    });
+    if (!row) {
+      return { statusCode: 404, body: { message: 'Delete request not found' } };
+    }
+    if (row.status !== SITE_DELETE_STATUS_PENDING) {
+      return {
+        statusCode: 409,
+        body: { message: `Request is already ${row.status}` },
+      };
+    }
+
+    const moTehsils = this.rbac.managerOperationTehsilSet(user);
+    const tehsil = canonicalTehsil(row.tehsil) || row.tehsil;
+    if (!moTehsils.has(tehsil)) {
+      return {
+        statusCode: 403,
+        body: {
+          message: 'You do not have Manager Operations access for this tehsil',
+        },
+      };
+    }
+
+    row.status = SITE_DELETE_STATUS_REJECTED;
+    row.reviewedBy = String(user.id);
+    row.reviewedAt = new Date();
+    row.reviewRemarks = body?.remarks?.trim() || null;
+    const saved = await this.siteDeleteRequestRepo.save(row);
+
+    await this.workflowService.notifyOperator(
+      row.requestedBy,
+      'Delete request rejected',
+      `Your delete request for ${row.uniqueIdentifier} (${row.tehsil}) was rejected${
+        row.reviewRemarks ? `: ${row.reviewRemarks}` : '.'
+      }`,
+    );
+
+    return {
+      statusCode: 200,
+      body: {
+        message: 'Delete request rejected. Site was not deleted.',
+        request: this.serializeDeleteRequest(saved),
+      },
+    };
+  }
+
+  async cancelSiteDeleteRequest(
+    jwt: JwtContext,
+    requestId: string,
+  ): Promise<ServiceResult> {
+    const denied = this.assertMinRole(jwt, ADMIN);
+    if (denied) return denied;
+
+    const user = await this.loadActor(jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+    if (this.rbac.userRoleCode(user) !== ADMIN) {
+      return {
+        statusCode: 403,
+        body: { message: 'Only the requesting Tehsil Manager can cancel' },
+      };
+    }
+
+    const row = await this.siteDeleteRequestRepo.findOne({
+      where: { id: requestId },
+    });
+    if (!row) {
+      return { statusCode: 404, body: { message: 'Delete request not found' } };
+    }
+    if (row.status !== SITE_DELETE_STATUS_PENDING) {
+      return {
+        statusCode: 409,
+        body: { message: `Request is already ${row.status}` },
+      };
+    }
+    if (row.requestedBy !== String(user.id)) {
+      return {
+        statusCode: 403,
+        body: { message: 'You can only cancel your own delete requests' },
+      };
+    }
+
+    row.status = SITE_DELETE_STATUS_CANCELLED;
+    row.reviewedBy = String(user.id);
+    row.reviewedAt = new Date();
+    const saved = await this.siteDeleteRequestRepo.save(row);
+    return {
+      statusCode: 200,
+      body: {
+        message: 'Delete request cancelled.',
+        request: this.serializeDeleteRequest(saved),
+      },
     };
   }
 

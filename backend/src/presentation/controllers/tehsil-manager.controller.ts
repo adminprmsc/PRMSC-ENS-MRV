@@ -22,7 +22,7 @@ import {
   ServiceResult,
   TehsilManagerService,
 } from '../../application/services/tehsil-manager.service';
-import { ADMIN } from '../../domain/constants/roles';
+import { ADMIN, SUPER_ADMIN } from '../../domain/constants/roles';
 
 @Controller('api/operator')
 export class TehsilManagerController {
@@ -258,11 +258,80 @@ export class TehsilManagerController {
   @Delete('water-system/:systemId')
   @UseGuards(JwtAuthGuard, MinRoleGuard)
   @MinRole(ADMIN)
-  deleteWaterSystem(@Req() req: Request, @Param('systemId') systemId: string) {
+  deleteWaterSystem(
+    @Req() req: Request,
+    @Param('systemId') systemId: string,
+    @Body() body: { reason?: string },
+  ) {
     return this.respond(
       this.tehsilManagerService.deleteWaterSystem(
         this.jwtFromRequest(req),
         systemId,
+        body,
+      ),
+    );
+  }
+
+  @Get('site-delete-requests')
+  @UseGuards(JwtAuthGuard, MinRoleGuard)
+  @MinRole(ADMIN)
+  listSiteDeleteRequests(
+    @Req() req: Request,
+    @Query() query: { status?: string },
+  ) {
+    return this.respond(
+      this.tehsilManagerService.listSiteDeleteRequests(
+        this.jwtFromRequest(req),
+        query,
+      ),
+    );
+  }
+
+  @Post('site-delete-requests/:requestId/approve')
+  @UseGuards(JwtAuthGuard, MinRoleGuard)
+  @MinRole(SUPER_ADMIN)
+  approveSiteDeleteRequest(
+    @Req() req: Request,
+    @Param('requestId') requestId: string,
+    @Body() body: { remarks?: string },
+  ) {
+    return this.respond(
+      this.tehsilManagerService.approveSiteDeleteRequest(
+        this.jwtFromRequest(req),
+        requestId,
+        body,
+      ),
+    );
+  }
+
+  @Post('site-delete-requests/:requestId/reject')
+  @UseGuards(JwtAuthGuard, MinRoleGuard)
+  @MinRole(SUPER_ADMIN)
+  rejectSiteDeleteRequest(
+    @Req() req: Request,
+    @Param('requestId') requestId: string,
+    @Body() body: { remarks?: string },
+  ) {
+    return this.respond(
+      this.tehsilManagerService.rejectSiteDeleteRequest(
+        this.jwtFromRequest(req),
+        requestId,
+        body,
+      ),
+    );
+  }
+
+  @Post('site-delete-requests/:requestId/cancel')
+  @UseGuards(JwtAuthGuard, MinRoleGuard)
+  @MinRole(ADMIN)
+  cancelSiteDeleteRequest(
+    @Req() req: Request,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.respond(
+      this.tehsilManagerService.cancelSiteDeleteRequest(
+        this.jwtFromRequest(req),
+        requestId,
       ),
     );
   }
@@ -285,11 +354,16 @@ export class TehsilManagerController {
   @Delete('solar-system/:systemId')
   @UseGuards(JwtAuthGuard, MinRoleGuard)
   @MinRole(ADMIN)
-  deleteSolarSystem(@Req() req: Request, @Param('systemId') systemId: string) {
+  deleteSolarSystem(
+    @Req() req: Request,
+    @Param('systemId') systemId: string,
+    @Body() body: { reason?: string },
+  ) {
     return this.respond(
       this.tehsilManagerService.deleteSolarSystem(
         this.jwtFromRequest(req),
         systemId,
+        body,
       ),
     );
   }

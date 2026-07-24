@@ -7,6 +7,7 @@ import { Notification } from '../../infrastructure/database/entities/notificatio
 import { Role } from '../../infrastructure/database/entities/role.entity';
 import { User } from '../../infrastructure/database/entities/user.entity';
 import { UserTehsil } from '../../infrastructure/database/entities/user-tehsil.entity';
+import { UserManagerOperation } from '../../infrastructure/database/entities/user-manager-operation.entity';
 import { VerificationLog } from '../../infrastructure/database/entities/verification-log.entity';
 import { RbacService } from './rbac.service';
 
@@ -21,6 +22,8 @@ export class WorkflowService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(UserTehsil)
     private readonly userTehsilRepo: Repository<UserTehsil>,
+    @InjectRepository(UserManagerOperation)
+    private readonly managerOpRepo: Repository<UserManagerOperation>,
     private readonly rbac: RbacService,
   ) {}
 
@@ -89,6 +92,30 @@ export class WorkflowService {
 
     for (const u of recipients.values()) {
       await this.createNotification(u.id, title, message, submissionId);
+    }
+  }
+
+  /** Notify Manager Operations users assigned to this tehsil via user_manageroperation. */
+  async notifyManagerOperationsForTehsil(
+    tehsil: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
+    const c = canonicalTehsil(tehsil);
+    if (!c) return;
+
+    const links = await this.managerOpRepo.find({ where: { tehsil: c } });
+    const seen = new Set<string>();
+    for (const row of links) {
+      const uid = String(row.userId);
+      if (seen.has(uid)) continue;
+      seen.add(uid);
+      const u = await this.userRepo.findOne({
+        where: { id: uid },
+        relations: { assignedRole: true },
+      });
+      if (!u || this.rbac.userRoleCode(u) !== SUPER_ADMIN) continue;
+      await this.createNotification(u.id, title, message);
     }
   }
 

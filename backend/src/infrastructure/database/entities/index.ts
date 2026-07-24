@@ -14,6 +14,7 @@ export { Submission } from './submission.entity';
 export { VerificationLog } from './verification-log.entity';
 export { Notification } from './notification.entity';
 export { TrainingVideo } from './training-video.entity';
+export { SiteDeleteRequest } from './site-delete-request.entity';
 
 import { Role } from './role.entity';
 import { User } from './user.entity';
@@ -31,6 +32,7 @@ import { Submission } from './submission.entity';
 import { VerificationLog } from './verification-log.entity';
 import { Notification } from './notification.entity';
 import { TrainingVideo } from './training-video.entity';
+import { SiteDeleteRequest } from './site-delete-request.entity';
 
 export const ALL_ENTITIES = [
   Role,
@@ -49,4 +51,5 @@ export const ALL_ENTITIES = [
   VerificationLog,
   Notification,
   TrainingVideo,
+  SiteDeleteRequest,
 ];

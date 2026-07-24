@@ -40,6 +40,7 @@ import {
 } from "../../../../components/ui/select";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { getApiErrorMessage } from "../../../../lib/api-error";
+import { TypeToConfirmDeleteDialog } from "../../../../components/TypeToConfirmDeleteDialog";
 import {
   deleteSolarSystem,
   getSolarSystem,
@@ -81,6 +82,7 @@ export default function SolarSiteEditPage() {
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const [site, setSite] = useState<SolarSystemRow | null>(null);
   const [monthlyLogCount, setMonthlyLogCount] = useState<number>(0);
@@ -248,24 +250,19 @@ export default function SolarSiteEditPage() {
     }
   };
 
-  const remove = async () => {
+  const remove = async (reason: string) => {
     if (!isResolved) return;
-    if (monthlyLogCount > 0) {
-      setToast({
-        message:
-          "This site has monthly energy submissions and cannot be deleted. Remove those records first.",
-        type: "error",
-      });
-      return;
-    }
-    if (!window.confirm("Delete this solar site? This cannot be undone."))
-      return;
 
     setDeleting(true);
     try {
-      await deleteSolarSystem(site!.id);
-      setToast({ message: "Solar site deleted.", type: "success" });
-      setTimeout(() => navigate(tehsilRoutes.solarSites), 700);
+      await deleteSolarSystem(site!.id, reason);
+      setDeleteDialogOpen(false);
+      setToast({
+        message:
+          "Delete request submitted. Waiting for Manager Operations approval.",
+        type: "success",
+      });
+      setTimeout(() => navigate(tehsilRoutes.solarSites), 900);
     } catch (e: unknown) {
       setToast({
         message: getApiErrorMessage(e, "Delete failed"),
@@ -286,6 +283,26 @@ export default function SolarSiteEditPage() {
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ message: "", type: "success" })}
+      />
+
+      <TypeToConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        resourceKind="solar site"
+        confirmSiteId={String(site?.unique_identifier || "")}
+        resourceName={
+          site
+            ? `${site.unique_identifier || "Solar site"}${
+                monthlyLogCount > 0
+                  ? ` (${monthlyLogCount} monthly submission${
+                      monthlyLogCount === 1 ? "" : "s"
+                    })`
+                  : ""
+              }`
+            : "this solar site"
+        }
+        confirming={deleting}
+        onConfirm={(reason) => void remove(reason)}
       />
 
       <div className="mx-auto w-full max-w-6xl">
@@ -724,13 +741,9 @@ export default function SolarSiteEditPage() {
                     type="button"
                     variant="outline"
                     className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
-                    onClick={() => void remove()}
+                    onClick={() => setDeleteDialogOpen(true)}
                     disabled={saving || deleting || !isResolved}
-                    title={
-                      monthlyLogCount > 0
-                        ? "Deletion blocked: monthly logs exist"
-                        : "Delete this solar site"
-                    }
+                    title="Delete this solar site and all related submissions"
                   >
                     {deleting ? (
                       <Loader2 className="size-4 animate-spin" />
