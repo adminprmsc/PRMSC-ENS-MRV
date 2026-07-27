@@ -35,7 +35,11 @@ import {
   AccordionTrigger,
 } from "../../../components/ui/accordion";
 import { useAuth } from "../../../contexts/AuthContext";
-import { TEHSIL_OPTIONS, LOCATION_DATA } from "../../../utils/locationData";
+import {
+  ALL_TEHSILS,
+  ALL_VILLAGES,
+  useLocationCatalog,
+} from "../../../hooks/useLocationCatalog";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { getWaterAnomalies } from "../../../services/tehsilManagerOperatorService";
 
@@ -76,29 +80,44 @@ type AnomalyItem = {
 
 export default function WaterAlertsPage() {
   const { user } = useAuth();
+  const {
+    tehsils: catalogTehsils,
+    resolveUserTehsils,
+    scopeVillageOptions,
+    scopeTehsilOptions,
+  } = useLocationCatalog();
 
   const scopedTehsils = useMemo((): string[] => {
-    const t = (user?.tehsils ?? []).filter(
-      (x): x is string => typeof x === "string" && x.trim().length > 0,
-    );
-    return t.length > 0 ? t : [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
-
-  const restrictTehsils = scopedTehsils.length > 0 && !(scopedTehsils.length > 1 && scopedTehsils.includes("All Tehsils"));
+    const fromUser = resolveUserTehsils(user?.tehsils);
+    return fromUser.length > 0 ? fromUser : catalogTehsils;
+  }, [user?.tehsils, resolveUserTehsils, catalogTehsils]);
 
   const [filters, setFilters] = useState({
-    tehsil: scopedTehsils.length === 1 ? (scopedTehsils[0] ?? "All Tehsils") : "All Tehsils",
-    village: "All Villages",
+    tehsil:
+      scopedTehsils.length === 1
+        ? (scopedTehsils[0] ?? ALL_TEHSILS)
+        : ALL_TEHSILS,
+    village: ALL_VILLAGES,
     end_date: "",
   });
 
-  const villageOptions = useMemo(() => {
-    if (filters.tehsil === "All Tehsils") return ["All Villages"];
-    return [
-      "All Villages",
-      ...((LOCATION_DATA[String(filters.tehsil).toUpperCase()] || []) as string[]),
-    ];
-  }, [filters.tehsil]);
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(filters.tehsil, {
+        allowedTehsils: scopedTehsils,
+      }),
+    [scopeVillageOptions, filters.tehsil, scopedTehsils],
+  );
+
+  const tehsilOptions = useMemo(
+    () =>
+      scopeTehsilOptions({
+        allowedTehsils: scopedTehsils,
+        includeAll: true,
+        allLabel: ALL_TEHSILS,
+      }),
+    [scopeTehsilOptions, scopedTehsils],
+  );
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AnomalyItem[]>([]);
@@ -171,8 +190,8 @@ export default function WaterAlertsPage() {
               onValueChange={(v) =>
                 setFilters((p) => ({
                   ...p,
-                  tehsil: v ?? "All Tehsils",
-                  village: "All Villages",
+                  tehsil: v ?? ALL_TEHSILS,
+                  village: ALL_VILLAGES,
                 }))
               }
             >
@@ -180,10 +199,7 @@ export default function WaterAlertsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(scopedTehsils.length === 1 || restrictTehsils
-                  ? scopedTehsils
-                  : ["All Tehsils", ...scopedTehsils]
-                ).map((t) => (
+                {tehsilOptions.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
                   </SelectItem>
@@ -196,7 +212,7 @@ export default function WaterAlertsPage() {
             <Select
               value={filters.village}
               onValueChange={(v) =>
-                setFilters((p) => ({ ...p, village: v ?? "All Villages" }))
+                setFilters((p) => ({ ...p, village: v ?? ALL_VILLAGES }))
               }
             >
               <SelectTrigger className="h-9">

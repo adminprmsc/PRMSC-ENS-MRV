@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { DataGridColumnMeta } from "@/components/DataGrid";
+import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
+import { SOLAR_SITE_TYPES } from "@/constants/solarSiteTypes";
 import type {
   SolarSystemDetailRow,
   WaterSystemDetailRow,
@@ -147,6 +149,16 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         ),
       },
       {
+        id: "site_type",
+        accessorFn: (row) => row.site_type?.trim() || "Not set",
+        header: "Site type",
+        meta: {
+          filterVariant: "select",
+          filterOptions: [...SOLAR_SITE_TYPES, "Not set"],
+        } satisfies DataGridColumnMeta,
+        cell: ({ row }) => <SolarSiteTypeBadge value={row.original.site_type} />,
+      },
+      {
         accessorKey: "tehsil",
         header: "Tehsil",
         meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
@@ -276,6 +288,7 @@ export function solarSystemDetailFields(row: SolarSystemDetailRow) {
   return [
     { label: "Solar system ID", value: row.solar_system_id },
     { label: "Unique identifier", value: row.unique_identifier ?? "—" },
+    { label: "Site type", value: row.site_type?.trim() || "Not set" },
     { label: "Tehsil", value: row.tehsil },
     { label: "Village", value: row.village },
     { label: "Settlement", value: row.settlement ?? "—" },

@@ -9,7 +9,7 @@ import DataGridSkeleton, {
   ExecutiveKpiCardsSkeleton,
 } from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { useProgramDashboardApi, useTehsilManagerOperatorApi } from "@/hooks";
+import { useProgramDashboardApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { fetchScopedWaterSystems } from "./fetchExecutiveScopedDashboard";
@@ -17,22 +17,13 @@ import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
 import {
-  fetchRegisteredLocationSites,
-  type RegisteredLocationSite,
-} from "./registeredLocationOptions";
-import {
   latestAcceptedByWaterSystem,
   useHqSubmissions,
 } from "./useHqSubmissions";
 
 const ExecutiveWaterAnalysis = () => {
   const { getDashboardWaterSystemsDetail } = useProgramDashboardApi();
-  const { getWaterSystems } = useTehsilManagerOperatorApi();
-  const [locationSites, setLocationSites] = useState<RegisteredLocationSite[]>(
-    [],
-  );
-  const [locationsLoading, setLocationsLoading] = useState(true);
-  const scope = useExecutiveScopeFilters(locationSites);
+  const scope = useExecutiveScopeFilters();
   const baseColumns = useWaterAnalysisColumns();
   const { submissions } = useHqSubmissions();
 
@@ -44,31 +35,6 @@ const ExecutiveWaterAnalysis = () => {
   const [rows, setRows] = useState<WaterSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const allowedTehsilsKey = scope.allowedTehsils.join("|");
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadLocations = async () => {
-      setLocationsLoading(true);
-      try {
-        const sites = await fetchRegisteredLocationSites(
-          getWaterSystems,
-          scope.allowedTehsils,
-        );
-        if (!cancelled) setLocationSites(sites);
-      } catch {
-        if (!cancelled) setLocationSites([]);
-      } finally {
-        if (!cancelled) setLocationsLoading(false);
-      }
-    };
-    void loadLocations();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when assigned tehsils change
-  }, [getWaterSystems, allowedTehsilsKey]);
 
   const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
     () => [
@@ -178,7 +144,7 @@ const ExecutiveWaterAnalysis = () => {
         villageEnabled={scope.villageEnabled}
         settlementEnabled={scope.settlementEnabled}
         locationMeta={scope.locationMeta}
-        locationsLoading={locationsLoading}
+        locationsLoading={scope.catalogLoading}
         onUpdate={scope.updateFilter}
         onApply={scope.applyFilters}
       />

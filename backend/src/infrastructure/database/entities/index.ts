@@ -15,6 +15,8 @@ export { VerificationLog } from './verification-log.entity';
 export { Notification } from './notification.entity';
 export { TrainingVideo } from './training-video.entity';
 export { SiteDeleteRequest } from './site-delete-request.entity';
+export { LocationVillage } from './location-village.entity';
+export { LocationSettlement } from './location-settlement.entity';
 
 import { Role } from './role.entity';
 import { User } from './user.entity';
@@ -33,6 +35,8 @@ import { VerificationLog } from './verification-log.entity';
 import { Notification } from './notification.entity';
 import { TrainingVideo } from './training-video.entity';
 import { SiteDeleteRequest } from './site-delete-request.entity';
+import { LocationVillage } from './location-village.entity';
+import { LocationSettlement } from './location-settlement.entity';
 
 export const ALL_ENTITIES = [
   Role,
@@ -52,4 +56,6 @@ export const ALL_ENTITIES = [
   Notification,
   TrainingVideo,
   SiteDeleteRequest,
+  LocationVillage,
+  LocationSettlement,
 ];

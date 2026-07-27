@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { canonicalTehsil } from '../../domain/constants/tehsils';
+import {
+  normalizeSolarSiteType,
+  SOLAR_SITE_TYPES,
+} from '../../domain/constants/solar-site-types';
 import { ADMIN, SUPER_ADMIN } from '../../domain/constants/roles';
 import {
   toIsoDateString,
@@ -43,6 +47,7 @@ import { StorageService } from './storage.service';
 import { WorkflowService } from './workflow.service';
 import { NotificationsService } from './notifications.service';
 import { WaterSubmissionDetailService } from './water-submission-detail.service';
+import { LocationsService } from './locations.service';
 import { OperatorHelpersService } from './operator-helpers.service';
 import {
   TehsilAccessDenied,
@@ -98,6 +103,7 @@ export class TehsilManagerService {
     private readonly waterSubmissionDetailService: WaterSubmissionDetailService,
     private readonly operatorHelpers: OperatorHelpersService,
     private readonly tehsilAccess: TehsilAccessService,
+    private readonly locationsService: LocationsService,
     private readonly rbac: RbacService,
   ) {}
 
@@ -1179,6 +1185,32 @@ export class TehsilManagerService {
     const village = data.village as string;
     const settlement = (data.settlement as string) || '';
 
+    if (!village) {
+      return { statusCode: 400, body: { message: 'village is required' } };
+    }
+    try {
+      await this.locationsService.assertVillageExists(ct, village);
+      if (settlement.trim()) {
+        await this.locationsService.assertSettlementExists(
+          ct,
+          village,
+          settlement,
+        );
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        const resp = e.getResponse();
+        return {
+          statusCode: 400,
+          body:
+            typeof resp === 'string'
+              ? { message: resp }
+              : (resp as Record<string, unknown>),
+        };
+      }
+      throw e;
+    }
+
     let uniqueId = data.unique_identifier as string | undefined;
     if (!uniqueId) {
       uniqueId = `WS-${ct.slice(0, 3).toUpperCase()}-${String(village).slice(0, 3).toUpperCase()}-${settlement ? settlement.slice(0, 3).toUpperCase() : 'XXX'}-${uuidv4().slice(0, 8)}`;
@@ -1298,6 +1330,42 @@ export class TehsilManagerService {
     const settlementRaw = this.coerceString(data.settlement).trim();
     const settlementDb = settlementRaw || null;
 
+    let siteType: string | null = null;
+    if ('site_type' in data && data.site_type != null && String(data.site_type).trim()) {
+      siteType = normalizeSolarSiteType(data.site_type);
+      if (!siteType) {
+        return {
+          statusCode: 400,
+          body: {
+            message: `Invalid site_type. Allowed: ${SOLAR_SITE_TYPES.join(', ')} (or leave empty)`,
+          },
+        };
+      }
+    }
+
+    try {
+      await this.locationsService.assertVillageExists(ct, village);
+      if (settlementRaw) {
+        await this.locationsService.assertSettlementExists(
+          ct,
+          village,
+          settlementRaw,
+        );
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        const resp = e.getResponse();
+        return {
+          statusCode: 400,
+          body:
+            typeof resp === 'string'
+              ? { message: resp }
+              : (resp as Record<string, unknown>),
+        };
+      }
+      throw e;
+    }
+
     const solarConnectionDate = this.operatorHelpers.parseDate(
       this.coerceString(data.solar_connection_date || data.installation_date),
     );
@@ -1319,6 +1387,7 @@ export class TehsilManagerService {
       tehsil: ct,
       village,
       settlement: settlementDb,
+      siteType,
       uniqueIdentifier: uniqueId,
       latitude: this.operatorHelpers.coerceOptionalFloat(data.latitude),
       longitude: this.operatorHelpers.coerceOptionalFloat(data.longitude),
@@ -2167,6 +2236,7 @@ export class TehsilManagerService {
         tehsil: s.tehsil,
         village: s.village,
         settlement: s.settlement,
+        site_type: s.siteType ?? null,
         unique_identifier: s.uniqueIdentifier,
         latitude: s.latitude,
         longitude: s.longitude,
@@ -2553,6 +2623,7 @@ export class TehsilManagerService {
         tehsil: system.tehsil,
         village: system.village,
         settlement: system.settlement || '',
+        site_type: system.siteType ?? null,
         unique_identifier: system.uniqueIdentifier,
         latitude: system.latitude,
         longitude: system.longitude,
@@ -2644,6 +2715,24 @@ export class TehsilManagerService {
             message: 'Cannot change settlement on an existing solar site',
           },
         };
+      }
+    }
+
+    if ('site_type' in data) {
+      const raw = data.site_type;
+      if (raw == null || String(raw).trim() === '') {
+        system.siteType = null;
+      } else {
+        const normalized = normalizeSolarSiteType(raw);
+        if (!normalized) {
+          return {
+            statusCode: 400,
+            body: {
+              message: `Invalid site_type. Allowed: ${SOLAR_SITE_TYPES.join(', ')} (or leave empty)`,
+            },
+          };
+        }
+        system.siteType = normalized;
       }
     }
 
@@ -2826,6 +2915,7 @@ export class TehsilManagerService {
           config: {
             id: String(system.id),
             installation_location: system.installationLocation,
+            site_type: system.siteType ?? null,
             disco_info: system.discoInfo,
             bill_reference_number: system.billReferenceNumber,
             solar_panel_capacity: system.solarPanelCapacity,

@@ -61,6 +61,7 @@ import WaterOperatorAssignments from "./pages/tehsil/operators/WaterOperatorAssi
 import SubmissionsAudit from "./pages/verification/VerificationDashboard";
 import SubmissionReview from "./pages/verification/SubmissionReview";
 import UsersAdminPage from "./pages/admin/UsersAdminPage";
+import AdminLocationsPage from "./pages/admin/AdminLocationsPage";
 import TrainingLayout from "./pages/training/TrainingLayout";
 import { TrainingHub } from "./pages/training/TrainingHub";
 import TrainingGuidePage from "./pages/training/TrainingGuidePage";
@@ -165,6 +166,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
                   <UsersAdminPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={adminRoutes.locations}
+              element={
+                <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
+                  <AdminLocationsPage />
                 </ProtectedRoute>
               }
             />

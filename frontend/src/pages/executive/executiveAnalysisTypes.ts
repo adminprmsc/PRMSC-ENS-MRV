@@ -33,6 +33,7 @@ export type SolarSystemDetailRow = {
   tehsil: string;
   village: string;
   settlement?: string | null;
+  site_type?: string | null;
   disco_info?: string | null;
   bill_reference_number?: string | null;
   total_export_kwh: number;

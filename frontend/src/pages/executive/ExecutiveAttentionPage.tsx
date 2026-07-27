@@ -24,8 +24,11 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgramDashboardApi } from "@/hooks";
+import {
+  ALL_VILLAGES,
+  useLocationCatalog,
+} from "@/hooks/useLocationCatalog";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { LOCATION_DATA, TEHSIL_OPTIONS } from "@/utils/locationData";
 import {
   AdminIssuesPanel,
   buildAdminIssues,
@@ -62,13 +65,17 @@ type ScopeFilters = {
 const ExecutiveAttentionPage = () => {
   const { user } = useAuth();
   const { getDashboardProgramSummary } = useProgramDashboardApi();
+  const {
+    tehsils: catalogTehsils,
+    resolveUserTehsils,
+    scopeVillageOptions,
+    scopeTehsilOptions,
+  } = useLocationCatalog();
 
   const allowedTehsils = useMemo(() => {
-    const t = (user?.tehsils ?? [])
-      .map((x) => String(x).trim())
-      .filter(Boolean);
-    return t.length ? t : [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+    const fromUser = resolveUserTehsils(user?.tehsils);
+    return fromUser.length ? fromUser : catalogTehsils;
+  }, [user?.tehsils, resolveUserTehsils, catalogTehsils]);
   const restrictTehsils = (user?.tehsils ?? []).length > 0;
   const initialTehsil =
     restrictTehsils && allowedTehsils.length > 1
@@ -89,7 +96,7 @@ const ExecutiveAttentionPage = () => {
 
   const [filters, setFilters] = useState<ScopeFilters>(() => ({
     tehsil: resolvedTehsil,
-    village: searchParams.get("village")?.trim() || "All Villages",
+    village: searchParams.get("village")?.trim() || ALL_VILLAGES,
     month: searchParams.get("month")?.trim() || "All Months",
     year: searchParams.get("year")?.trim() || "2026",
   }));
@@ -103,30 +110,18 @@ const ExecutiveAttentionPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const villageOptions = useMemo(() => {
-    if (filters.tehsil === ALL_ASSIGNED_TEHSILS) {
-      if (restrictTehsils && allowedTehsils.length) {
-        const villages = new Set<string>();
-        for (const tehsil of allowedTehsils) {
-          for (const village of (LOCATION_DATA[tehsil.toUpperCase()] ||
-            []) as string[]) {
-            villages.add(village);
-          }
-        }
-        return ["All Villages", ...[...villages].sort()];
-      }
-      return ["All Villages"];
-    }
-    return [
-      "All Villages",
-      ...((LOCATION_DATA[filters.tehsil.toUpperCase()] || []) as string[]),
-    ];
-  }, [filters.tehsil, restrictTehsils, allowedTehsils]);
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(filters.tehsil, {
+        allowedTehsils,
+      }),
+    [scopeVillageOptions, filters.tehsil, allowedTehsils],
+  );
 
   const updateScope = useCallback((patch: Partial<ScopeFilters>) => {
     setFilters((prev) => {
       const next = { ...prev, ...patch };
-      if (patch.tehsil !== undefined) next.village = "All Villages";
+      if (patch.tehsil !== undefined) next.village = ALL_VILLAGES;
       return next;
     });
   }, []);
@@ -185,13 +180,15 @@ const ExecutiveAttentionPage = () => {
     [summary.water_systems, summary.solar_systems, periodHint],
   );
 
-  const tehsilOptions = useMemo(() => {
-    if (restrictTehsils && allowedTehsils.length > 1) {
-      return [ALL_ASSIGNED_TEHSILS, ...allowedTehsils];
-    }
-    if (restrictTehsils) return allowedTehsils;
-    return [ALL_ASSIGNED_TEHSILS, ...TEHSIL_OPTIONS];
-  }, [restrictTehsils, allowedTehsils]);
+  const tehsilOptions = useMemo(
+    () =>
+      scopeTehsilOptions({
+        allowedTehsils: restrictTehsils ? allowedTehsils : catalogTehsils,
+        includeAll: true,
+        allLabel: ALL_ASSIGNED_TEHSILS,
+      }),
+    [scopeTehsilOptions, restrictTehsils, allowedTehsils, catalogTehsils],
+  );
 
   return (
     <PageShell className="animate-fade-in-up">

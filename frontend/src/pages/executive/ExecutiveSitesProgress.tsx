@@ -34,17 +34,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
+import { SOLAR_SITE_TYPES } from "@/constants/solarSiteTypes";
 import { hqRoutes } from "@/constants/routes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgramDashboardApi } from "@/hooks";
-import { getApiErrorMessage } from "@/lib/api-error";
-import { LOCATION_DATA, TEHSIL_OPTIONS } from "@/utils/locationData";
 import {
-  TehsilCoveragePanel,
-  buildRankedTehsilCoverage,
-  formatAdminDate,
-  formatSolarPeriod,
-} from "./AdminDashboardBlocks";
+  ALL_VILLAGES,
+  useLocationCatalog,
+} from "@/hooks/useLocationCatalog";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import {
   fetchScopedProgramDashboard,
@@ -52,6 +51,12 @@ import {
   type ProgramSummary,
   type ProgramWaterSystemCoverage,
 } from "./fetchScopedProgramDashboard";
+import {
+  TehsilCoveragePanel,
+  buildRankedTehsilCoverage,
+  formatAdminDate,
+  formatSolarPeriod,
+} from "./AdminDashboardBlocks";
 
 const YEARS = [2025, 2026, 2027, 2028, 2029];
 const MONTHS = [
@@ -165,6 +170,10 @@ function SolarSiteDetails({ row }: { row: SolarGridRow }) {
       actionLabel="Open site"
       fields={[
         {
+          label: "Site type",
+          value: <SolarSiteTypeBadge value={row.site_type} />,
+        },
+        {
           label: "Location",
           value:
             [row.village, row.settlement, row.tehsil]
@@ -186,13 +195,17 @@ function SolarSiteDetails({ row }: { row: SolarGridRow }) {
 const ExecutiveSitesProgress = () => {
   const { user } = useAuth();
   const { getDashboardProgramSummary } = useProgramDashboardApi();
+  const {
+    tehsils: catalogTehsils,
+    resolveUserTehsils,
+    scopeVillageOptions,
+    scopeTehsilOptions,
+  } = useLocationCatalog();
 
   const allowedTehsils = useMemo(() => {
-    const t = (user?.tehsils ?? [])
-      .map((x) => String(x).trim())
-      .filter(Boolean);
-    return t.length ? t : [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+    const fromUser = resolveUserTehsils(user?.tehsils);
+    return fromUser.length ? fromUser : catalogTehsils;
+  }, [user?.tehsils, resolveUserTehsils, catalogTehsils]);
   const restrictTehsils = (user?.tehsils ?? []).length > 0;
   const initialTehsil =
     restrictTehsils && allowedTehsils.length > 1
@@ -216,7 +229,7 @@ const ExecutiveSitesProgress = () => {
 
   const [filters, setFilters] = useState<ScopeFilters>(() => ({
     tehsil: resolvedTehsil,
-    village: searchParams.get("village")?.trim() || "All Villages",
+    village: searchParams.get("village")?.trim() || ALL_VILLAGES,
     month: urlMonth || "All Months",
     year: urlYear || "2026",
   }));
@@ -240,30 +253,18 @@ const ExecutiveSitesProgress = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const villageOptions = useMemo(() => {
-    if (filters.tehsil === ALL_ASSIGNED_TEHSILS) {
-      if (restrictTehsils && allowedTehsils.length) {
-        const villages = new Set<string>();
-        for (const tehsil of allowedTehsils) {
-          for (const village of (LOCATION_DATA[tehsil.toUpperCase()] ||
-            []) as string[]) {
-            villages.add(village);
-          }
-        }
-        return ["All Villages", ...[...villages].sort()];
-      }
-      return ["All Villages"];
-    }
-    return [
-      "All Villages",
-      ...((LOCATION_DATA[filters.tehsil.toUpperCase()] || []) as string[]),
-    ];
-  }, [filters.tehsil, restrictTehsils, allowedTehsils]);
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(filters.tehsil, {
+        allowedTehsils,
+      }),
+    [scopeVillageOptions, filters.tehsil, allowedTehsils],
+  );
 
   const updateScope = useCallback((patch: Partial<ScopeFilters>) => {
     setFilters((prev) => {
       const next = { ...prev, ...patch };
-      if (patch.tehsil !== undefined) next.village = "All Villages";
+      if (patch.tehsil !== undefined) next.village = ALL_VILLAGES;
       return next;
     });
   }, []);
@@ -446,6 +447,16 @@ const ExecutiveSitesProgress = () => {
         meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
       },
       {
+        id: "site_type",
+        accessorFn: (row) => row.site_type?.trim() || "Not set",
+        header: "Site type",
+        cell: ({ row }) => <SolarSiteTypeBadge value={row.original.site_type} />,
+        meta: {
+          filterVariant: "select",
+          filterOptions: [...SOLAR_SITE_TYPES, "Not set"],
+        } satisfies DataGridColumnMeta,
+      },
+      {
         accessorKey: "statusLabel",
         header: "Status",
         cell: ({ row }) => statusBadge(row.original.logged),
@@ -503,13 +514,15 @@ const ExecutiveSitesProgress = () => {
     [],
   );
 
-  const tehsilOptions = useMemo(() => {
-    if (restrictTehsils && allowedTehsils.length > 1) {
-      return [ALL_ASSIGNED_TEHSILS, ...allowedTehsils];
-    }
-    if (restrictTehsils) return allowedTehsils;
-    return [ALL_ASSIGNED_TEHSILS, ...TEHSIL_OPTIONS];
-  }, [restrictTehsils, allowedTehsils]);
+  const tehsilOptions = useMemo(
+    () =>
+      scopeTehsilOptions({
+        allowedTehsils: restrictTehsils ? allowedTehsils : catalogTehsils,
+        includeAll: true,
+        allLabel: ALL_ASSIGNED_TEHSILS,
+      }),
+    [scopeTehsilOptions, restrictTehsils, allowedTehsils, catalogTehsils],
+  );
 
   const waterLogged = Number(summary.water_sites_logged ?? 0);
   const solarLogged = Number(summary.solar_sites_logged ?? 0);

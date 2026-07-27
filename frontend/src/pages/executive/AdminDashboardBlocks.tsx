@@ -16,6 +16,7 @@ import { hqRoutes } from "@/constants/routes";
 import DataGrid, { type DataGridColumnMeta } from "@/components/DataGrid";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { DetailTile } from "@/components/common/DetailTile";
+import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -699,7 +700,12 @@ function SystemIdLinks({
   systems,
   kind,
 }: {
-  systems: Array<{ id: string; unique_identifier: string; village: string }>;
+  systems: Array<{
+    id: string;
+    unique_identifier: string;
+    village: string;
+    site_type?: string | null;
+  }>;
   kind: "water" | "solar";
 }) {
   if (systems.length === 0) {
@@ -710,7 +716,7 @@ function SystemIdLinks({
   return (
     <ul className="space-y-1">
       {shown.map((s) => (
-        <li key={s.id}>
+        <li key={s.id} className="flex flex-wrap items-center gap-1.5">
           <Link
             to={
               kind === "water"
@@ -722,9 +728,10 @@ function SystemIdLinks({
             {s.unique_identifier}
             <ArrowRight className="size-3 opacity-60" />
           </Link>
-          <span className="ml-1.5 text-[11px] text-muted-foreground">
-            {s.village}
-          </span>
+          {kind === "solar" ? (
+            <SolarSiteTypeBadge value={s.site_type} size="sm" showEmpty={false} />
+          ) : null}
+          <span className="text-[11px] text-muted-foreground">{s.village}</span>
         </li>
       ))}
       {rest > 0 ? (
