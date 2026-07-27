@@ -39,6 +39,7 @@ export type ProgramSolarSystemCoverage = {
   tehsil: string;
   village: string;
   settlement: string | null;
+  site_type: string | null;
   logs_count: number;
   months_logged: number;
   lifetime_last_log_year: number | null;
@@ -152,6 +153,7 @@ function normalizeSolarSystem(
     tehsil: String(raw.tehsil ?? "Unknown"),
     village: String(raw.village ?? "—"),
     settlement: raw.settlement ?? null,
+    site_type: raw.site_type ?? null,
     logs_count: logs,
     months_logged: Number(raw.months_logged ?? 0),
     lifetime_last_log_year:

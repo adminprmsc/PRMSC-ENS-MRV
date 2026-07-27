@@ -8,6 +8,7 @@ import { OperatorHelpersService } from './operator-helpers.service';
 import { PumpTimesService } from './pump-times.service';
 import { RbacService } from './rbac.service';
 import { StorageService } from './storage.service';
+import { LocationsService } from './locations.service';
 import { TehsilAccessService } from './tehsil-access.service';
 import { TehsilManagerService } from './tehsil-manager.service';
 import { TrainingService } from './training.service';
@@ -22,6 +23,7 @@ const SERVICES = [
   AuthService,
   DashboardService,
   EmailService,
+  LocationsService,
   NotificationsService,
   OperatorHelpersService,
   PumpTimesService,

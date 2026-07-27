@@ -40,7 +40,7 @@ import { useTehsilManagerOperatorApi } from "../../../../hooks";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import { getSolarSupplyRecord as fetchSolarSupplyRecord } from "../../../../services/tehsilManagerOperatorService";
 import type { SolarMonthlySupplyRecordDetail } from "../../../../types/api";
-import { TEHSIL_OPTIONS } from "../../../../utils/locationData";
+import { useLocationCatalog } from "../../../../hooks/useLocationCatalog";
 
 const MONTH_NAMES = [
   "",
@@ -57,11 +57,6 @@ const MONTH_NAMES = [
   "November",
   "December",
 ];
-
-function canonicalTehsil(raw: string): string | null {
-  const t = raw.trim().toUpperCase();
-  return (TEHSIL_OPTIONS as readonly string[]).find((o) => o === t) ?? null;
-}
 
 function EditPageSkeleton() {
   return (
@@ -95,6 +90,7 @@ export default function SolarMonthlyLogEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { matchTehsil, tehsils: catalogTehsils } = useLocationCatalog();
   const { updateSolarSupplyRecord, deleteSolarSupplyRecord, uploadImage } =
     useTehsilManagerOperatorApi();
 
@@ -150,15 +146,15 @@ export default function SolarMonthlyLogEditPage() {
         }
 
         const fromUser = (user?.tehsils ?? [])
-          .map(canonicalTehsil)
+          .map(matchTehsil)
           .filter((x): x is string => Boolean(x));
         const hasResolvedProfileTehsils = fromUser.length > 0;
         const tehsilSelectOptions = hasResolvedProfileTehsils
           ? [...new Set(fromUser)]
-          : [...TEHSIL_OPTIONS];
+          : catalogTehsils;
 
         if (hasResolvedProfileTehsils) {
-          const c = canonicalTehsil(String(rec.tehsil ?? ""));
+          const c = matchTehsil(String(rec.tehsil ?? ""));
           const allowed = new Set(tehsilSelectOptions);
           if (!c || !allowed.has(c)) {
             setLoadError("This record belongs to another tehsil.");
@@ -241,7 +237,7 @@ export default function SolarMonthlyLogEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [recordId, profileTehsilsKey]);
+  }, [recordId, profileTehsilsKey, matchTehsil, catalogTehsils, user?.tehsils]);
 
   const monthLabel =
     record && record.month >= 1 && record.month <= 12

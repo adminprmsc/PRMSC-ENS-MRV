@@ -202,6 +202,9 @@ function fallbackCrumb(pathname: string): Crumb[] {
   if (pathname === adminRoutes.users) {
     return [{ label: "Administration" }, { label: "User accounts" }];
   }
+  if (pathname === adminRoutes.locations) {
+    return [{ label: "Administration" }, { label: "Villages & settlements" }];
+  }
   if (pathname === accountRoutes.changePassword) {
     return [{ label: "Account" }, { label: "Change password" }];
   }

@@ -1,8 +1,11 @@
 import type { QueryFilters } from "@/services/types";
+import {
+  ALL_SETTLEMENTS,
+  ALL_VILLAGES,
+} from "@/hooks/useLocationCatalog";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
-export const ALL_VILLAGES = "All Villages";
-export const ALL_SETTLEMENTS = "All Settlements";
+export { ALL_VILLAGES, ALL_SETTLEMENTS };
 
 export type RegisteredLocationSite = {
   tehsil: string;

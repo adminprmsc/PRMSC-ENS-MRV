@@ -38,6 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../../components/ui/select";
+import { SOLAR_SITE_TYPES } from "../../../../constants/solarSiteTypes";
+import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import { TypeToConfirmDeleteDialog } from "../../../../components/TypeToConfirmDeleteDialog";
@@ -95,6 +97,7 @@ export default function SolarSiteEditPage() {
     longitude: "",
     installation_location: "",
     installation_location_other: "",
+    site_type: "",
     disco_info: "",
     bill_reference_number: "",
     solar_panel_capacity: "",
@@ -142,6 +145,7 @@ export default function SolarSiteEditPage() {
         ).includes(String(s.installation_location ?? ""))
           ? ""
           : String(s.installation_location ?? ""),
+        site_type: String(s.site_type ?? ""),
         disco_info: String(s.disco_info ?? ""),
         bill_reference_number: String(s.bill_reference_number ?? ""),
         solar_panel_capacity:
@@ -230,6 +234,7 @@ export default function SolarSiteEditPage() {
         ...formData,
         installation_location,
         installation_location_other: undefined,
+        site_type: formData.site_type.trim() || null,
         current_meter: {
           meter_type: "solar",
           meter_model: formData.meter_model,
@@ -379,6 +384,12 @@ export default function SolarSiteEditPage() {
                   <p className="mt-1 font-medium">{site?.settlement || "—"}</p>
                 </div>
                 <div className="rounded-lg border bg-background p-3 md:col-span-2">
+                  <p className="text-[11px] text-muted-foreground">Site type</p>
+                  <div className="mt-2">
+                    <SolarSiteTypeBadge value={formData.site_type || site?.site_type || null} />
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-background p-3 md:col-span-2">
                   <p className="text-[11px] text-muted-foreground">
                     DISCO / Electricity provider
                   </p>
@@ -485,6 +496,32 @@ export default function SolarSiteEditPage() {
                       className="h-11"
                     />
                   ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>Site type (optional)</Label>
+                  <Select
+                    value={formData.site_type || "__empty__"}
+                    onValueChange={(v) => {
+                      if (v == null) return;
+                      setFormData((prev) => ({
+                        ...prev,
+                        site_type: v === "__empty__" ? "" : v,
+                      }));
+                    }}
+                    disabled={saving || deleting || !isResolved}
+                  >
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Select site type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__empty__">Not set</SelectItem>
+                      {SOLAR_SITE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>DISCO / Electricity provider</Label>

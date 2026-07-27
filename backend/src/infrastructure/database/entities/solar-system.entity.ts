@@ -29,6 +29,10 @@ export class SolarSystem {
   @Column({ type: 'varchar', length: 150, nullable: true })
   settlement!: string | null;
 
+  /** Optional site classification: ABR | Tubewell | RO Plant */
+  @Column({ name: 'site_type', type: 'varchar', length: 30, nullable: true })
+  siteType!: string | null;
+
   @Column({
     name: 'unique_identifier',
     type: 'varchar',

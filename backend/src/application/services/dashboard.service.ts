@@ -63,7 +63,7 @@ export class DashboardService {
     settlement?: string,
   ) {
     let waterSystems = await this.waterSystemRepo.find();
-    let solarSystems = await this.solarSystemRepo.find();
+    let solarSystems: SolarSystem[] = await this.solarSystemRepo.find();
     waterSystems = this.applyLocationFilters(
       waterSystems,
       tehsil,
@@ -278,6 +278,7 @@ export class DashboardService {
       tehsil: string;
       village: string;
       settlement: string | null;
+      site_type: string | null;
       logs_count: number;
       months_logged: number;
       lifetime_last_log_year: number | null;
@@ -318,12 +319,15 @@ export class DashboardService {
         const stats = solarStatsBySystem.get(String(ss.id));
         const logs = stats?.logs_count ?? 0;
         const life = solarLifetimeLast.get(String(ss.id));
+        const siteType: string | null =
+          (ss as { siteType?: string | null }).siteType ?? null;
         return {
           id: String(ss.id),
           unique_identifier: ss.uniqueIdentifier,
           tehsil: ss.tehsil || 'Unknown',
           village: ss.village || '—',
           settlement: ss.settlement ?? null,
+          site_type: siteType,
           logs_count: logs,
           months_logged: stats?.months_logged ?? 0,
           lifetime_last_log_year: life?.last_year ?? null,
@@ -797,6 +801,7 @@ export class DashboardService {
       .addSelect('ss.tehsil', 'tehsil')
       .addSelect('ss.village', 'village')
       .addSelect('ss.settlement', 'settlement')
+      .addSelect('ss.site_type', 'site_type')
       .addSelect('ss.disco_info', 'disco_info')
       .addSelect('ss.bill_reference_number', 'bill_reference_number')
       .addSelect(
@@ -818,6 +823,7 @@ export class DashboardService {
       .addGroupBy('ss.tehsil')
       .addGroupBy('ss.village')
       .addGroupBy('ss.settlement')
+      .addGroupBy('ss.site_type')
       .addGroupBy('ss.disco_info')
       .addGroupBy('ss.bill_reference_number')
       .orderBy('ss.tehsil')
@@ -853,6 +859,7 @@ export class DashboardService {
         tehsil: r.tehsil,
         village: r.village,
         settlement: r.settlement,
+        site_type: r.site_type ?? null,
         disco_info: r.disco_info,
         bill_reference_number: r.bill_reference_number,
         total_export_kwh: expKwh,

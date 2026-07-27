@@ -4,3 +4,4 @@ export * from "./useVerificationApi";
 export * from "./useProgramDashboardApi";
 export * from "./useTehsilProgramSummary";
 export * from "./useUsersApi";
+export * from "./useLocationCatalog";

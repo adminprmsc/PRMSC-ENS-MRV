@@ -79,6 +79,7 @@ export const accountRoutes = {
 /** Platform administrator */
 export const adminRoutes = {
   users: "/admin/users",
+  locations: "/admin/locations",
 } as const;
 
 /** Training center — guides for all portal roles; videos restricted on page. */

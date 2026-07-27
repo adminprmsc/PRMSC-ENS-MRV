@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MapPinned,
   Menu,
   PanelLeft,
   Radio,
@@ -238,6 +239,11 @@ const MainLayout = () => {
             icon: <Users className="size-4 shrink-0 opacity-90" />,
             label: "User accounts",
             end: true,
+          },
+          {
+            path: adminRoutes.locations,
+            icon: <MapPinned className="size-4 shrink-0 opacity-90" />,
+            label: "Villages & settlements",
           },
         ],
       });

@@ -56,13 +56,13 @@ import {
   Trash2,
   ExternalLink,
 } from "lucide-react";
-import { TEHSIL_OPTIONS } from "../../../utils/locationData";
 import {
   formatPakistanDateTime,
   getPakistanMonth,
   getPakistanYear,
   nowIsoTimestamp,
 } from "../../../utils/pakistanTime";
+import { useLocationCatalog } from "../../../hooks/useLocationCatalog";
 
 type RegisteredSolarSystem = {
   id: string | number;
@@ -71,12 +71,6 @@ type RegisteredSolarSystem = {
   settlement?: string | undefined;
   solar_panel_capacity?: number | null;
 };
-
-/** Map API / profile tehsil string to canonical `TEHSIL_OPTIONS` entry. */
-function canonicalTehsil(raw: string): string | null {
-  const t = raw.trim().toUpperCase();
-  return (TEHSIL_OPTIONS as readonly string[]).find((o) => o === t) ?? null;
-}
 
 function FormField({
   label,
@@ -152,6 +146,7 @@ const currentYear = getPakistanYear();
 
 const SolarSupplyDataForm = () => {
   const { user } = useAuth();
+  const { matchTehsil, tehsils: catalogTehsils } = useLocationCatalog();
   const {
     getSolarSupplyData,
     saveSolarSupplyData,
@@ -228,19 +223,19 @@ const SolarSupplyDataForm = () => {
 
   const tehsilSelectOptions = useMemo(() => {
     const fromUser = (user?.tehsils ?? [])
-      .map(canonicalTehsil)
+      .map(matchTehsil)
       .filter((x): x is string => Boolean(x));
     const unique = [...new Set(fromUser)];
     if (unique.length > 0) return unique;
-    return [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+    return catalogTehsils;
+  }, [user?.tehsils, matchTehsil, catalogTehsils]);
 
   const hasResolvedProfileTehsils = useMemo(() => {
     const fromUser = (user?.tehsils ?? [])
-      .map(canonicalTehsil)
+      .map(matchTehsil)
       .filter((x): x is string => Boolean(x));
     return new Set(fromUser).size > 0;
-  }, [user?.tehsils]);
+  }, [user?.tehsils, matchTehsil]);
 
   const tehsilSelectLocked = tehsilSelectOptions.length === 1;
 
@@ -248,7 +243,7 @@ const SolarSupplyDataForm = () => {
     if (!hasResolvedProfileTehsils) return registeredSystems;
     const allowed = new Set(tehsilSelectOptions);
     return registeredSystems.filter((s) => {
-      const c = canonicalTehsil(s.tehsil);
+      const c = matchTehsil(s.tehsil);
       return c !== null && allowed.has(c);
     });
   }, [registeredSystems, hasResolvedProfileTehsils, tehsilSelectOptions]);
@@ -288,7 +283,7 @@ const SolarSupplyDataForm = () => {
     if (!query) return scopedRegisteredSystems;
     return scopedRegisteredSystems.filter((s) => {
       const label = formatSiteLabel(s).toLowerCase();
-      const tehsil = String(canonicalTehsil(s.tehsil) ?? s.tehsil).toLowerCase();
+      const tehsil = String(matchTehsil(s.tehsil) ?? s.tehsil).toLowerCase();
       return label.includes(query) || tehsil.includes(query);
     });
   }, [scopedRegisteredSystems, siteSearch]);
@@ -505,7 +500,7 @@ const SolarSupplyDataForm = () => {
         if (!rec || cancelled) return;
 
         if (hasResolvedProfileTehsils) {
-          const c = canonicalTehsil(String(rec.tehsil ?? ""));
+          const c = matchTehsil(String(rec.tehsil ?? ""));
           const allowed = new Set(tehsilSelectOptions);
           if (!c || !allowed.has(c)) {
             setRecordLoadError("This record belongs to another tehsil.");
@@ -580,7 +575,7 @@ const SolarSupplyDataForm = () => {
         }
 
         if (hasResolvedProfileTehsils) {
-          const c = canonicalTehsil(sys.tehsil);
+          const c = matchTehsil(sys.tehsil);
           const allowed = new Set(tehsilSelectOptions);
           if (!c || !allowed.has(c)) {
             setToast({
@@ -1143,7 +1138,7 @@ const SolarSupplyDataForm = () => {
                     </span>
                     <span className="text-slate-400">·</span>
                     <span className="text-xs uppercase tracking-wide text-slate-500">
-                      {canonicalTehsil(selectedSystem.tehsil) ??
+                      {matchTehsil(selectedSystem.tehsil) ??
                         selectedSystem.tehsil}
                     </span>
                   </p>

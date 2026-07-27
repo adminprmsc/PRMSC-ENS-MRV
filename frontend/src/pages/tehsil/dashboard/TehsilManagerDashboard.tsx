@@ -35,7 +35,11 @@ import {
 } from "../../../components/ui/select";
 import { tehsilRoutes } from "../../../constants/routes";
 import { useAuth } from "../../../contexts/AuthContext";
-import { TEHSIL_OPTIONS, LOCATION_DATA } from "../../../utils/locationData";
+import {
+  ALL_TEHSILS,
+  ALL_VILLAGES,
+  useLocationCatalog,
+} from "../../../hooks/useLocationCatalog";
 import { useTehsilProgramSummary } from "../../../hooks";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { getPakistanYear } from "../../../utils/pakistanTime";
@@ -95,13 +99,16 @@ const QUICK_LINKS = [
 const TehsilManagerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const {
+    tehsils: catalogTehsils,
+    resolveUserTehsils,
+    scopeVillageOptions,
+  } = useLocationCatalog();
 
   const scopedTehsils = useMemo((): string[] => {
-    const t = (user?.tehsils ?? []).filter(
-      (x): x is string => typeof x === "string" && x.trim().length > 0,
-    );
-    return t.length > 0 ? t : [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+    const fromUser = resolveUserTehsils(user?.tehsils);
+    return fromUser.length > 0 ? fromUser : catalogTehsils;
+  }, [user?.tehsils, resolveUserTehsils, catalogTehsils]);
 
   const currentYear = getPakistanYear();
   const defaultTehsil = useMemo((): string => {
@@ -109,12 +116,12 @@ const TehsilManagerDashboard = () => {
       const only = scopedTehsils[0];
       if (only !== undefined) return only;
     }
-    return "All Tehsils";
+    return ALL_TEHSILS;
   }, [scopedTehsils]);
 
   const [filters, setFilters] = useState<Filters>({
     tehsil: defaultTehsil,
-    village: "All Villages",
+    village: ALL_VILLAGES,
     month: "",
     year: currentYear,
   });
@@ -124,23 +131,27 @@ const TehsilManagerDashboard = () => {
     setFilters((prev) => ({
       ...prev,
       tehsil: defaultTehsil,
-      village: "All Villages",
+      village: ALL_VILLAGES,
     }));
     setActiveFilters((prev) => ({
       ...prev,
       tehsil: defaultTehsil,
-      village: "All Villages",
+      village: ALL_VILLAGES,
     }));
   }, [defaultTehsil]);
 
   const TEHSILS = useMemo(() => {
     if (scopedTehsils.length === 1) return scopedTehsils;
-    return ["All Tehsils", ...scopedTehsils];
+    return [ALL_TEHSILS, ...scopedTehsils];
   }, [scopedTehsils]);
 
-  const [villageOptions, setVillageOptions] = useState<string[]>([
-    "All Villages",
-  ]);
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(filters.tehsil, {
+        allowedTehsils: scopedTehsils,
+      }),
+    [scopeVillageOptions, filters.tehsil, scopedTehsils],
+  );
 
   const {
     data: summary,
@@ -167,16 +178,6 @@ const TehsilManagerDashboard = () => {
   ];
 
   const YEARS = [currentYear - 1, currentYear, currentYear + 1];
-
-  useEffect(() => {
-    const key = filters.tehsil.toUpperCase();
-    if (filters.tehsil !== "All Tehsils" && LOCATION_DATA[key]) {
-      setVillageOptions(["All Villages", ...LOCATION_DATA[key]]);
-    } else {
-      setVillageOptions(["All Villages"]);
-      setFilters((prev) => ({ ...prev, village: "All Villages" }));
-    }
-  }, [filters.tehsil]);
 
   useEffect(() => {
     if (!statsError) return;
@@ -211,11 +212,11 @@ const TehsilManagerDashboard = () => {
 
   const activeScopeLabel = useMemo(() => {
     const tehsil =
-      activeFilters.tehsil === "All Tehsils"
+      activeFilters.tehsil === ALL_TEHSILS
         ? "All tehsils"
         : activeFilters.tehsil;
     const village =
-      activeFilters.village === "All Villages"
+      activeFilters.village === ALL_VILLAGES
         ? "all villages"
         : activeFilters.village;
     const month =
@@ -304,7 +305,7 @@ const TehsilManagerDashboard = () => {
               setFilters((prev) => ({
                 ...prev,
                 tehsil: value,
-                village: "All Villages",
+                village: ALL_VILLAGES,
               }))
             }
             options={TEHSILS}

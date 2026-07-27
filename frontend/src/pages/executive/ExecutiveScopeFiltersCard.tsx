@@ -156,19 +156,24 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
           <div className="min-w-0 space-y-1">
             <CardTitle className="text-base">Scope filters</CardTitle>
             <CardDescription className="text-xs leading-relaxed">
-              Choose tehsil first, then village and settlement. Only places with
-              registered sites appear in the lists.
+              Choose tehsil, village, and settlement from the location catalog.
+              With All Tehsils selected, villages and settlements from every
+              assigned tehsil are listed.
             </CardDescription>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {locationsLoading ? (
             <Badge variant="outline" className="font-normal">
-              Loading places…
+              Loading catalog…
             </Badge>
-          ) : locationMeta ? (
+          ) : locationMeta &&
+            (locationMeta.villageCount > 0 || locationMeta.settlementCount > 0) ? (
             <Badge variant="outline" className="font-normal">
-              {locationMeta.siteCount} registered sites
+              {locationMeta.villageCount} villages
+              {locationMeta.settlementCount > 0
+                ? ` · ${locationMeta.settlementCount} settlements`
+                : ""}
             </Badge>
           ) : null}
           <Badge
@@ -258,17 +263,11 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
           </div>
         </FieldGroup>
 
-        {!villageEnabled ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Pick a specific tehsil to unlock village and settlement filters for
-            registered sites.
-          </p>
-        ) : villageEnabled &&
-          locationMeta &&
-          !locationsLoading &&
-          locationMeta.villageCount === 0 ? (
+        {!locationsLoading &&
+        locationMeta &&
+        locationMeta.villageCount === 0 ? (
           <p className="mt-3 text-xs text-amber-800">
-            No registered sites found for this tehsil in the current catalogue.
+            No villages found in the location catalog for this scope.
           </p>
         ) : null}
       </CardContent>

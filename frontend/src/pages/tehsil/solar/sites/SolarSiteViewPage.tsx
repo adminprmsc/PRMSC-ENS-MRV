@@ -7,6 +7,7 @@ import { Button } from "../../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
 import { Badge } from "../../../../components/ui/badge";
 import { Skeleton } from "../../../../components/ui/skeleton";
+import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import { getSolarSystem } from "../../../../services/tehsilManagerOperatorService";
@@ -104,6 +105,7 @@ export default function SolarSiteViewPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Badge>{kv(site.unique_identifier)}</Badge>
+            <SolarSiteTypeBadge value={site.site_type} />
             <Badge variant="outline">{kv(site.tehsil)}</Badge>
             <Badge variant="outline">{kv(site.village)}</Badge>
             {site.settlement ? (
@@ -122,6 +124,10 @@ export default function SolarSiteViewPage() {
               <CardContent className="space-y-2 pt-4">
                 <DetailRow label="System ID" value={site.id} />
                 <DetailRow label="UID" value={kv(site.unique_identifier)} />
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                  <span className="shrink-0 text-muted-foreground">Site type</span>
+                  <SolarSiteTypeBadge value={site.site_type} />
+                </div>
                 <DetailRow
                   label="Created"
                   value={formatPakistanDateTime(site.created_at)}

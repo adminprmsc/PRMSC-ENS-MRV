@@ -29,6 +29,7 @@ import {
 import type { SolarSystemRow } from "../../../types/api";
 import { formatPakistanDateTime } from "../../../utils/pakistanTime";
 import { Badge } from "../../../components/ui/badge";
+import { SolarSiteTypeBadge } from "../../../components/SolarSiteTypeBadge";
 
 export default function SolarSites() {
   const navigate = useNavigate();
@@ -81,6 +82,7 @@ export default function SolarSites() {
         s.tehsil,
         s.village,
         s.settlement,
+        s.site_type,
         s.unique_identifier,
         s.disco_info,
         s.bill_reference_number,
@@ -164,12 +166,13 @@ export default function SolarSites() {
         count={filtered.length}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Tehsil, village, DISCO, bill ref, UID…"
+        searchPlaceholder="Tehsil, village, site type, DISCO, bill ref, UID…"
       >
         <DataTableWrap>
           <Table>
             <DataTableHeader>
               <DataTableHead>Location</DataTableHead>
+              <DataTableHead>Site type</DataTableHead>
               <DataTableHead>UID</DataTableHead>
               <DataTableHead>DISCO</DataTableHead>
               <DataTableHead>Capacity</DataTableHead>
@@ -178,7 +181,7 @@ export default function SolarSites() {
             </DataTableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <DataTableEmpty colSpan={6} />
+                <DataTableEmpty colSpan={7} />
               ) : (
                 filtered.map((s) => (
                   <TableRow key={s.id}>
@@ -188,6 +191,9 @@ export default function SolarSites() {
                         {kv(s.tehsil)}
                         {s.settlement ? ` · ${s.settlement}` : ""}
                       </p>
+                    </TableCell>
+                    <TableCell>
+                      <SolarSiteTypeBadge value={s.site_type ?? null} />
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       <div className="flex flex-wrap items-center gap-1.5">

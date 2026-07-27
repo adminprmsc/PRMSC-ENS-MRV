@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "../../../components/ui/select";
 import { Textarea } from "../../../components/ui/textarea";
+import { SOLAR_SITE_TYPES } from "../../../constants/solarSiteTypes";
 import {
   Alert,
   AlertDescription,
@@ -45,18 +46,8 @@ import {
 import { Separator } from "../../../components/ui/separator";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { SearchableOptionField } from "../../../components/common/SearchableOptionField";
-import {
-  TEHSIL_OPTIONS,
-  LOCATION_DATA,
-  SETTLEMENT_DATA,
-} from "../../../utils/locationData";
+import { useLocationCatalog } from "../../../hooks/useLocationCatalog";
 import { cn } from "../../../lib/utils";
-
-/** Map API / profile tehsil string to canonical `TEHSIL_OPTIONS` entry. */
-function canonicalTehsil(raw: string): string | null {
-  const t = raw.trim().toUpperCase();
-  return (TEHSIL_OPTIONS as readonly string[]).find((o) => o === t) ?? null;
-}
 
 function FormField({
   label,
@@ -115,6 +106,8 @@ const SolarSystemForm = () => {
   const { user } = useAuth();
   const { createSolarSystem, getSolarSystemConfig } =
     useTehsilManagerOperatorApi();
+  const { villagesFor, settlementsFor, matchTehsil, tehsils: catalogTehsils } =
+    useLocationCatalog();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({
@@ -125,12 +118,12 @@ const SolarSystemForm = () => {
 
   const tehsilSelectOptions = useMemo(() => {
     const fromUser = (user?.tehsils ?? [])
-      .map(canonicalTehsil)
+      .map((t) => matchTehsil(t))
       .filter((x): x is string => Boolean(x));
     const unique = [...new Set(fromUser)];
     if (unique.length > 0) return unique;
-    return [...TEHSIL_OPTIONS];
-  }, [user?.tehsils]);
+    return catalogTehsils;
+  }, [user?.tehsils, matchTehsil, catalogTehsils]);
 
   const tehsilSelectLocked = tehsilSelectOptions.length === 1;
 
@@ -142,6 +135,7 @@ const SolarSystemForm = () => {
     longitude: "",
     installation_location: "",
     installation_location_other: "",
+    site_type: "",
     disco_info: "",
     bill_reference_number: "",
     solar_panel_capacity: "",
@@ -168,13 +162,13 @@ const SolarSystemForm = () => {
   }, [isEditMode, tehsilSelectOptions]);
 
   const villageOptions = useMemo(
-    () => LOCATION_DATA[formData.tehsil] || [],
-    [formData.tehsil],
+    () => villagesFor(formData.tehsil),
+    [formData.tehsil, villagesFor],
   );
 
   const settlementOptions = useMemo(
-    () => SETTLEMENT_DATA[formData.village] || [],
-    [formData.village],
+    () => settlementsFor(formData.tehsil, formData.village),
+    [formData.tehsil, formData.village, settlementsFor],
   );
 
   const installationTypeValue = (
@@ -258,6 +252,7 @@ const SolarSystemForm = () => {
         meter_serial_number: undefined,
         installation_location_other: undefined,
         installation_location,
+        site_type: formData.site_type.trim() || null,
         current_meter: {
           meter_type: "solar",
           meter_model,
@@ -324,6 +319,7 @@ const SolarSystemForm = () => {
     longitude: "Longitude",
     installation_location: "Installation type",
     installation_location_other: "Installation type (other)",
+    site_type: "Site type",
     disco_info: "DISCO / electricity provider",
     bill_reference_number: "Bill reference number",
     solar_panel_capacity: "PV capacity",
@@ -560,6 +556,34 @@ const SolarSystemForm = () => {
                     disabled={loading}
                   />
                 ) : null}
+              </FormField>
+
+              <FormField
+                label="Site type"
+                description="Optional — ABR, Tubewell, or RO Plant."
+              >
+                <Select
+                  value={formData.site_type || "__empty__"}
+                  onValueChange={(v) => {
+                    if (v == null) return;
+                    setFormData((prev) => ({
+                      ...prev,
+                      site_type: v === "__empty__" ? "" : v,
+                    }));
+                  }}
+                >
+                  <SelectTrigger className={cn("w-full", inputClass)}>
+                    <SelectValue placeholder="Select site type (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__empty__">Not set</SelectItem>
+                    {SOLAR_SITE_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormField>
 
               <div className="col-span-full grid grid-cols-1 gap-5 sm:grid-cols-2">

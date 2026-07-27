@@ -51,12 +51,12 @@ import {
 import { ROLE, normalizeRole, type UserRole } from "@/constants/roles";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUsersApi } from "@/hooks";
+import { useLocationCatalog } from "@/hooks/useLocationCatalog";
 import { getApiErrorMessage } from "@/lib/api-error";
 import type {
   ListedUser,
   OperatorWaterSystemAssignment,
 } from "@/services/usersService";
-import { TEHSIL_OPTIONS } from "@/utils/locationData";
 
 function operatorTehsils(user: ListedUser): string[] {
   const fromSystems = [
@@ -302,6 +302,7 @@ function UserTableBody({
 
 export default function UsersAdminPage() {
   const { user: currentUser } = useAuth();
+  const { tehsils: catalogTehsils } = useLocationCatalog();
   const {
     users,
     usersLoading,
@@ -535,7 +536,7 @@ export default function UsersAdminPage() {
           </Label>
           <ScrollArea className="h-48 rounded-md border border-border/60 p-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              {TEHSIL_OPTIONS.map((tehsil) => (
+              {catalogTehsils.map((tehsil) => (
                 <label
                   key={tehsil}
                   className="flex cursor-pointer items-center gap-2 text-sm"

@@ -64,6 +64,7 @@ export type SolarSystemRow = {
   tehsil: string;
   village: string;
   settlement?: string | null;
+  site_type?: string | null;
   unique_identifier?: string;
   latitude?: number | null;
   longitude?: number | null;

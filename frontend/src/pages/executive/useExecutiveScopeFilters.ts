@@ -1,32 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { TEHSIL_OPTIONS } from "@/utils/locationData";
 import { useAuth } from "@/contexts/AuthContext";
 import { isExecutiveRole } from "@/constants/roles";
-import type { ExecutiveScopeFilters } from "./executiveAnalysisTypes";
-import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import {
   ALL_SETTLEMENTS,
   ALL_VILLAGES,
-  buildRegisteredLocationCascade,
-  type RegisteredLocationSite,
-} from "./registeredLocationOptions";
+  useLocationCatalog,
+} from "@/hooks/useLocationCatalog";
+import type { ExecutiveScopeFilters } from "./executiveAnalysisTypes";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
-export function useExecutiveScopeFilters(
-  locationSites: RegisteredLocationSite[] = [],
-) {
+/**
+ * HQ analysis scope filters — tehsil / village / settlement options come from
+ * the DB location catalog (single source of truth).
+ */
+export function useExecutiveScopeFilters() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const {
+    loading: catalogLoading,
+    matchTehsil,
+    resolveUserTehsils,
+    scopeTehsilOptions,
+    scopeVillageOptions,
+    scopeSettlementOptions,
+    tehsils: catalogTehsils,
+  } = useLocationCatalog();
 
   const allowedTehsils = useMemo(() => {
-    const t = (user?.tehsils ?? [])
-      .map((x) => String(x).trim())
-      .filter(Boolean);
+    const fromUser = resolveUserTehsils(user?.tehsils);
     if (isExecutiveRole(user?.role)) {
-      return t;
+      return fromUser;
     }
-    return t.length ? t : [...TEHSIL_OPTIONS];
-  }, [user?.role, user?.tehsils]);
+    return fromUser.length ? fromUser : catalogTehsils;
+  }, [user?.role, user?.tehsils, resolveUserTehsils, catalogTehsils]);
 
   const restrictTehsils =
     isExecutiveRole(user?.role) || (user?.tehsils ?? []).length > 0;
@@ -41,76 +48,88 @@ export function useExecutiveScopeFilters(
   const seedFilters = useMemo((): ExecutiveScopeFilters => {
     const urlTehsil = searchParams.get("tehsil")?.trim() || "";
     const urlVillage = searchParams.get("village")?.trim() || "";
+    const urlSettlement = searchParams.get("settlement")?.trim() || "";
     const urlYear = searchParams.get("year")?.trim() || "";
     const urlMonth = searchParams.get("month")?.trim() || "";
+    const matchedUrl = matchTehsil(urlTehsil);
     const tehsilOk =
       urlTehsil === ALL_ASSIGNED_TEHSILS ||
-      allowedTehsils.includes(urlTehsil) ||
+      (matchedUrl != null && allowedTehsils.includes(matchedUrl)) ||
       (!restrictTehsils && urlTehsil.length > 0);
     return {
-      tehsil: tehsilOk ? urlTehsil : initialTehsil,
+      tehsil: tehsilOk
+        ? matchedUrl && urlTehsil !== ALL_ASSIGNED_TEHSILS
+          ? matchedUrl
+          : urlTehsil || initialTehsil
+        : initialTehsil,
       village: urlVillage || ALL_VILLAGES,
-      settlement: ALL_SETTLEMENTS,
+      settlement: urlSettlement || ALL_SETTLEMENTS,
       month: urlMonth || "All Months",
       year: urlYear || "2026",
     };
-  }, [searchParams, allowedTehsils, restrictTehsils, initialTehsil]);
+  }, [
+    searchParams,
+    allowedTehsils,
+    restrictTehsils,
+    initialTehsil,
+    matchTehsil,
+  ]);
 
   const [filters, setFilters] = useState<ExecutiveScopeFilters>(seedFilters);
   const [activeFilters, setActiveFilters] =
     useState<ExecutiveScopeFilters>(seedFilters);
 
-  const cascade = useMemo(
+  const tehsilOptions = useMemo(
     () =>
-      buildRegisteredLocationCascade(
-        locationSites,
-        allowedTehsils,
-        filters.tehsil,
-        filters.village,
-      ),
-    [locationSites, allowedTehsils, filters.tehsil, filters.village],
+      scopeTehsilOptions({
+        allowedTehsils: restrictTehsils ? allowedTehsils : catalogTehsils,
+        includeAll: true,
+        allLabel: ALL_ASSIGNED_TEHSILS,
+      }),
+    [
+      scopeTehsilOptions,
+      restrictTehsils,
+      allowedTehsils,
+      catalogTehsils,
+    ],
   );
 
-  const tehsilOptions = useMemo(() => {
-    const withSites = cascade.tehsilsWithSites.filter((t) =>
-      allowedTehsils.includes(t),
-    );
-    const base =
-      withSites.length > 0
-        ? withSites
-        : restrictTehsils
-          ? allowedTehsils
-          : allowedTehsils;
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(filters.tehsil, {
+        allowedTehsils,
+      }),
+    [scopeVillageOptions, filters.tehsil, allowedTehsils],
+  );
 
-    if (restrictTehsils) {
-      return base.length > 1 ? [ALL_ASSIGNED_TEHSILS, ...base] : base;
-    }
-    return [ALL_ASSIGNED_TEHSILS, ...base];
-  }, [cascade.tehsilsWithSites, allowedTehsils, restrictTehsils]);
+  const settlementOptions = useMemo(
+    () =>
+      scopeSettlementOptions(filters.tehsil, filters.village, {
+        allowedTehsils,
+      }),
+    [scopeSettlementOptions, filters.tehsil, filters.village, allowedTehsils],
+  );
 
-  const villageOptions = cascade.villageOptions;
-  const settlementOptions = cascade.settlementOptions;
+  /** Village/settlement filters stay available under "All Tehsils". */
+  const villageEnabled = true;
+  const settlementEnabled = true;
 
-  const villageEnabled = filters.tehsil !== ALL_ASSIGNED_TEHSILS;
-  const settlementEnabled =
-    villageEnabled && filters.village !== ALL_VILLAGES;
+  const locationMeta = useMemo(() => {
+    const villageCount = Math.max(0, villageOptions.length - 1);
+    const settlementCount = Math.max(0, settlementOptions.length - 1);
+    return {
+      siteCount: 0,
+      villageCount,
+      settlementCount,
+    };
+  }, [villageOptions.length, settlementOptions.length]);
 
-  // Keep draft selections valid as registered sites / cascade change
   useEffect(() => {
     setFilters((prev) => {
       const next = { ...prev };
       let changed = false;
 
-      if (prev.tehsil === ALL_ASSIGNED_TEHSILS) {
-        if (
-          prev.village !== ALL_VILLAGES ||
-          prev.settlement !== ALL_SETTLEMENTS
-        ) {
-          next.village = ALL_VILLAGES;
-          next.settlement = ALL_SETTLEMENTS;
-          changed = true;
-        }
-      } else if (
+      if (
         prev.village !== ALL_VILLAGES &&
         !villageOptions.includes(prev.village)
       ) {
@@ -201,11 +220,8 @@ export function useExecutiveScopeFilters(
     settlementOptions,
     villageEnabled,
     settlementEnabled,
-    locationMeta: {
-      siteCount: cascade.siteCount,
-      villageCount: cascade.villageCount,
-      settlementCount: cascade.settlementCount,
-    },
+    locationMeta,
+    catalogLoading,
     applyFilters,
     updateFilter,
   };
@@ -213,8 +229,18 @@ export function useExecutiveScopeFilters(
 
 function EXECUTIVE_MONTH_LABEL(month: number): string {
   const labels = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
   return labels[month - 1] ?? String(month);
 }
