@@ -175,5 +175,5 @@ Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
 | `deploy/scripts/migrate-from-supabase.sh` | Dump from Supabase + restore locally (VM) |
 | `deploy/scripts/dump-from-supabase.sh`    | Dump only (optional laptop backup)        |
 | `deploy/scripts/restore-from-supabase.sh` | Restore existing `.dump` file             |
-| `deploy/scripts/backup-postgres.sh`       | Postgres backup (run on VM)               |
-| `deploy/scripts/pull-backup-to-mac.sh`    | Create dump on VM over SSH + copy to Mac  |
+| `deploy/scripts/backup-postgres.sh`       | Postgres backup — run on the VM first     |
+| `deploy/scripts/pull-backup-to-mac.sh`    | Copy newest VM dump to Mac (`~/Downloads/prmsc-backups`) |
