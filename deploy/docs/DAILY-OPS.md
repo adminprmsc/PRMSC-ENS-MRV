@@ -51,7 +51,12 @@ chmod +x deploy/scripts/pull-backup-to-mac.sh
 ./deploy/scripts/pull-backup-to-mac.sh
 ```
 
-This downloads the newest dump to `~/Downloads/prmsc-backups/` and opens Finder.
+This SSHs to the VM, runs `backup-postgres.sh` there, then copies the new dump to `~/Downloads/prmsc-backups/` and opens Finder.
+
+```bash
+# Download newest existing dump only (skip creating a new one)
+./deploy/scripts/pull-backup-to-mac.sh --latest-only
+```
 
 ### Manual way (two terminals)
 
@@ -232,13 +237,9 @@ docker compose --env-file .env.docker up -d --build frontend
 ssh adminprms98@101.50.86.169
 ```
 
-**Backup on VM + pull dump to Mac**
+**Backup on VM + pull dump to Mac** (from Mac only)
 
 ```bash
-# VM
-cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
-
-# Mac (exit SSH first)
 ./deploy/scripts/pull-backup-to-mac.sh
 ```
 
