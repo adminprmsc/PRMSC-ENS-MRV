@@ -168,7 +168,35 @@ DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0 \
 docker compose --env-file .env.docker up -d
 ```
 
-If that still fails looking up `registry-1.docker.io`, the base image is not cached — fix DNS, or build images on the Mac and load them on the VM (see VM-OPS / ask for image transfer).
+If that still fails looking up `registry-1.docker.io`, the base image is not
+cached on the VM. **Build images on the Mac and load them on the VM** (no Docker Hub needed on the server):
+
+#### D. Mac — build & upload app images
+
+```bash
+cd /path/to/PRMSC-MRV
+git fetch origin main && git checkout main && git pull   # or stay on the commit you deployed
+
+docker compose --env-file .env.docker build backend frontend
+docker tag prmsc-mrv-backend:latest prmsc-ens-mrv-backend:latest
+docker tag prmsc-mrv-frontend:latest prmsc-ens-mrv-frontend:latest
+docker save prmsc-ens-mrv-backend:latest prmsc-ens-mrv-frontend:latest \
+  | gzip > /tmp/prmsc-app-images.tar.gz
+
+scp /tmp/prmsc-app-images.tar.gz adminprms98@101.50.86.169:~/prmsc-app-images.tar.gz
+```
+
+#### E. VM — load images and recreate containers (no `--build`)
+
+```bash
+cd ~/PRMSC-ENS-MRV
+gunzip -c ~/prmsc-app-images.tar.gz | docker load
+docker compose --env-file .env.docker up -d --force-recreate --no-build backend frontend
+docker compose --env-file .env.docker ps
+curl -s http://localhost/api/health
+```
+
+Containers should show **Created** / **Up** as *just now*, not “3 days ago”.
 
 ### Verify
 
