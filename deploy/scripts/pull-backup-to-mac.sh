@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Create a Postgres dump on the production VM (over SSH), then copy it to this Mac.
+# Copy the latest Postgres dump from the production VM to this Mac.
 #
-# Run from your Mac — NOT from inside an SSH session on the VM.
+# Recommended flow (two steps):
+#   1) On the VM:  cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
+#   2) On the Mac: ./deploy/scripts/pull-backup-to-mac.sh
+#
+# Run this script from your Mac — NOT from inside an SSH session on the VM.
 #
 # Usage:
 #   ./deploy/scripts/pull-backup-to-mac.sh
-#   ./deploy/scripts/pull-backup-to-mac.sh --latest-only   # skip create; download newest existing dump
+#   ./deploy/scripts/pull-backup-to-mac.sh --create   # optional: create dump on VM via SSH, then download
 #   VM_HOST=101.50.86.169 LOCAL_DIR=~/Downloads/prmsc-backups ./deploy/scripts/pull-backup-to-mac.sh
 
 set -euo pipefail
@@ -15,16 +19,21 @@ VM_HOST="${VM_HOST:-101.50.86.169}"
 VM="${VM_USER}@${VM_HOST}"
 REMOTE_REPO="${REMOTE_REPO:-PRMSC-ENS-MRV}"
 LOCAL_DIR="${LOCAL_DIR:-$HOME/Downloads/prmsc-backups}"
-CREATE_BACKUP=1
+CREATE_BACKUP=0
 OPEN_FINDER=1
 
 usage() {
   cat <<'EOF'
 Usage: pull-backup-to-mac.sh [options]
 
-  --create         Create a fresh dump on the VM, then download it (default)
-  --latest-only    Skip create; download the newest existing dump only
-  --no-open        Do not open the local folder in Finder
+Recommended:
+  1) On VM:  cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
+  2) On Mac: ./deploy/scripts/pull-backup-to-mac.sh
+
+Options:
+  (default)        Download the newest existing dump from the VM
+  --create         Create a fresh dump on the VM via SSH, then download it
+  --no-open        Do not open the dump in Finder
   -h, --help       Show this help
 
 Env overrides:
@@ -42,6 +51,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --latest-only)
+      # Kept for backwards compatibility; this is already the default.
       CREATE_BACKUP=0
       shift
       ;;
@@ -63,7 +73,12 @@ done
 
 if [[ -n "${SSH_CONNECTION:-}" ]]; then
   echo "This script must run on your Mac, not inside SSH on the VM." >&2
-  echo "Exit SSH (type: exit) and run it from a local terminal." >&2
+  echo "" >&2
+  echo "On the VM, take the backup first:" >&2
+  echo "  cd ~/${REMOTE_REPO} && ./deploy/scripts/backup-postgres.sh" >&2
+  echo "" >&2
+  echo "Then exit SSH (type: exit) and on your Mac run:" >&2
+  echo "  ./deploy/scripts/pull-backup-to-mac.sh" >&2
   exit 1
 fi
 
@@ -82,10 +97,11 @@ LATEST=$(
 
 if [[ -z "$LATEST" ]]; then
   echo "No dump found on VM." >&2
-  if [[ "$CREATE_BACKUP" -eq 0 ]]; then
-    echo "Re-run without --latest-only to create one, or SSH in and run:" >&2
-    echo "  cd ~/${REMOTE_REPO} && ./deploy/scripts/backup-postgres.sh" >&2
-  fi
+  echo "Take a backup on the VM first, then re-run this script:" >&2
+  echo "  ssh ${VM}" >&2
+  echo "  cd ~/${REMOTE_REPO} && ./deploy/scripts/backup-postgres.sh" >&2
+  echo "  exit" >&2
+  echo "  ./deploy/scripts/pull-backup-to-mac.sh" >&2
   exit 1
 fi
 
@@ -97,13 +113,19 @@ echo "         to: $DEST"
 scp "${VM}:${LATEST}" "$DEST"
 
 echo ""
-echo "Saved:"
-ls -lh "$DEST"
+echo "Saved: $DEST"
+ls -lh "$DEST" || true
 
-echo ""
-echo "Recent files in $LOCAL_DIR:"
-ls -lht "$LOCAL_DIR" | head -6
+# Directory listing can fail under macOS TCC (e.g. Cursor terminal → ~/Downloads).
+if ls -lht "$LOCAL_DIR" >/dev/null 2>&1; then
+  echo ""
+  echo "Recent files in $LOCAL_DIR:"
+  ls -lht "$LOCAL_DIR" | head -6
+else
+  echo ""
+  echo "(Could not list $LOCAL_DIR — macOS privacy; the dump above is still saved.)"
+fi
 
 if [[ "$OPEN_FINDER" -eq 1 ]] && command -v open >/dev/null 2>&1; then
-  open "$LOCAL_DIR"
+  open -R "$DEST" 2>/dev/null || open "$LOCAL_DIR" 2>/dev/null || true
 fi

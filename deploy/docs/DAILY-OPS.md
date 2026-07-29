@@ -32,50 +32,52 @@ cd ~/PRMSC-ENS-MRV
 
 ## 2. Take a DB backup on the VM, then copy it to your Mac
 
+**Recommended: two steps** — backup on prod first, then pull to Mac.
+
 ### Which terminal am I in?
 
-| Prompt looks like | You are on | Safe for `scp` to Mac? |
+| Prompt looks like | You are on | What to run |
 | --- | --- | --- |
-| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | Yes |
-| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | **No** — `~/Downloads` is on the server |
+| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `./deploy/scripts/backup-postgres.sh` |
+| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | `./deploy/scripts/pull-backup-to-mac.sh` |
 
-If you run `scp` after the `adminprms98@prmsc-ens-mrv` prompt, the file stays on the VM. Your Mac Finder will still show old Jul 16 files.
+If you run the Mac pull script while still SSH’d into the VM, it will refuse and tell you to exit first.
 
-### Easiest way (Mac only)
-
-From your **Mac** project folder (not inside SSH):
+### Step A — VM (create the dump)
 
 ```bash
-cd /path/to/PRMSC-MRV
-chmod +x deploy/scripts/pull-backup-to-mac.sh
-./deploy/scripts/pull-backup-to-mac.sh
-```
-
-This SSHs to the VM, runs `backup-postgres.sh` there, then copies the new dump to `~/Downloads/prmsc-backups/` and opens Finder.
-
-```bash
-# Download newest existing dump only (skip creating a new one)
-./deploy/scripts/pull-backup-to-mac.sh --latest-only
-```
-
-### Manual way (two terminals)
-
-| Where | What to do |
-| --- | --- |
-| **Terminal A (SSH → VM)** | Create the dump |
-| **Terminal B (Mac only)** | Download the dump |
-
-**Step A — VM**
-
-```bash
+ssh adminprms98@101.50.86.169
 cd ~/PRMSC-ENS-MRV
 ./deploy/scripts/backup-postgres.sh
 ls -lh backups/
 ```
 
-You should see a new file like `prmsc_mrv_20260721_071840.dump` (~400KB+ is normal — custom format is compressed).
+You should see a new file like `prmsc_mrv_20260729_110224.dump` (~400KB–1MB is normal — custom format is compressed).
 
-**Step B — Mac** (type `exit` first if you are still in SSH)
+Then leave the VM:
+
+```bash
+exit
+```
+
+### Step B — Mac (copy that dump here)
+
+From your **Mac** project folder:
+
+```bash
+cd /Users/aubairakif/Codebases/PRMSC-HO/MRV-NAYATEL/code/PRMSC-MRV
+./deploy/scripts/pull-backup-to-mac.sh
+```
+
+This downloads the newest dump from the VM to `~/Downloads/prmsc-backups/` and reveals it in Finder.
+
+Optional one-shot from Mac only (creates dump via SSH, then downloads):
+
+```bash
+./deploy/scripts/pull-backup-to-mac.sh --create
+```
+
+### Manual scp (if you prefer)
 
 ```bash
 mkdir -p ~/Downloads/prmsc-backups
@@ -83,12 +85,9 @@ mkdir -p ~/Downloads/prmsc-backups
 LATEST=$(ssh adminprms98@101.50.86.169 'ls -1t ~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump | head -1')
 echo "Downloading: $LATEST"
 scp "adminprms98@101.50.86.169:$LATEST" ~/Downloads/prmsc-backups/
-
-ls -lh ~/Downloads/prmsc-backups/
-open ~/Downloads/prmsc-backups
 ```
 
-You should see today’s file (e.g. `prmsc_mrv_20260721_....dump`). ~400–450 KB is normal for this database.
+You should see today’s file under `~/Downloads/prmsc-backups/`.
 
 ---
 
@@ -237,9 +236,15 @@ docker compose --env-file .env.docker up -d --build frontend
 ssh adminprms98@101.50.86.169
 ```
 
-**Backup on VM + pull dump to Mac** (from Mac only)
+**Backup on VM, then pull to Mac**
 
 ```bash
+# Terminal A — VM
+ssh adminprms98@101.50.86.169
+cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
+exit
+
+# Terminal B — Mac
 ./deploy/scripts/pull-backup-to-mac.sh
 ```
 
