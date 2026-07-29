@@ -97,13 +97,19 @@ echo "         to: $DEST"
 scp "${VM}:${LATEST}" "$DEST"
 
 echo ""
-echo "Saved:"
-ls -lh "$DEST"
+echo "Saved: $DEST"
+ls -lh "$DEST" || true
 
-echo ""
-echo "Recent files in $LOCAL_DIR:"
-ls -lht "$LOCAL_DIR" | head -6
+# Directory listing can fail under macOS TCC (e.g. Cursor terminal → ~/Downloads).
+if ls -lht "$LOCAL_DIR" >/dev/null 2>&1; then
+  echo ""
+  echo "Recent files in $LOCAL_DIR:"
+  ls -lht "$LOCAL_DIR" | head -6
+else
+  echo ""
+  echo "(Could not list $LOCAL_DIR — macOS privacy; the dump above is still saved.)"
+fi
 
 if [[ "$OPEN_FINDER" -eq 1 ]] && command -v open >/dev/null 2>&1; then
-  open "$LOCAL_DIR"
+  open -R "$DEST" 2>/dev/null || open "$LOCAL_DIR" 2>/dev/null || true
 fi
