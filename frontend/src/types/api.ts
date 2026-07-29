@@ -122,6 +122,7 @@ export type SolarMonthlyLogTableRow = SolarMonthlySupplyListItem & {
   tehsil: string;
   village: string;
   settlement: string;
+  site_type?: string | null;
 };
 
 /** `GET /operator/solar-supply-data/record/:id` full shape. */

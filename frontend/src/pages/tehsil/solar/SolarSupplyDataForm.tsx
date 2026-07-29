@@ -69,6 +69,7 @@ type RegisteredSolarSystem = {
   tehsil: string;
   village: string;
   settlement?: string | undefined;
+  site_type?: string | null;
   solar_panel_capacity?: number | null;
 };
 
@@ -97,6 +98,8 @@ const inputClass = "h-10 bg-background w-full";
 function formatSiteLabel(s: RegisteredSolarSystem): string {
   const parts = [s.village];
   if (s.settlement?.trim()) parts.push(s.settlement.trim());
+  const siteType = s.site_type?.trim();
+  if (siteType) parts.push(siteType);
   const loc = parts.join(" · ");
   const cap =
     s.solar_panel_capacity != null &&
