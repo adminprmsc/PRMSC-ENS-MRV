@@ -32,62 +32,58 @@ cd ~/PRMSC-ENS-MRV
 
 ## 2. Take a DB backup on the VM, then copy it to your Mac
 
-**Recommended: two steps** — backup on prod first, then pull to Mac.
+Same pattern as WFM: **backup on prod first**, then pull to Mac.
 
 ### Which terminal am I in?
 
 | Prompt looks like | You are on | What to run |
 | --- | --- | --- |
-| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `./deploy/scripts/backup-postgres.sh` |
-| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | `./deploy/scripts/pull-backup-to-mac.sh` |
+| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `make db-backup` |
+| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | `./deploy/backup-db.sh --pull-only` |
 
-If you run the Mac pull script while still SSH’d into the VM, it will refuse and tell you to exit first.
-
-### Step A — VM (create the dump)
+### Step A — VM (create & keep the dump)
 
 ```bash
 ssh adminprms98@101.50.86.169
 cd ~/PRMSC-ENS-MRV
-./deploy/scripts/backup-postgres.sh
-ls -lh backups/
+git pull origin main          # so you have the Makefile
+make db-backup
 ```
 
-You should see a new file like `prmsc_mrv_20260729_110224.dump` (~400KB–1MB is normal — custom format is compressed).
-
-Then leave the VM:
+Writes `~/PRMSC-ENS-MRV/backups/prmsc-mrv-YYYYMMDD-HHMMSS.dump` and leaves it on the VM.
 
 ```bash
 exit
 ```
 
-### Step B — Mac (copy that dump here)
+### Step B — Mac (copy it down)
 
-From your **Mac** project folder:
-
-```bash
-cd /Users/aubairakif/Codebases/PRMSC-HO/MRV-NAYATEL/code/PRMSC-MRV
-./deploy/scripts/pull-backup-to-mac.sh
-```
-
-This downloads the newest dump from the VM to `~/Downloads/prmsc-backups/` and reveals it in Finder.
-
-Optional one-shot from Mac only (creates dump via SSH, then downloads):
+From your **Mac** repo root:
 
 ```bash
-./deploy/scripts/pull-backup-to-mac.sh --create
+./deploy/backup-db.sh --pull-only
 ```
 
-### Manual scp (if you prefer)
+Saves into local `./backups/`. The VM copy stays unless you pass `--delete-remote`.
+
+### One-shot from Mac (create on VM, then scp)
 
 ```bash
-mkdir -p ~/Downloads/prmsc-backups
-
-LATEST=$(ssh adminprms98@101.50.86.169 'ls -1t ~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump | head -1')
-echo "Downloading: $LATEST"
-scp "adminprms98@101.50.86.169:$LATEST" ~/Downloads/prmsc-backups/
+./deploy/backup-db.sh
+# or:  PRMSC_SSH_HOST=101.50.86.169 ./deploy/backup-db.sh
 ```
 
-You should see today’s file under `~/Downloads/prmsc-backups/`.
+That runs `make db-backup` on the VM, then copies the new file into local `./backups/`.
+
+Uses a short SSH `ControlPath` (`/tmp/prmsc-ssh-%C`) so macOS does not reject the Unix socket.
+
+Optional SSH key:
+
+```bash
+PRMSC_SSH_KEY=~/.ssh/id_ed25519 ./deploy/backup-db.sh --pull-only
+```
+
+Password auth works if no key is set.
 
 ---
 
@@ -117,8 +113,18 @@ ssh adminprms98@101.50.86.169
 cd ~/PRMSC-ENS-MRV
 
 # optional but recommended before a big release
-./deploy/scripts/backup-postgres.sh
+make db-backup
 
+make deploy
+```
+
+(`make deploy` = `git pull --ff-only origin main` + `docker compose … up -d --build`. Migrations run on backend start.)
+
+Or the long form:
+
+```bash
+cd ~/PRMSC-ENS-MRV
+./deploy/scripts/backup-postgres.sh
 git pull origin main
 docker compose --env-file .env.docker up -d --build
 ```
@@ -241,17 +247,23 @@ ssh adminprms98@101.50.86.169
 ```bash
 # Terminal A — VM
 ssh adminprms98@101.50.86.169
-cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
+cd ~/PRMSC-ENS-MRV && make db-backup
 exit
 
 # Terminal B — Mac
-./deploy/scripts/pull-backup-to-mac.sh
+./deploy/backup-db.sh --pull-only
+```
+
+**One-shot from Mac** (create on VM + scp)
+
+```bash
+./deploy/backup-db.sh
 ```
 
 **Daily deploy on VM (normal DNS)**
 
 ```bash
-cd ~/PRMSC-ENS-MRV && git pull origin main && docker compose --env-file .env.docker up -d --build
+cd ~/PRMSC-ENS-MRV && make deploy
 ```
 
 **Daily deploy on VM (no GitHub DNS — after Mac uploaded bundle)**

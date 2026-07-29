@@ -170,10 +170,12 @@ Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
 | `.env.docker.example`                     | Single env template                       |
 | `docker-compose.yml`                      | Full stack (VM)                           |
 | `docker-compose.dev.yml`                  | Local dev ports + skip nginx/frontend     |
+| `Makefile`                                | `make deploy`, `make db-backup`, `make up`, … |
+| `deploy/backup-db.sh`                     | Mac: create/pull prod dump into `./backups/`  |
 | `deploy/setup.sh`                         | VM bootstrap                              |
 | `deploy/VM-OPS.md`                        | **Day-to-day VM ops** (SSH, deploy, logs) |
 | `deploy/scripts/migrate-from-supabase.sh` | Dump from Supabase + restore locally (VM) |
 | `deploy/scripts/dump-from-supabase.sh`    | Dump only (optional laptop backup)        |
 | `deploy/scripts/restore-from-supabase.sh` | Restore existing `.dump` file             |
-| `deploy/scripts/backup-postgres.sh`       | Postgres backup — run on the VM first     |
-| `deploy/scripts/pull-backup-to-mac.sh`    | Copy newest VM dump to Mac (`~/Downloads/prmsc-backups`) |
+| `deploy/scripts/backup-postgres.sh`       | Postgres backup (also used by `make db-backup`) |
+| `deploy/scripts/pull-backup-to-mac.sh`    | Thin wrapper → `deploy/backup-db.sh`      |

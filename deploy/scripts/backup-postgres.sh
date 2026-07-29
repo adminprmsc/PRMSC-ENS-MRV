@@ -42,4 +42,8 @@ echo "Backing up $POSTGRES_DB to $OUT ..."
   --no-owner --no-acl -Fc >"$OUT"
 
 ls -lh "$OUT"
-echo "Copy off the VM regularly."
+# Relative path from repo root so deploy/backup-db.sh / make wrappers can scp it.
+REL_OUT="${OUT#"$ROOT_DIR"/}"
+echo "CREATED:${REL_OUT}"
+echo "Copy off the VM regularly (from Mac: ./deploy/backup-db.sh --pull-only)."
+
