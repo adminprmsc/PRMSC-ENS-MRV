@@ -12,8 +12,8 @@ import type {
 
 function monthOrder(a: SolarMonthlyLogTableRow, b: SolarMonthlyLogTableRow): number {
   const loc =
-    `${a.tehsil}\0${a.village}\0${a.settlement}`.localeCompare(
-      `${b.tehsil}\0${b.village}\0${b.settlement}`,
+    `${a.tehsil}\0${a.village}\0${a.settlement}\0${a.site_type ?? ""}\0${a.solar_system_id}`.localeCompare(
+      `${b.tehsil}\0${b.village}\0${b.settlement}\0${b.site_type ?? ""}\0${b.solar_system_id}`,
       undefined,
       { sensitivity: "base" },
     );
@@ -41,16 +41,14 @@ export function useSolarMonthlyLogs(year: number) {
         sites.map(async (site) => {
           try {
             const data = await getSolarSupplyData({
-              tehsil: site.tehsil,
-              village: site.village,
-              settlement: site.settlement ?? "",
+              solar_system_id: site.id,
               year,
             });
             const list = (Array.isArray(data) ? data : []) as SolarMonthlySupplyListItem[];
             return list.map(
               (r): SolarMonthlyLogTableRow => ({
                 ...r,
-                solar_system_id: site.id,
+                solar_system_id: String(r.solar_system_id ?? site.id),
                 tehsil: site.tehsil,
                 village: site.village,
                 settlement: (site.settlement ?? "").trim(),

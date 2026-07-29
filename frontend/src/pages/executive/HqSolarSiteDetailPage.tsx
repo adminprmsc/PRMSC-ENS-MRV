@@ -107,6 +107,7 @@ export default function HqSolarSiteDetailPage() {
       setSite(res);
       try {
         const data = await getSolarSupplyData({
+          solar_system_id: systemId,
           tehsil: res.tehsil,
           village: res.village,
           settlement: res.settlement ?? "",

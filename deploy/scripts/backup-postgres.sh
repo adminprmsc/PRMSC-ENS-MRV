@@ -1,3 +1,7 @@
+# //command
+# ./deploy/backup-db.sh --pull-only
+
+
 #!/usr/bin/env bash
 # Backup Postgres from the running stack.
 #

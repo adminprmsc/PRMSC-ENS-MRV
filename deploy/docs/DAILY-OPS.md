@@ -38,7 +38,7 @@ Same pattern as WFM: **backup on prod first**, then pull to Mac.
 
 | Prompt looks like | You are on | What to run |
 | --- | --- | --- |
-| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `make db-backup` |
+| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `./deploy/scripts/backup-postgres.sh` |
 | `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | `./deploy/backup-db.sh --pull-only` |
 
 ### Step A — VM (create & keep the dump)
@@ -46,11 +46,12 @@ Same pattern as WFM: **backup on prod first**, then pull to Mac.
 ```bash
 ssh adminprms98@101.50.86.169
 cd ~/PRMSC-ENS-MRV
-git pull origin main          # so you have the Makefile
-make db-backup
+./deploy/scripts/backup-postgres.sh
 ```
 
-Writes `~/PRMSC-ENS-MRV/backups/prmsc-mrv-YYYYMMDD-HHMMSS.dump` and leaves it on the VM.
+Writes `~/PRMSC-ENS-MRV/backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` and leaves it on the VM.
+
+(`make db-backup` works too if `make` is installed; the VM often does not have it.)
 
 ```bash
 exit
@@ -73,7 +74,7 @@ Saves into local `./backups/`. The VM copy stays unless you pass `--delete-remot
 # or:  PRMSC_SSH_HOST=101.50.86.169 ./deploy/backup-db.sh
 ```
 
-That runs `make db-backup` on the VM, then copies the new file into local `./backups/`.
+That runs `./deploy/scripts/backup-postgres.sh` on the VM, then copies the new file into local `./backups/`.
 
 Uses a short SSH `ControlPath` (`/tmp/prmsc-ssh-%C`) so macOS does not reject the Unix socket.
 
@@ -113,12 +114,13 @@ ssh adminprms98@101.50.86.169
 cd ~/PRMSC-ENS-MRV
 
 # optional but recommended before a big release
-make db-backup
+./deploy/scripts/backup-postgres.sh
 
-make deploy
+git pull --ff-only origin main
+docker compose --env-file .env.docker up -d --build
 ```
 
-(`make deploy` = `git pull --ff-only origin main` + `docker compose … up -d --build`. Migrations run on backend start.)
+(Backend entrypoint runs TypeORM migrations on start. If `make` is installed you can use `make deploy` instead.)
 
 Or the long form:
 
@@ -247,7 +249,7 @@ ssh adminprms98@101.50.86.169
 ```bash
 # Terminal A — VM
 ssh adminprms98@101.50.86.169
-cd ~/PRMSC-ENS-MRV && make db-backup
+cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
 exit
 
 # Terminal B — Mac
@@ -263,7 +265,7 @@ exit
 **Daily deploy on VM (normal DNS)**
 
 ```bash
-cd ~/PRMSC-ENS-MRV && make deploy
+cd ~/PRMSC-ENS-MRV && git pull --ff-only origin main && docker compose --env-file .env.docker up -d --build
 ```
 
 **Daily deploy on VM (no GitHub DNS — after Mac uploaded bundle)**

@@ -283,13 +283,25 @@ const SolarSupplyDataForm = () => {
 
   const filteredScopedSystems = useMemo(() => {
     const query = siteSearch.trim().toLowerCase();
-    if (!query) return scopedRegisteredSystems;
-    return scopedRegisteredSystems.filter((s) => {
-      const label = formatSiteLabel(s).toLowerCase();
-      const tehsil = String(matchTehsil(s.tehsil) ?? s.tehsil).toLowerCase();
-      return label.includes(query) || tehsil.includes(query);
-    });
-  }, [scopedRegisteredSystems, siteSearch]);
+    const base = !query
+      ? scopedRegisteredSystems
+      : scopedRegisteredSystems.filter((s) => {
+          const label = formatSiteLabel(s).toLowerCase();
+          const tehsil = String(matchTehsil(s.tehsil) ?? s.tehsil).toLowerCase();
+          return label.includes(query) || tehsil.includes(query);
+        });
+    // Keep the selected site visible so SelectValue does not fall back to raw UUID.
+    if (
+      selectedSystemId &&
+      !base.some((s) => String(s.id) === selectedSystemId)
+    ) {
+      const selected = scopedRegisteredSystems.find(
+        (s) => String(s.id) === selectedSystemId,
+      );
+      if (selected) return [selected, ...base];
+    }
+    return base;
+  }, [scopedRegisteredSystems, siteSearch, selectedSystemId, matchTehsil]);
 
   const noSitesInScope =
     !isDedicatedRecordEdit && scopedRegisteredSystems.length === 0;
@@ -306,9 +318,7 @@ const SolarSupplyDataForm = () => {
       setLoadingExistingForAdd(true);
       try {
         const data = (await getSolarSupplyData({
-          tehsil: selectedSystem.tehsil,
-          village: selectedSystem.village,
-          settlement: selectedSystem.settlement || "",
+          solar_system_id: String(selectedSystem.id),
           year,
         })) as SolarSupplyRow[];
         if (cancelled) return;
@@ -625,9 +635,7 @@ const SolarSupplyDataForm = () => {
     (async () => {
       try {
         const data = (await getSolarSupplyData({
-          tehsil: selectedSystem.tehsil,
-          village: selectedSystem.village,
-          settlement: selectedSystem.settlement || "",
+          solar_system_id: String(selectedSystem.id),
           year,
         })) as SolarSupplyRow[];
         if (cancelled) return;
@@ -738,9 +746,7 @@ const SolarSupplyDataForm = () => {
     if (!selectedSystem) return;
     try {
       const data = (await getSolarSupplyData({
-        tehsil: selectedSystem.tehsil,
-        village: selectedSystem.village,
-        settlement: selectedSystem.settlement || "",
+        solar_system_id: String(selectedSystem.id),
         year,
       })) as SolarSupplyRow[];
       const row = data.find((d) => d.month === month);
@@ -828,6 +834,7 @@ const SolarSupplyDataForm = () => {
               tehsil: selectedSystem.tehsil,
               village: selectedSystem.village,
               settlement: selectedSystem.settlement || "",
+              solar_system_id: String(selectedSystem.id),
               monthlyData: [
                 {
                   month,
@@ -909,6 +916,7 @@ const SolarSupplyDataForm = () => {
               tehsil: selectedSystem.tehsil,
               village: selectedSystem.village,
               settlement: selectedSystem.settlement || "",
+              solar_system_id: String(selectedSystem.id),
               monthlyData: [
                 {
                   month,
@@ -1212,7 +1220,11 @@ const SolarSupplyDataForm = () => {
                         }}
                       >
                         <SelectTrigger className={inputClass}>
-                          <SelectValue placeholder="Select site" />
+                          <SelectValue placeholder="Select site">
+                            {selectedSystem
+                              ? formatSiteLabel(selectedSystem)
+                              : null}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
                           <div className="sticky top-0 z-10 border-b bg-popover p-2">

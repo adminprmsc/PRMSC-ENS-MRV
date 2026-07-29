@@ -419,6 +419,7 @@ export class TehsilManagerController {
     @Req() req: Request,
     @Query()
     query: {
+      solar_system_id?: string;
       tehsil?: string;
       village?: string;
       settlement?: string;

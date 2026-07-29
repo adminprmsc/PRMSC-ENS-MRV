@@ -1331,8 +1331,9 @@ export class TehsilManagerService {
     const settlementDb = settlementRaw || null;
 
     let siteType: string | null = null;
-    if ('site_type' in data && data.site_type != null && String(data.site_type).trim()) {
-      siteType = normalizeSolarSiteType(data.site_type);
+    const rawSiteType = this.coerceString(data.site_type).trim();
+    if ('site_type' in data && rawSiteType) {
+      siteType = normalizeSolarSiteType(rawSiteType);
       if (!siteType) {
         return {
           statusCode: 400,
@@ -2719,8 +2720,8 @@ export class TehsilManagerService {
     }
 
     if ('site_type' in data) {
-      const raw = data.site_type;
-      if (raw == null || String(raw).trim() === '') {
+      const raw = this.coerceString(data.site_type).trim();
+      if (!raw) {
         system.siteType = null;
       } else {
         const normalized = normalizeSolarSiteType(raw);
@@ -2955,6 +2956,7 @@ export class TehsilManagerService {
   async getSolarSupplyData(
     jwt: JwtContext,
     query: {
+      solar_system_id?: string;
       tehsil?: string;
       village?: string;
       settlement?: string;
@@ -2965,40 +2967,66 @@ export class TehsilManagerService {
     if (denied) return denied;
 
     const user = await this.loadActor(jwt);
+    const solarSystemId = (query.solar_system_id || '').trim();
     const tehsil = query.tehsil;
     const village = query.village;
     const settlement = query.settlement || '';
     const year = query.year ? parseInt(query.year, 10) : undefined;
 
-    if (!tehsil || !village) {
-      return {
-        statusCode: 400,
-        body: { message: 'Tehsil and village are required' },
-      };
-    }
+    let system: Awaited<ReturnType<typeof this.solarSystemRepo.findOne>> = null;
 
-    const ct = canonicalTehsil(tehsil);
-    if (!ct) return { statusCode: 400, body: { message: 'Invalid tehsil' } };
-    try {
-      await this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
-    } catch {
-      return {
-        statusCode: 403,
-        body: { message: 'Access denied for this tehsil' },
-      };
-    }
+    if (solarSystemId) {
+      system = await this.solarSystemRepo.findOne({
+        where: { id: solarSystemId },
+      });
+      if (!system) {
+        return {
+          statusCode: 200,
+          body: [] as unknown as Record<string, unknown>,
+        };
+      }
+      try {
+        await this.tehsilAccess.assertUserMayAccessSolarSystem(user!, system);
+      } catch {
+        return {
+          statusCode: 403,
+          body: { message: 'Access denied for this solar site' },
+        };
+      }
+    } else {
+      // Legacy location lookup — ambiguous when multiple sites share a village.
+      if (!tehsil || !village) {
+        return {
+          statusCode: 400,
+          body: {
+            message: 'solar_system_id is required (or tehsil + village)',
+          },
+        };
+      }
 
-    const system = await this.operatorHelpers.findSolarSystemByLocation(
-      ct,
-      village,
-      settlement,
-      this.solarSystemRepo,
-    );
-    if (!system) {
-      return {
-        statusCode: 200,
-        body: [] as unknown as Record<string, unknown>,
-      };
+      const ct = canonicalTehsil(tehsil);
+      if (!ct) return { statusCode: 400, body: { message: 'Invalid tehsil' } };
+      try {
+        await this.tehsilAccess.assertUserMayAccessTehsil(user!, ct);
+      } catch {
+        return {
+          statusCode: 403,
+          body: { message: 'Access denied for this tehsil' },
+        };
+      }
+
+      system = await this.operatorHelpers.findSolarSystemByLocation(
+        ct,
+        village,
+        settlement,
+        this.solarSystemRepo,
+      );
+      if (!system) {
+        return {
+          statusCode: 200,
+          body: [] as unknown as Record<string, unknown>,
+        };
+      }
     }
 
     const where: Record<string, unknown> = { solarSystemId: system.id };
@@ -3010,6 +3038,7 @@ export class TehsilManagerService {
 
     const out = records.map((r) => ({
       id: String(r.id),
+      solar_system_id: String(system.id),
       year: r.year,
       month: r.month,
       export_off_peak: r.exportOffPeak,
@@ -3237,17 +3266,48 @@ export class TehsilManagerService {
           continue;
         }
 
-        const system = await this.operatorHelpers.findSolarSystemByLocation(
-          ct,
-          row.village as string,
-          row.settlement as string,
-          this.solarSystemRepo,
-        );
-        if (!system) {
+        const rowSystemId = this.coerceString(row.solar_system_id).trim();
+        let system = rowSystemId
+          ? await this.solarSystemRepo.findOne({ where: { id: rowSystemId } })
+          : null;
+
+        if (system) {
+          try {
+            await this.tehsilAccess.assertUserMayAccessSolarSystem(
+              opUser,
+              system,
+              { forWrite: true },
+            );
+          } catch {
+            errors.push(
+              `Row ${i + 1}: solar site not permitted for your account`,
+            );
+            continue;
+          }
+          // Prefer explicit id; still require tehsil access alignment.
+          if (canonicalTehsil(system.tehsil) !== ct) {
+            errors.push(`Row ${i + 1}: solar_system_id does not match tehsil`);
+            continue;
+          }
+        } else if (rowSystemId) {
           errors.push(
-            `Row ${i + 1}: No solar system for this location — your tehsil manager must register it first`,
+            `Row ${i + 1}: No solar system for solar_system_id — register the site first`,
           );
           continue;
+        } else {
+          // Legacy: location-only lookup (ambiguous when ABR + Tubewell share a village).
+          system = await this.operatorHelpers.findSolarSystemByLocation(
+            ct,
+            row.village as string,
+            row.settlement as string,
+            this.solarSystemRepo,
+          );
+          if (!system) {
+            errors.push(
+              `Row ${i + 1}: No solar system for this location — your tehsil manager must register it first`,
+            );
+            continue;
+          }
         }
 
         const monthlyData =

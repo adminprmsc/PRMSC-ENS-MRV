@@ -98,6 +98,7 @@ export type ApiValidationErrorBody = {
 /** One row from `GET /operator/solar-supply-data` (list for a site + year). */
 export type SolarMonthlySupplyListItem = {
   id: string;
+  solar_system_id?: string;
   year: number;
   month: number;
   tou_required?: boolean | null;

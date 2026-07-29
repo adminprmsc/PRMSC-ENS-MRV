@@ -3,8 +3,9 @@
 # Production DB backup: create on the VM first, then copy to this Mac.
 #
 # Two steps (you can also run them separately):
-#   1. On the VM  →  make db-backup
-#        writes ~/PRMSC-ENS-MRV/backups/prmsc-mrv-YYYYMMDD-HHMMSS.dump
+#   1. On the VM  →  ./deploy/scripts/backup-postgres.sh
+#        (or: make db-backup  if `make` is installed)
+#        writes ~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump or prmsc-mrv-*.dump
 #        (stays on the VM)
 #   2. On your Mac →  this script (or --pull-only)
 #        scp that file into ./backups/ on your laptop
@@ -37,7 +38,7 @@ log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \?//'
+  sed -n '2,28p' "$0" | sed 's/^# \?//'
   exit 0
 }
 
@@ -60,7 +61,7 @@ done
 
 if [[ -n "${SSH_CONNECTION:-}" ]]; then
   die "Run this on your Mac, not inside SSH on the VM.
-  On the VM first:  cd ~/PRMSC-ENS-MRV && make db-backup
+  On the VM first:  cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
   Then exit SSH and run:  ./deploy/backup-db.sh --pull-only"
 fi
 
@@ -116,18 +117,17 @@ if [[ "$PULL_ONLY" -eq 1 ]]; then
       "set -e; cd ${REMOTE_DIR}; ls -1t backups/prmsc-mrv-*.dump backups/prmsc_mrv_*.dump 2>/dev/null | head -1 || true"
   )"
   [[ -n "$REMOTE_REL" ]] || die "No backups found on VM under ${REMOTE_DIR}/backups/
-  On the VM run first: cd ~/PRMSC-ENS-MRV && make db-backup"
+  On the VM run first: cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh"
 else
-  log "Step 1/2 — creating backup on the VM (make db-backup)..."
+  log "Step 1/2 — creating backup on the VM (./deploy/scripts/backup-postgres.sh)..."
   REMOTE_OUT="$(
     ssh "${SSH_OPTS[@]}" "$REMOTE" \
-      "set -e; cd ${REMOTE_DIR}; make db-backup"
+      "set -e; cd ${REMOTE_DIR}; ./deploy/scripts/backup-postgres.sh"
   )"
   printf '%s\n' "$REMOTE_OUT"
   REMOTE_REL="$(printf '%s\n' "$REMOTE_OUT" | sed -n 's/^CREATED://p' | tail -1)"
   [[ -n "$REMOTE_REL" ]] || die "VM backup finished but no CREATED: path was printed.
-  On the VM check: cd ~/PRMSC-ENS-MRV && make db-backup
-  (Need the Makefile on the VM — git pull origin main first.)"
+  On the VM check: cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh"
 fi
 
 REMOTE_NAME="$(basename "$REMOTE_REL")"

@@ -68,26 +68,10 @@ health: ## Hit API health via nginx
 db-shell: check-env ## Open a psql shell inside the postgres container
 	$(COMPOSE) exec postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-# Creates ./backups/prmsc-mrv-YYYYMMDD-HHMMSS.dump on this machine (typically the VM).
-# Prints CREATED:<path> as the last line so deploy/backup-db.sh can scp it.
+# Prefer shell script (make is not installed on all VMs).
 db-backup: check-env ## Dump Postgres into ./backups/ (run on the VM)
-	@mkdir -p $(BACKUP_DIR)
-	@stamp=$$(date +%Y%m%d-%H%M%S); \
-	out="$(BACKUP_DIR)/prmsc-mrv-$$stamp.dump"; \
-	echo "==> Dumping database to $$out"; \
-	$(COMPOSE) exec -T postgres true >/dev/null \
-	  || { echo "ERROR: postgres container is not running (make ps)"; exit 1; }; \
-	$(COMPOSE) exec -T postgres \
-	  sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner --no-acl -Fc' \
-	  > "$$out"; \
-	bytes=$$(wc -c < "$$out" | tr -d ' '); \
-	if [ "$$bytes" -lt 100 ]; then \
-	  rm -f "$$out"; \
-	  echo "ERROR: dump was empty ($$bytes bytes)"; \
-	  exit 1; \
-	fi; \
-	echo "==> Backup written: $$out ($$bytes bytes)"; \
-	echo "CREATED:$$out"
+	@./deploy/scripts/backup-postgres.sh
+
 
 prune: ## Remove dangling images to reclaim disk
 	docker image prune -f
