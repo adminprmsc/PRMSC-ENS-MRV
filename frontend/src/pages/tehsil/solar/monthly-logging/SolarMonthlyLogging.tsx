@@ -40,6 +40,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "../../../../components/ui/native-select";
+import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { useSolarMonthlyLogs, useTehsilManagerOperatorApi } from "../../../../hooks";
 import { getApiErrorMessage } from "../../../../lib/api-error";
@@ -95,6 +96,7 @@ export default function SolarMonthlyLogging() {
         r.tehsil,
         r.village,
         r.settlement,
+        r.site_type ?? "",
         String(r.year),
         monthLabel,
         String(r.month),
@@ -222,7 +224,14 @@ export default function SolarMonthlyLogging() {
                 filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <div className="font-medium">{r.village}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">{r.village}</div>
+                        <SolarSiteTypeBadge
+                          value={r.site_type}
+                          size="sm"
+                          showEmpty={false}
+                        />
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {r.tehsil}
                         {r.settlement ? ` · ${r.settlement}` : ""}

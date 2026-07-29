@@ -54,6 +54,7 @@ export function useSolarMonthlyLogs(year: number) {
                 tehsil: site.tehsil,
                 village: site.village,
                 settlement: (site.settlement ?? "").trim(),
+                site_type: site.site_type ?? null,
               }),
             );
           } catch {
