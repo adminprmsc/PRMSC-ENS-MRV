@@ -3455,13 +3455,17 @@ export class TehsilManagerService {
           where: { id: record.waterSystemId },
         });
         if (system) {
+          const logDateIso = this.isoDate(record.logDate);
+          const logParts = logDateIso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
           systemInfo = {
             id: system.id,
             uid: system.uniqueIdentifier,
             village: system.village,
             tehsil: system.tehsil,
-            year: record.logDate?.getFullYear() ?? null,
-            month: record.logDate ? record.logDate.getMonth() + 1 : null,
+            log_date: logDateIso,
+            year: logParts ? Number(logParts[1]) : null,
+            month: logParts ? Number(logParts[2]) : null,
+            day: logParts ? Number(logParts[3]) : null,
             last_edited_at: record.updatedAt?.toISOString() ?? null,
             pump_start_time: record.pumpStartTime
               ? record.pumpStartTime.slice(0, 8)
@@ -3478,6 +3482,7 @@ export class TehsilManagerService {
 
       result.push({
         id: sub.id,
+        record_id: sub.recordId,
         submission_type: sub.submissionType,
         status: sub.status,
         operator_name: operator?.name ?? 'Unknown',

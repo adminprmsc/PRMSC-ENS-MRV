@@ -8,7 +8,6 @@ import {
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import {
   Field,
   FieldLabel,
@@ -68,12 +67,18 @@ export function SearchableOptionField({
       ? options.filter((o) => o !== allValue)
       : options;
     const q = query.trim().toLowerCase();
+    const labelOf = (o: string) =>
+      `${o} ${optionLabel ? optionLabel(o) : ""}`.toLowerCase();
     const matched = q
       ? rest
-          .filter((o) => o.toLowerCase().includes(q))
+          .filter((o) => labelOf(o).includes(q))
           .sort((a, b) => {
-            const aStarts = a.toLowerCase().startsWith(q) ? 0 : 1;
-            const bStarts = b.toLowerCase().startsWith(q) ? 0 : 1;
+            const aText = labelOf(a);
+            const bText = labelOf(b);
+            const aStarts =
+              aText.startsWith(q) || a.toLowerCase().startsWith(q) ? 0 : 1;
+            const bStarts =
+              bText.startsWith(q) || b.toLowerCase().startsWith(q) ? 0 : 1;
             if (aStarts !== bStarts) return aStarts - bStarts;
             return a.localeCompare(b);
           })
@@ -84,7 +89,7 @@ export function SearchableOptionField({
       truncated: matched.length > maxResults,
       total: rest.length,
     };
-  }, [options, allValue, hasAllOption, query, maxResults]);
+  }, [options, allValue, hasAllOption, query, maxResults, optionLabel]);
 
   const syncRect = () => {
     const el = anchorRef.current;
@@ -198,11 +203,11 @@ export function SearchableOptionField({
   }
 
   const control = (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-1", className)}>
       <div ref={anchorRef}>
         <InputGroup
           className={cn(
-            "h-10 w-full bg-background",
+            "h-8 w-full bg-background",
             disabled && "pointer-events-none opacity-60",
           )}
         >
@@ -211,13 +216,14 @@ export function SearchableOptionField({
           </InputGroupAddon>
           <InputGroupInput
             ref={inputRef}
-            value={query}
+            value={open ? query : hasSelection ? display(value) : query}
             disabled={disabled}
             onChange={(e) => {
               setQuery(e.target.value);
               setOpen(true);
             }}
             onFocus={() => {
+              setQuery("");
               setOpen(true);
               syncRect();
             }}
@@ -228,34 +234,30 @@ export function SearchableOptionField({
             placeholder={
               hasSelection
                 ? display(value)
-                : (placeholder ?? `Type to find a ${label.toLowerCase()}…`)
+                : (placeholder ?? label)
             }
-            className="text-sm"
+            className="text-xs"
             autoComplete="off"
             aria-expanded={open}
             aria-autocomplete="list"
           />
+          {hasSelection && !open ? (
+            <InputGroupAddon align="inline-end">
+              <button
+                type="button"
+                className="text-[10px] font-medium text-primary hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  selectValue(emptyValue);
+                }}
+                disabled={disabled}
+              >
+                Clear
+              </button>
+            </InputGroupAddon>
+          ) : null}
         </InputGroup>
       </div>
-
-      {hasSelection ? (
-        <div className="flex items-center justify-between gap-2">
-          <Badge
-            variant="secondary"
-            className="max-w-full truncate font-normal"
-          >
-            {display(value)}
-          </Badge>
-          <button
-            type="button"
-            className="shrink-0 text-[11px] font-medium text-primary hover:underline"
-            onClick={() => selectValue(emptyValue)}
-            disabled={disabled}
-          >
-            Clear
-          </button>
-        </div>
-      ) : null}
       {menu}
     </div>
   );
@@ -263,18 +265,9 @@ export function SearchableOptionField({
   if (hideLabel) return control;
 
   return (
-    <Field className="min-w-0">
-      <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+    <Field className="min-w-0 gap-1">
+      <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
-        {hint ? (
-          <span className="ml-1 font-normal normal-case tracking-normal">
-            {hint}
-          </span>
-        ) : choices.total > 0 ? (
-          <span className="ml-1 font-normal normal-case tracking-normal">
-            ({choices.total})
-          </span>
-        ) : null}
       </FieldLabel>
       {control}
     </Field>

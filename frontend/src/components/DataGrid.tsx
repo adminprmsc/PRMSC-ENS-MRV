@@ -266,43 +266,43 @@ export default function DataGrid<T extends Record<string, unknown>>({
   return (
     <TooltipProvider>
       <Card className="gap-0 overflow-hidden py-0 shadow-sm">
-        <CardHeader className="gap-4 border-b bg-muted/20 py-4 [.border-b]:pb-4">
-          <div className="flex min-w-0 flex-col gap-1">
+        <CardHeader className="gap-2 border-b bg-muted/20 py-3 [.border-b]:pb-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-base font-semibold tracking-tight">
+              <CardTitle className="text-sm font-semibold tracking-tight">
                 {title}
               </CardTitle>
               <Badge
                 variant="secondary"
                 className="border border-emerald-200/80 bg-emerald-50 font-medium text-emerald-800"
               >
-                {filteredCount.toLocaleString()}{" "}
-                {filteredCount === 1 ? "record" : "records"}
+                {filteredCount.toLocaleString()}
               </Badge>
               {hasActiveFilters ? (
-                <Badge variant="outline" className="font-normal">
+                <Badge variant="outline" className="font-normal text-xs">
                   Filtered
                 </Badge>
               ) : null}
             </div>
             {description ? (
-              <CardDescription className="max-w-3xl text-xs leading-relaxed">
+              <CardDescription className="max-w-3xl text-xs">
                 {description}
               </CardDescription>
             ) : null}
           </div>
 
           <CardAction className="col-start-1 row-start-2 w-full justify-self-stretch sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:w-auto sm:justify-self-end">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <InputGroup className="h-9 w-full min-w-[220px] bg-background sm:w-72">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <InputGroup className="h-8 w-full min-w-[180px] bg-background sm:w-64">
                 <InputGroupAddon align="inline-start">
-                  <Search className="size-4" />
+                  <Search className="size-3.5" />
                 </InputGroupAddon>
                 <InputGroupInput
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search all columns…"
-                  aria-label="Search all columns"
+                  placeholder="Search…"
+                  aria-label="Search table"
+                  className="text-xs"
                 />
                 {searchInput ? (
                   <InputGroupAddon align="inline-end">
@@ -325,9 +325,9 @@ export default function DataGrid<T extends Record<string, unknown>>({
                   variant="ghost"
                   size="sm"
                   onClick={clearFilters}
-                  className="h-9"
+                  className="h-8 px-2 text-xs"
                 >
-                  Clear filters
+                  Clear
                 </Button>
               ) : null}
 
@@ -335,17 +335,16 @@ export default function DataGrid<T extends Record<string, unknown>>({
                 <PopoverTrigger
                   className={cn(
                     buttonVariants({ variant: "outline", size: "sm" }),
-                    "h-9 gap-1.5 bg-background",
+                    "h-8 gap-1 bg-background px-2 text-xs",
                   )}
                 >
                   <SlidersHorizontal className="size-3.5" />
                   Columns
-                  <ChevronDown className="size-3.5 opacity-60" />
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-56 p-2">
                   <PopoverHeader className="px-1.5 pb-1.5">
                     <PopoverTitle className="text-xs font-medium text-muted-foreground">
-                      Toggle columns
+                      Columns
                     </PopoverTitle>
                   </PopoverHeader>
                   <div className="max-h-64 space-y-0.5 overflow-y-auto">
@@ -373,35 +372,24 @@ export default function DataGrid<T extends Record<string, unknown>>({
               <Button
                 type="button"
                 size="sm"
-                className="h-9 gap-1.5"
+                className="h-8 gap-1 px-2.5 text-xs"
                 onClick={exportXlsx}
               >
                 <Download className="size-3.5" />
-                Export Excel
+                Export
               </Button>
             </div>
           </CardAction>
         </CardHeader>
 
         {filterableColumns.length > 0 ? (
-          <div className="border-b border-border/60 bg-background px-4 py-3">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Column filters
-              </p>
-              {hasActiveFilters ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto px-0 text-xs"
-                  onClick={clearFilters}
-                >
-                  Reset all
-                </Button>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="border-b border-border/60 bg-background px-3 py-2">
+            <div
+              className={cn(
+                "flex flex-wrap items-end gap-2",
+                filterableColumns.length === 1 && "sm:max-w-xs",
+              )}
+            >
               {filterableColumns.map((col) => {
                 const meta = getColumnMeta(col.columnDef);
                 const label = String(col.columnDef.header ?? col.id);
@@ -410,7 +398,7 @@ export default function DataGrid<T extends Record<string, unknown>>({
                   const options = selectOptionsByColumn.get(col.id) ?? [];
                   const current = (col.getFilterValue() as string) ?? "all";
                   return (
-                    <div key={col.id} className="min-w-0 space-y-1.5">
+                    <div key={col.id} className="min-w-[8rem] flex-1 space-y-1 sm:max-w-[11rem]">
                       <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         {label}
                       </Label>
@@ -437,7 +425,7 @@ export default function DataGrid<T extends Record<string, unknown>>({
                 }
 
                 return (
-                  <div key={col.id} className="min-w-0 space-y-1.5">
+                  <div key={col.id} className="min-w-[8rem] flex-1 space-y-1 sm:max-w-[11rem]">
                     <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       {label}
                     </Label>
@@ -446,12 +434,23 @@ export default function DataGrid<T extends Record<string, unknown>>({
                       onChange={(e) =>
                         col.setFilterValue(e.target.value || undefined)
                       }
-                      placeholder={`Filter ${label}…`}
+                      placeholder={label}
                       className="h-8 bg-background text-xs shadow-none"
                     />
                   </div>
                 );
               })}
+              {hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={clearFilters}
+                >
+                  Reset
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

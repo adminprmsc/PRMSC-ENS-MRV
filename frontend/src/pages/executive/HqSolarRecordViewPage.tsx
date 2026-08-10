@@ -5,9 +5,10 @@ import { ArrowLeft, ExternalLink, Loader2, RotateCcw, Sun } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getSolarSupplyRecord } from "@/services/tehsilManagerOperatorService";
@@ -210,12 +211,15 @@ export default function HqSolarRecordViewPage() {
                 <CardTitle className="text-sm font-semibold">Electricity bill</CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                <Button variant="outline" size="sm" asChild>
-                  <a href={billUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="size-4" />
-                    Open bill image
-                  </a>
-                </Button>
+                <a
+                  href={billUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                >
+                  <ExternalLink className="size-4" />
+                  Open bill image
+                </a>
               </CardContent>
             </Card>
           ) : null}

@@ -10,6 +10,7 @@ import {
 import DataGrid, { type DataGridColumnMeta } from "@/components/DataGrid";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { DetailTile } from "@/components/common/DetailTile";
+import { CopyableId } from "@/components/common/CopyableId";
 import { LivePulseBadge } from "@/components/LivePulseBadge";
 import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,9 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Field,
@@ -357,9 +355,13 @@ const ExecutiveSitesProgress = () => {
         accessorKey: "unique_identifier",
         header: "System ID",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.unique_identifier}</span>
+          <CopyableId
+            value={String(row.original.unique_identifier ?? "")}
+            label="System ID"
+          />
         ),
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        // Search covers System ID / location / operator — avoid a second filter row.
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "statusLabel",
@@ -373,18 +375,18 @@ const ExecutiveSitesProgress = () => {
       {
         accessorKey: "tehsil",
         header: "Tehsil",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "village",
         header: "Village",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "settlement",
         header: "Settlement",
         cell: ({ getValue }) => String(getValue() ?? "—") || "—",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "days_logged",
@@ -406,15 +408,12 @@ const ExecutiveSitesProgress = () => {
           row.bulk_meter_installed ? "Installed" : "Not installed",
         cell: ({ row }) =>
           row.original.bulk_meter_installed ? "Installed" : "Not installed",
-        meta: {
-          filterVariant: "select",
-          filterOptions: ["Installed", "Not installed"],
-        } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "operatorLabel",
         header: "Operator",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         id: "action",
@@ -442,9 +441,12 @@ const ExecutiveSitesProgress = () => {
         accessorKey: "unique_identifier",
         header: "Site ID",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.unique_identifier}</span>
+          <CopyableId
+            value={String(row.original.unique_identifier ?? "")}
+            label="Site ID"
+          />
         ),
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         id: "site_type",
@@ -468,18 +470,18 @@ const ExecutiveSitesProgress = () => {
       {
         accessorKey: "tehsil",
         header: "Tehsil",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "village",
         header: "Village",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "settlement",
         header: "Settlement",
         cell: ({ getValue }) => String(getValue() ?? "—") || "—",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "months_logged",
@@ -539,23 +541,10 @@ const ExecutiveSitesProgress = () => {
       />
 
       <Card className="gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-foreground/10">
-        <CardHeader className="border-b border-border/80 bg-muted/20 py-4 [.border-b]:pb-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="text-base font-semibold tracking-tight">
-                Scope
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Filters apply to sites and coverage.
-              </CardDescription>
-            </div>
-            <LivePulseBadge syncing={loading} />
-          </div>
-        </CardHeader>
-        <CardContent className="py-4">
-          <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <CardContent className="p-3 sm:p-4">
+          <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+            <Field className="gap-1">
+              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Tehsil
               </FieldLabel>
               <Select
@@ -564,22 +553,22 @@ const ExecutiveSitesProgress = () => {
                   updateScope({ tehsil: v ?? filters.tehsil })
                 }
               >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
+                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
                   <SelectValue placeholder="Tehsil" />
                 </SelectTrigger>
                 <SelectContent>
                   {tehsilOptions.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t === ALL_ASSIGNED_TEHSILS
-                        ? `All assigned (${allowedTehsils.length})`
+                        ? `All (${allowedTehsils.length})`
                         : t}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <Field className="gap-1">
+              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Village
               </FieldLabel>
               <Select
@@ -588,7 +577,7 @@ const ExecutiveSitesProgress = () => {
                   updateScope({ village: v ?? filters.village })
                 }
               >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
+                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
                   <SelectValue placeholder="Village" />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
@@ -600,15 +589,15 @@ const ExecutiveSitesProgress = () => {
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <Field className="gap-1">
+              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Year
               </FieldLabel>
               <Select
                 value={filters.year}
                 onValueChange={(v) => updateScope({ year: v ?? filters.year })}
               >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
+                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
                   <SelectValue placeholder="Year" />
                 </SelectTrigger>
                 <SelectContent>
@@ -620,8 +609,8 @@ const ExecutiveSitesProgress = () => {
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <Field className="gap-1">
+              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Month
               </FieldLabel>
               <Select
@@ -630,7 +619,7 @@ const ExecutiveSitesProgress = () => {
                   updateScope({ month: v ?? filters.month })
                 }
               >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
+                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
                   <SelectValue placeholder="Month" />
                 </SelectTrigger>
                 <SelectContent>
@@ -643,6 +632,9 @@ const ExecutiveSitesProgress = () => {
                 </SelectContent>
               </Select>
             </Field>
+            <div className="col-span-2 flex items-end sm:col-span-1">
+              <LivePulseBadge syncing={loading} />
+            </div>
           </FieldGroup>
         </CardContent>
       </Card>
@@ -759,7 +751,7 @@ const ExecutiveSitesProgress = () => {
           ) : (
             <DataGrid
               title="Water systems progress"
-              description="Expand a row for logging progress, meter, and operators — then open the full site record."
+              description="Search by system ID, village, or operator. Filter by Logged / Missing if needed."
               exportFileName="hq-water-sites-progress"
               rows={waterRows}
               columns={waterColumns}
@@ -775,7 +767,7 @@ const ExecutiveSitesProgress = () => {
           ) : (
             <DataGrid
               title="Solar sites progress"
-              description="Expand a row for monthly logging progress, then open the full site record."
+              description="Search by site ID or village. Filter by status or site type if needed."
               exportFileName="hq-solar-sites-progress"
               rows={solarRows}
               columns={solarColumns}

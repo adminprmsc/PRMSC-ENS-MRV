@@ -1,14 +1,8 @@
 import { memo } from "react";
-import { MapPin, SlidersHorizontal } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Field,
   FieldGroup,
@@ -54,15 +48,14 @@ type ExecutiveScopeFiltersCardProps = {
 function tehsilLabel(value: string, assignedCount?: number) {
   if (value === ALL_ASSIGNED_TEHSILS) {
     return assignedCount && assignedCount > 0
-      ? `All assigned tehsils (${assignedCount})`
-      : "All assigned tehsils";
+      ? `All tehsils (${assignedCount})`
+      : "All tehsils";
   }
   return value;
 }
 
 function FilterSelect({
   label,
-  hint,
   value,
   disabled,
   placeholder,
@@ -72,7 +65,6 @@ function FilterSelect({
   onChange,
 }: {
   label: string;
-  hint?: string;
   value: string;
   disabled?: boolean;
   placeholder: string;
@@ -86,7 +78,6 @@ function FilterSelect({
     return (
       <SearchableOptionField
         label={label}
-        {...(hint ? { hint } : {})}
         value={value}
         options={options}
         allValue={allValue}
@@ -100,21 +91,16 @@ function FilterSelect({
   }
 
   return (
-    <Field className="min-w-0">
-      <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+    <Field className="min-w-0 gap-1">
+      <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
-        {hint ? (
-          <span className="ml-1 font-normal normal-case tracking-normal">
-            {hint}
-          </span>
-        ) : null}
       </FieldLabel>
       <Select
         value={value}
         onValueChange={(v) => onChange(v ?? value)}
         disabled={disabled}
       >
-        <SelectTrigger className="h-9 w-full bg-background text-sm">
+        <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="max-h-72">
@@ -147,51 +133,24 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   ).length;
 
   return (
-    <Card className="gap-0 overflow-visible py-0 ring-border/50">
-      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
-        <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <SlidersHorizontal className="size-4" />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="text-base">Scope filters</CardTitle>
-            <CardDescription className="text-xs leading-relaxed">
-              Choose tehsil, village, and settlement from the location catalog.
-              With All Tehsils selected, villages and settlements from every
-              assigned tehsil are listed.
-            </CardDescription>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {locationsLoading ? (
-            <Badge variant="outline" className="font-normal">
-              Loading catalog…
-            </Badge>
-          ) : locationMeta &&
-            (locationMeta.villageCount > 0 || locationMeta.settlementCount > 0) ? (
-            <Badge variant="outline" className="font-normal">
-              {locationMeta.villageCount} villages
-              {locationMeta.settlementCount > 0
-                ? ` · ${locationMeta.settlementCount} settlements`
-                : ""}
-            </Badge>
-          ) : null}
+    <Card className="gap-0 overflow-visible py-0 shadow-sm ring-border/40">
+      <CardContent className="space-y-3 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium text-foreground">Filters</p>
           <Badge
             variant="secondary"
-            className="max-w-[min(100%,320px)] font-normal"
+            className="max-w-[min(100%,280px)] truncate font-normal"
           >
             <MapPin className="mr-1 size-3 shrink-0" />
             <span className="truncate">{activeScopeLabel}</span>
           </Badge>
         </div>
-      </CardHeader>
 
-      <CardContent className="pt-4">
-        <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <FilterSelect
             label="Tehsil"
             value={filters.tehsil}
-            placeholder="Select tehsil"
+            placeholder="Tehsil"
             options={tehsilOptions}
             optionLabel={(v) => tehsilLabel(v, assignedCount)}
             onChange={(v) => onUpdate("tehsil", v)}
@@ -199,16 +158,9 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
 
           <FilterSelect
             label="Village"
-            {...(villageEnabled
-              ? locationMeta && locationMeta.villageCount > 0
-                ? { hint: `(${locationMeta.villageCount})` }
-                : {}
-              : { hint: "(select a tehsil)" })}
             value={filters.village}
             disabled={!villageEnabled}
-            placeholder={
-              villageEnabled ? "Select village" : "Select a tehsil first"
-            }
+            placeholder={villageEnabled ? "Village" : "Tehsil first"}
             options={villageEnabled ? villageOptions : [ALL_VILLAGES]}
             searchable
             onChange={(v) => onUpdate("village", v)}
@@ -216,17 +168,10 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
 
           <FilterSelect
             label="Settlement"
-            {...(settlementEnabled
-              ? locationMeta && locationMeta.settlementCount > 0
-                ? { hint: `(${locationMeta.settlementCount})` }
-                : {}
-              : { hint: "(select a village)" })}
             value={filters.settlement}
             disabled={!settlementEnabled}
             placeholder={
-              settlementEnabled
-                ? "Select settlement"
-                : "Select a village first"
+              settlementEnabled ? "Settlement" : "Village first"
             }
             options={
               settlementEnabled ? settlementOptions : [ALL_SETTLEMENTS]
@@ -247,18 +192,21 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
             label="Month"
             value={filters.month}
             placeholder="Month"
-            options={["All Months", ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1))]}
+            options={[
+              "All Months",
+              ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
+            ]}
             optionLabel={(v) =>
               v === "All Months"
-                ? "All Months"
+                ? "All months"
                 : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
             }
             onChange={(v) => onUpdate("month", v)}
           />
 
           <div className="flex items-end">
-            <Button type="button" className="h-9 w-full" onClick={onApply}>
-              Apply filters
+            <Button type="button" size="sm" className="h-8 w-full" onClick={onApply}>
+              Apply
             </Button>
           </div>
         </FieldGroup>
@@ -266,9 +214,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
         {!locationsLoading &&
         locationMeta &&
         locationMeta.villageCount === 0 ? (
-          <p className="mt-3 text-xs text-amber-800">
-            No villages found in the location catalog for this scope.
-          </p>
+          <p className="text-xs text-amber-800">No villages in this scope.</p>
         ) : null}
       </CardContent>
     </Card>

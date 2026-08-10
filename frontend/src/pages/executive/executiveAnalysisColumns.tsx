@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { DataGridColumnMeta } from "@/components/DataGrid";
+import { CopyableId } from "@/components/common/CopyableId";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { SOLAR_SITE_TYPES } from "@/constants/solarSiteTypes";
 import type {
@@ -25,25 +26,29 @@ export function useWaterAnalysisColumns(): Array<ColumnDef<WaterSystemDetailRow>
       {
         accessorKey: "unique_identifier",
         header: "System ID",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        // Area/period come from top filters; table search covers ID + place names.
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <span className="font-medium text-foreground">{String(getValue() ?? "—")}</span>
+          <CopyableId
+            value={String(getValue() ?? "")}
+            label="System ID"
+          />
         ),
       },
       {
         accessorKey: "tehsil",
         header: "Tehsil",
-        meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "village",
         header: "Village",
-        meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "settlement",
         header: "Settlement",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => String(getValue() ?? "—"),
       },
       {
@@ -143,9 +148,12 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
       {
         accessorKey: "unique_identifier",
         header: "System ID",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <span className="font-medium text-foreground">{String(getValue() ?? "—")}</span>
+          <CopyableId
+            value={String(getValue() ?? "")}
+            label="System ID"
+          />
         ),
       },
       {
@@ -161,29 +169,29 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
       {
         accessorKey: "tehsil",
         header: "Tehsil",
-        meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "village",
         header: "Village",
-        meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
       {
         accessorKey: "settlement",
         header: "Settlement",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => String(getValue() ?? "—"),
       },
       {
         accessorKey: "disco_info",
         header: "DISCO",
-        meta: { filterVariant: "select" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => String(getValue() ?? "—"),
       },
       {
         accessorKey: "bill_reference_number",
         header: "Bill ref",
-        meta: { filterVariant: "text" } satisfies DataGridColumnMeta,
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => String(getValue() ?? "—"),
       },
       {

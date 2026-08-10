@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getWaterVerificationQueue } from "@/services/tehsilManagerOperatorService";
 import { getApiErrorMessage } from "@/lib/api-error";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
+import { submissionLogDateKey } from "./hqSubmissionTypes";
 
 export function filterApprovedSubmissions(
   submissions: HqSubmissionRow[],
@@ -16,6 +17,10 @@ export function filterApprovedSubmissions(
     if (String(s.system_info?.id ?? "") !== String(waterSystemId)) return false;
     if (scope?.year != null && s.system_info?.year !== scope.year) return false;
     if (scope?.month != null && s.system_info?.month !== scope.month) return false;
+    if (scope?.logDate) {
+      const key = submissionLogDateKey(s);
+      if (key !== scope.logDate.slice(0, 10)) return false;
+    }
     return true;
   });
 }

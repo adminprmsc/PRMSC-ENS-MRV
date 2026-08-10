@@ -1,29 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Building2,
+  BookOpen,
+  CalendarDays,
+  ChevronDown,
   ChevronRight,
-  Gauge,
   Loader2,
   RotateCcw,
   Sun,
 } from "lucide-react";
 
+import { CopyableId } from "@/components/common/CopyableId";
+import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import { kv, PageHeader, PageShell, StatCard } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { useClientPagination } from "@/hooks/useClientPagination";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -52,11 +48,27 @@ const MONTH_NAMES = [
   "December",
 ] as const;
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function MetaItem({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="break-all text-right font-medium">{value}</span>
+    <div className="min-w-0">
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "mt-0.5 truncate text-sm text-foreground",
+          mono && "font-mono text-xs",
+        )}
+        title={typeof value === "string" ? value : undefined}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -67,6 +79,37 @@ function fmtNum(v: unknown) {
   if (!Number.isFinite(n)) return String(v);
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+
+function recordTotals(row: SolarMonthlySupplyListItem) {
+  const exportKwh =
+    row.export_total ??
+    Number(row.export_off_peak ?? 0) + Number(row.export_peak ?? 0);
+  const importKwh =
+    row.import_total ??
+    Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0);
+  const netKwh =
+    row.net_total ??
+    Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
+  return { exportKwh, importKwh, netKwh };
+}
+
+function monthLabel(month: number): string {
+  return month >= 1 && month <= 12 ? MONTH_NAMES[month] : `Month ${month}`;
+}
+
+function monthSortKey(row: SolarMonthlySupplyListItem): string {
+  return `${row.year}-${String(row.month).padStart(2, "0")}`;
+}
+
+type MonthBranch = {
+  key: string;
+  year: number;
+  month: number;
+  records: SolarMonthlySupplyListItem[];
+  exportKwh: number;
+  importKwh: number;
+  netKwh: number;
+};
 
 type LocationState = {
   from?: string;
@@ -88,6 +131,9 @@ export default function HqSolarSiteDetailPage() {
   const [records, setRecords] = useState<SolarMonthlySupplyListItem[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsError, setRecordsError] = useState("");
+  const [siteDetailsOpen, setSiteDetailsOpen] = useState(false);
+  const [monthFilter, setMonthFilter] = useState("");
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   const backTo = state.from?.trim() || hqRoutes.solarAnalysis;
   const metrics = state.metrics;
@@ -113,9 +159,13 @@ export default function HqSolarSiteDetailPage() {
           settlement: res.settlement ?? "",
           year: String(displayYear),
         });
-        setRecords(Array.isArray(data) ? (data as SolarMonthlySupplyListItem[]) : []);
+        setRecords(
+          Array.isArray(data) ? (data as SolarMonthlySupplyListItem[]) : [],
+        );
       } catch (err) {
-        setRecordsError(getApiErrorMessage(err, "Could not load monthly records"));
+        setRecordsError(
+          getApiErrorMessage(err, "Could not load monthly records"),
+        );
         setRecords([]);
       }
     } catch (err) {
@@ -138,17 +188,86 @@ export default function HqSolarSiteDetailPage() {
       ? kv(metrics.unique_identifier)
       : "Solar site";
 
-  const sortedRecords = useMemo(
-    () => [...records].sort((a, b) => a.month - b.month),
+  const monthBranches = useMemo((): MonthBranch[] => {
+    const byMonth = new Map<string, SolarMonthlySupplyListItem[]>();
+    for (const row of records) {
+      const key = monthSortKey(row);
+      if (monthFilter && key !== monthFilter) continue;
+      const list = byMonth.get(key);
+      if (list) list.push(row);
+      else byMonth.set(key, [row]);
+    }
+
+    return Array.from(byMonth.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, list]) => {
+        const sorted = [...list].sort((a, b) =>
+          String(b.updated_at ?? b.created_at ?? "").localeCompare(
+            String(a.updated_at ?? a.created_at ?? ""),
+          ),
+        );
+        let exportKwh = 0;
+        let importKwh = 0;
+        let netKwh = 0;
+        for (const r of sorted) {
+          const t = recordTotals(r);
+          exportKwh += Number(t.exportKwh) || 0;
+          importKwh += Number(t.importKwh) || 0;
+          netKwh += Number(t.netKwh) || 0;
+        }
+        const first = sorted[0];
+        return {
+          key,
+          year: first?.year ?? displayYear,
+          month: first?.month ?? 0,
+          records: sorted,
+          exportKwh,
+          importKwh,
+          netKwh,
+        };
+      });
+  }, [records, monthFilter, displayYear]);
+
+  const monthOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(records.map((r) => monthSortKey(r))),
+      ).sort((a, b) => b.localeCompare(a)),
     [records],
   );
 
-  const recordsPagination = useClientPagination(sortedRecords, 10);
+  const latestMonthKey = monthOptions[0] ?? "";
+
+  const monthPickerLabel = (key: string) => {
+    const [y, m] = key.split("-");
+    const month = Number(m);
+    const count = records.filter((r) => monthSortKey(r) === key).length;
+    return `${monthLabel(month)} ${y} · ${count} record${count === 1 ? "" : "s"}`;
+  };
 
   useEffect(() => {
-    recordsPagination.resetPage();
+    if (monthFilter) {
+      setExpandedMonths(new Set([monthFilter]));
+      return;
+    }
+    setExpandedMonths(new Set(latestMonthKey ? [latestMonthKey] : []));
+  }, [monthFilter, latestMonthKey]);
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const monthsPagination = useClientPagination(monthBranches, 8);
+
+  useEffect(() => {
+    monthsPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedRecords.length, displayYear]);
+  }, [monthBranches.length, displayYear, monthFilter]);
 
   return (
     <PageShell>
@@ -157,7 +276,9 @@ export default function HqSolarSiteDetailPage() {
         title={loading ? "Solar site" : title}
         description={
           site
-            ? [site.tehsil, site.village, site.settlement].filter(Boolean).join(" · ")
+            ? [site.tehsil, site.village, site.settlement]
+                .filter(Boolean)
+                .join(" · ")
             : "Site profile and monthly energy records"
         }
         actions={
@@ -222,56 +343,157 @@ export default function HqSolarSiteDetailPage() {
                 value={`${Number(metrics.total_net_kwh ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
                 accent="green"
               />
-              <StatCard label="Months logged" value={metrics.months_logged} accent="amber" />
+              <StatCard
+                label="Months logged"
+                value={metrics.months_logged}
+                accent="amber"
+              />
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader className="border-b border-border/60 pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Building2 className="size-4 text-muted-foreground" />
-                  Identity
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-4">
-                <DetailRow label="System ID" value={site.id} />
-                <DetailRow label="UID" value={kv(site.unique_identifier)} />
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
-                  <span className="shrink-0 text-muted-foreground">Site type</span>
-                  <SolarSiteTypeBadge value={site.site_type} />
+          <div className="rounded-lg border border-border/70 bg-muted/10">
+            <button
+              type="button"
+              onClick={() => setSiteDetailsOpen((o) => !o)}
+              aria-expanded={siteDetailsOpen}
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
+            >
+              <BookOpen className="size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-sm font-medium text-foreground">
+                    Site details
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Optional registry info
+                  </span>
                 </div>
-                <DetailRow label="Created" value={formatPakistanDateTime(site.created_at)} />
-                <DetailRow label="Updated" value={formatPakistanDateTime(site.updated_at)} />
-              </CardContent>
-            </Card>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {kv(site.installation_location)} · {kv(site.disco_info)} ·
+                  Panel {kv(site.solar_panel_capacity)} kW · Updated{" "}
+                  {formatPakistanDateTime(site.updated_at)}
+                </p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "size-4 shrink-0 text-muted-foreground transition-transform duration-300",
+                  siteDetailsOpen && "rotate-180",
+                )}
+              />
+            </button>
 
-            <Card>
-              <CardHeader className="border-b border-border/60 pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Gauge className="size-4 text-muted-foreground" />
-                  Technical
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-4">
-                <DetailRow label="Location" value={kv(site.installation_location)} />
-                <DetailRow label="DISCO" value={kv(site.disco_info)} />
-                <DetailRow label="Bill ref" value={kv(site.bill_reference_number)} />
-                <DetailRow label="Panel (kW)" value={kv(site.solar_panel_capacity)} />
-                <DetailRow label="Inverter" value={kv(site.inverter_capacity)} />
-                <DetailRow label="Meter serial" value={kv(site.meter_serial_number)} />
-              </CardContent>
-            </Card>
+            {siteDetailsOpen ? (
+              <div className="border-t border-border/60 px-3 py-3">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <MetaItem
+                    label="System ID"
+                    mono
+                    value={
+                      <CopyableId
+                        value={site.id}
+                        label="System ID"
+                        className="inline-flex max-w-full items-center gap-0.5 [&_span]:truncate [&_span]:font-mono [&_span]:text-xs"
+                      />
+                    }
+                  />
+                  <MetaItem label="UID" value={kv(site.unique_identifier)} />
+                  <MetaItem
+                    label="Site type"
+                    value={<SolarSiteTypeBadge value={site.site_type} />}
+                  />
+                  <MetaItem
+                    label="Created"
+                    value={formatPakistanDateTime(site.created_at)}
+                  />
+                  <MetaItem
+                    label="Updated"
+                    value={formatPakistanDateTime(site.updated_at)}
+                  />
+                  <MetaItem
+                    label="Location"
+                    value={kv(site.installation_location)}
+                  />
+                  <MetaItem label="DISCO" value={kv(site.disco_info)} />
+                  <MetaItem
+                    label="Bill ref"
+                    value={kv(site.bill_reference_number)}
+                  />
+                  <MetaItem
+                    label="Panel (kW)"
+                    value={kv(site.solar_panel_capacity)}
+                  />
+                  <MetaItem
+                    label="Inverter (kW)"
+                    value={kv(site.inverter_capacity)}
+                  />
+                  <MetaItem
+                    label="Meter serial"
+                    value={kv(site.meter_serial_number)}
+                  />
+                </dl>
+              </div>
+            ) : null}
           </div>
 
           <Card>
             <CardHeader className="border-b border-border/60 bg-muted/20 py-3">
-              <CardTitle className="text-base">Monthly energy records ({displayYear})</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Logged export, import, and net values. Open any month for full readings and bill attachment.
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarDays className="size-4 text-muted-foreground" />
+                Monthly energy records ({displayYear})
+              </CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Months group as branches. Expand for peak / off-peak detail and
+                open a record — newest update first within a month.
               </p>
             </CardHeader>
-            <CardContent className="pt-4">
+
+            <CardContent className="space-y-3 pt-4">
+              {!recordsLoading && !recordsError && records.length > 0 ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3">
+                  <div className="min-w-0 flex-1 sm:max-w-md">
+                    <SearchableOptionField
+                      label="Jump to month"
+                      value={monthFilter}
+                      options={monthOptions}
+                      allValue=""
+                      allLabel={`All months · ${records.length} records · ${monthOptions.length} months`}
+                      placeholder="Search month (Jun, 2026-06…)…"
+                      maxResults={24}
+                      onChange={setMonthFilter}
+                      optionLabel={monthPickerLabel}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:ms-auto sm:pb-px">
+                    {latestMonthKey ? (
+                      <Button
+                        type="button"
+                        variant={
+                          monthFilter === latestMonthKey
+                            ? "secondary"
+                            : "outline"
+                        }
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => setMonthFilter(latestMonthKey)}
+                      >
+                        Latest month
+                      </Button>
+                    ) : null}
+                    {monthFilter ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-muted-foreground"
+                        onClick={() => setMonthFilter("")}
+                      >
+                        Show all months
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               {recordsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
@@ -279,78 +501,97 @@ export default function HqSolarSiteDetailPage() {
                 </div>
               ) : recordsError ? (
                 <p className="text-sm text-destructive">{recordsError}</p>
-              ) : sortedRecords.length === 0 ? (
+              ) : records.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No monthly records for {displayYear} at this site.
                 </p>
+              ) : monthBranches.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+                  <p className="text-sm font-medium">No records for this month</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-8"
+                    onClick={() => setMonthFilter("")}
+                  >
+                    Show all months
+                  </Button>
+                </div>
               ) : (
-                <div className="overflow-hidden rounded-lg border border-border/60">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Month</TableHead>
-                          <TableHead>Export (kWh)</TableHead>
-                          <TableHead>Import (kWh)</TableHead>
-                          <TableHead>Net (kWh)</TableHead>
-                          <TableHead>Updated</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recordsPagination.pageItems.map((row) => {
-                          const exportKwh =
-                            row.export_total ??
-                            Number(row.export_off_peak ?? 0) + Number(row.export_peak ?? 0);
-                          const importKwh =
-                            row.import_total ??
-                            Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0);
-                          const netKwh =
-                            row.net_total ??
-                            Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
-                          const monthName =
-                            row.month >= 1 && row.month <= 12
-                              ? MONTH_NAMES[row.month]
-                              : `Month ${row.month}`;
-
-                          return (
-                            <TableRow key={row.id}>
-                              <TableCell className="text-sm font-medium">{monthName}</TableCell>
-                              <TableCell className="tabular-nums text-sm text-amber-700">
-                                {fmtNum(exportKwh)}
-                              </TableCell>
-                              <TableCell className="tabular-nums text-sm text-red-700">
-                                {fmtNum(importKwh)}
-                              </TableCell>
-                              <TableCell className="tabular-nums text-sm font-medium">
-                                {fmtNum(netKwh)}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {formatPakistanDateTime(row.updated_at)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Link
-                                  to={hqRoutes.solarRecordDetails(row.id)}
-                                  state={{ from: location.pathname }}
-                                  className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
-                                >
-                                  Record detail
-                                  <ChevronRight className="size-3.5" />
-                                </Link>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                <div className="overflow-hidden rounded-lg border border-border shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {monthBranches.reduce((n, b) => n + b.records.length, 0)}
+                      </span>{" "}
+                      record
+                      {monthBranches.reduce((n, b) => n + b.records.length, 0) ===
+                      1
+                        ? ""
+                        : "s"}{" "}
+                      ·{" "}
+                      <span className="font-medium text-foreground">
+                        {monthBranches.length}
+                      </span>{" "}
+                      month{monthBranches.length === 1 ? "" : "s"}
+                    </p>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          setExpandedMonths(
+                            new Set(
+                              monthsPagination.pageItems.map((b) => b.key),
+                            ),
+                          )
+                        }
+                      >
+                        Expand page
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setExpandedMonths(new Set())}
+                      >
+                        Collapse
+                      </Button>
+                    </div>
                   </div>
+
+                  <div className="overflow-x-auto overscroll-x-contain">
+                    <table className="w-full caption-bottom text-sm">
+                      <thead className="sr-only">
+                        <tr>
+                          <th>Month energy records</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthsPagination.pageItems.map((branch) => (
+                          <MonthTreeBranch
+                            key={branch.key}
+                            branch={branch}
+                            open={expandedMonths.has(branch.key)}
+                            fromPath={location.pathname}
+                            onToggle={() => toggleMonth(branch.key)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
                   <PaginatedListFooter
-                    pageIndex={recordsPagination.pageIndex}
-                    pageSize={recordsPagination.pageSize}
-                    pageCount={recordsPagination.pageCount}
-                    total={recordsPagination.total}
-                    onPageChange={recordsPagination.goToPage}
-                    onPageSizeChange={recordsPagination.setPageSize}
+                    pageIndex={monthsPagination.pageIndex}
+                    pageSize={monthsPagination.pageSize}
+                    pageCount={monthsPagination.pageCount}
+                    total={monthsPagination.total}
+                    onPageChange={monthsPagination.goToPage}
+                    onPageSizeChange={monthsPagination.setPageSize}
                   />
                 </div>
               )}
@@ -365,5 +606,296 @@ export default function HqSolarSiteDetailPage() {
         </Card>
       )}
     </PageShell>
+  );
+}
+
+function MetricChip({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="min-w-[4.5rem] rounded-md border border-border/70 bg-background/80 px-2 py-1 text-right">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "text-sm font-semibold tabular-nums leading-tight",
+          valueClassName,
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MonthTreeBranch({
+  branch,
+  open,
+  fromPath,
+  onToggle,
+}: {
+  branch: MonthBranch;
+  open: boolean;
+  fromPath: string;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr className="border-b border-border/80 bg-muted/25 hover:bg-muted/40">
+        <td className="p-0">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            className="flex w-full items-center gap-3 px-3 py-3 text-left"
+          >
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-md border border-border/80 bg-background text-muted-foreground transition-colors duration-200",
+                open && "border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+              )}
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3.5 transition-transform duration-300 ease-out",
+                  open && "rotate-90",
+                )}
+              />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold tracking-tight text-foreground">
+                  {monthLabel(branch.month)} {branch.year}
+                </span>
+                <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/70">
+                  {branch.records.length} record
+                  {branch.records.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Click to {open ? "hide" : "view"} peak / off-peak breakdown
+              </p>
+            </div>
+
+            <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+              <MetricChip
+                label="Export"
+                value={fmtNum(branch.exportKwh)}
+                valueClassName="text-amber-700 dark:text-amber-400"
+              />
+              <MetricChip
+                label="Import"
+                value={fmtNum(branch.importKwh)}
+                valueClassName="text-red-700 dark:text-red-400"
+              />
+              <MetricChip
+                label="Net"
+                value={fmtNum(branch.netKwh)}
+                valueClassName="text-foreground"
+              />
+            </div>
+          </button>
+          {/* Mobile metrics under title when chips are hidden */}
+          <div className="flex gap-1.5 border-t border-border/50 px-3 py-2 sm:hidden">
+            <MetricChip
+              label="Export"
+              value={fmtNum(branch.exportKwh)}
+              valueClassName="text-amber-700"
+            />
+            <MetricChip
+              label="Import"
+              value={fmtNum(branch.importKwh)}
+              valueClassName="text-red-700"
+            />
+            <MetricChip label="Net" value={fmtNum(branch.netKwh)} />
+          </div>
+        </td>
+      </tr>
+
+      <tr className="border-0">
+        <td className="p-0">
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
+              open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div
+                className={cn(
+                  "space-y-2 border-b border-border/80 bg-muted/10 px-3 py-3 ps-12 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none",
+                  open
+                    ? "translate-y-0 opacity-100"
+                    : "-translate-y-1 opacity-0",
+                )}
+              >
+                {branch.records.map((row, idx) => {
+                  const { exportKwh, importKwh, netKwh } = recordTotals(row);
+                  return (
+                    <article
+                      key={row.id}
+                      className={cn(
+                        "overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm",
+                        idx > 0 && "mt-0",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-3 py-2.5">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">
+                              Monthly record
+                            </span>
+                            {idx === 0 && branch.records.length > 1 ? (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                                Latest update
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                            <span>
+                              Updated{" "}
+                              <span className="font-medium text-foreground/80">
+                                {formatPakistanDateTime(row.updated_at)}
+                              </span>
+                            </span>
+                            {row.created_at ? (
+                              <span>
+                                Created{" "}
+                                <span className="font-medium text-foreground/80">
+                                  {formatPakistanDateTime(row.created_at)}
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Record ID
+                            </span>
+                            <CopyableId
+                              value={row.id}
+                              label="Record ID"
+                              className="inline-flex max-w-[14rem] items-center gap-0.5 [&_button]:size-6 [&_span]:truncate [&_span]:font-mono [&_span]:text-[11px]"
+                            />
+                          </div>
+                        </div>
+                        <Link
+                          to={hqRoutes.solarRecordDetails(row.id)}
+                          state={{ from: fromPath }}
+                          className={cn(
+                            buttonVariants({ size: "sm" }),
+                            "h-8 shrink-0",
+                          )}
+                        >
+                          Open record
+                          <ChevronRight className="size-3.5" />
+                        </Link>
+                      </div>
+
+                      <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                        <div>
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Totals (kWh)
+                          </p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-md border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-amber-800/80 dark:text-amber-200/80">
+                                Export
+                              </p>
+                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-amber-800 dark:text-amber-200">
+                                {fmtNum(exportKwh)}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-red-200/80 bg-red-50/70 px-2.5 py-2 dark:border-red-900/50 dark:bg-red-950/30">
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-red-800/80 dark:text-red-200/80">
+                                Import
+                              </p>
+                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-red-800 dark:text-red-200">
+                                {fmtNum(importKwh)}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Net
+                              </p>
+                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+                                {fmtNum(netKwh)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Time-of-use split
+                          </p>
+                          <div className="overflow-hidden rounded-md border border-border/70">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border/70 bg-muted/40">
+                                  <th className="px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Band
+                                  </th>
+                                  <th className="px-2.5 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Export
+                                  </th>
+                                  <th className="px-2.5 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Import
+                                  </th>
+                                  <th className="px-2.5 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Net
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr className="border-b border-border/50">
+                                  <td className="px-2.5 py-2 text-xs font-medium">
+                                    Peak
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs tabular-nums text-amber-700">
+                                    {fmtNum(row.export_peak)}
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs tabular-nums text-red-700">
+                                    {fmtNum(row.import_peak)}
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs font-medium tabular-nums">
+                                    {fmtNum(row.net_peak)}
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="px-2.5 py-2 text-xs font-medium">
+                                    Off-peak
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs tabular-nums text-amber-700">
+                                    {fmtNum(row.export_off_peak)}
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs tabular-nums text-red-700">
+                                    {fmtNum(row.import_off_peak)}
+                                  </td>
+                                  <td className="px-2.5 py-2 text-right text-xs font-medium tabular-nums">
+                                    {fmtNum(row.net_off_peak)}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
