@@ -1,6 +1,7 @@
 # PRMSC-MRV deployment
 
 > **Daily backup + deploy:** see **[docs/DAILY-OPS.md](./docs/DAILY-OPS.md)**.  
+> **VM lost / new Nayatel server:** see **[docs/VM-RECOVERY.md](./docs/VM-RECOVERY.md)**.  
 > **Regular server use** (SSH, logs, DB checks): see **[VM-OPS.md](./VM-OPS.md)**.
 
 Single Docker stack: **PostgreSQL + NestJS + React + Nginx**. Database is self-hosted in Docker; **Supabase is used only for file storage** (S3-compatible API). One env file (`.env.docker`), one compose file (`docker-compose.yml`).
