@@ -52,6 +52,7 @@ import ExecutiveSolarAnalysis from "./pages/executive/ExecutiveSolarAnalysis";
 import HqSolarRecordViewPage from "./pages/executive/HqSolarRecordViewPage";
 import HqWaterSystemDetailPage from "./pages/executive/HqWaterSystemDetailPage";
 import HqSolarSiteDetailPage from "./pages/executive/HqSolarSiteDetailPage";
+import HqSitesTechInfoPage from "./pages/executive/HqSitesTechInfoPage";
 import TehsilManagerDashboard from "./pages/tehsil/dashboard/TehsilManagerDashboard";
 import LoggingCompliance from "./pages/tehsil/logging/LoggingCompliance";
 import SolarLoggingCompliancePage from "./pages/tehsil/logging/SolarLoggingCompliancePage";
@@ -191,6 +192,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
                   <ExecutiveSitesProgress />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/sites-technical-info"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <HqSitesTechInfoPage />
                 </ProtectedRoute>
               }
             />

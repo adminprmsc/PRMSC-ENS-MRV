@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { LayoutDashboard } from "lucide-react";
+import { Droplets, LayoutDashboard, RefreshCcw } from "lucide-react";
 import { useProgramDashboardApi } from "../../hooks";
 import { getApiErrorMessage } from "../../lib/api-error";
 import {
@@ -25,7 +25,6 @@ import { Skeleton } from "../../components/ui/skeleton";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -45,6 +44,12 @@ import {
   fetchScopedProgramDashboard,
   type ProgramSummary,
 } from "./fetchScopedProgramDashboard";
+import { Link } from "react-router-dom";
+import { hqRoutes } from "../../constants/routes";
+import { getLoggingCompliance } from "../../services/tehsilManagerOperatorService";
+import type { WaterSystemRow } from "../tehsil/logging/loggingComplianceTypes";
+import { formatAssignedOperators } from "../tehsil/logging/loggingComplianceTypes";
+import { getPakistanIsoDateString } from "../../utils/pakistanTime";
 
 type SummaryData = ProgramSummary;
 type RowData = {
@@ -135,6 +140,165 @@ type ProgramDashboardProps = {
   /** Field-ops anomaly table; hidden on COO organization KPI view. */
   showAnomalies?: boolean;
 };
+
+/** Today's water logging card for the HQ command center. */
+function HqTodayWaterCard({ tehsils }: { tehsils: string[] }) {
+  const today = getPakistanIsoDateString(new Date());
+  const [systems, setSystems] = useState<WaterSystemRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = { water_date: today };
+      if (tehsils.length === 1 && tehsils[0]) params.tehsil = tehsils[0];
+      const data = (await getLoggingCompliance(params)) as {
+        water_systems?: WaterSystemRow[];
+      };
+      setSystems(data.water_systems ?? []);
+    } catch {
+      setSystems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [today, tehsils]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const total = systems.length;
+  const entered = systems.filter((s) => s.daily_status !== "missing").length;
+  const submitted = systems.filter((s) =>
+    ["submitted", "accepted"].includes(s.daily_status),
+  ).length;
+  const missing = systems.filter((s) => s.daily_status === "missing").length;
+  const pct = total > 0 ? Math.round((100 * entered) / total) : 0;
+  const barColor =
+    pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  const statusLabel =
+    pct >= 80 ? "On track" : pct >= 50 ? "Needs attention" : "Behind";
+  const statusClass =
+    pct >= 80
+      ? "border-emerald-200 text-emerald-700 bg-emerald-50"
+      : pct >= 50
+        ? "border-amber-200 text-amber-700 bg-amber-50"
+        : "border-red-200 text-red-700 bg-red-50";
+
+  const todayLabel = new Date(today + "T00:00:00").toLocaleDateString("en-PK", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  return (
+    <section className="hq-section">
+      <Card className="border-blue-100 shadow-sm">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <Droplets className="size-4.5" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold">
+                  Today's water logging
+                </CardTitle>
+                <p className="text-[11px] text-muted-foreground">{todayLabel}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!loading && total > 0 && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${statusClass}`}
+                >
+                  {statusLabel}
+                </Badge>
+              )}
+              <button
+                type="button"
+                onClick={() => void load()}
+                disabled={loading}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors disabled:opacity-50"
+                title="Refresh"
+              >
+                <RefreshCcw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {loading ? (
+            <div className="space-y-3">
+              <div className="h-7 w-1/3 animate-pulse rounded bg-muted" />
+              <div className="h-2 animate-pulse rounded-full bg-muted" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : total === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              No water systems in scope
+            </p>
+          ) : (
+            <>
+              <div className="flex items-end justify-between">
+                <span className="text-3xl font-bold tabular-nums">{pct}%</span>
+                <div className="pb-1 text-right text-xs text-muted-foreground">
+                  <p className="font-medium">{entered}/{total} have an entry</p>
+                  <p>{submitted} submitted · {missing} missing</p>
+                </div>
+              </div>
+
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-border/50 divide-y divide-border/40 pt-1">
+                {systems.map((s) => {
+                  const isLogged = s.daily_status !== "missing";
+                  const opLabel = formatAssignedOperators(s.assigned_operators);
+                  const location = [s.unique_identifier, s.village, s.tehsil]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return (
+                    <Link
+                      key={s.id}
+                      to={hqRoutes.waterSystem(s.id)}
+                      className={`flex items-center justify-between gap-2 px-3 py-2.5 text-xs transition-colors hover:bg-muted/40 ${
+                        isLogged ? "bg-emerald-50/40" : "bg-red-50/30"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{location}</p>
+                        {opLabel ? (
+                          <p className="truncate text-muted-foreground">{opLabel}</p>
+                        ) : null}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`shrink-0 text-[10px] font-semibold ${
+                          isLogged
+                            ? "border-emerald-200 text-emerald-700 bg-emerald-50"
+                            : "border-red-200 text-red-700 bg-red-50"
+                        }`}
+                      >
+                        {isLogged ? "Logged" : "Missing"}
+                      </Badge>
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
 
 const ProgramDashboard = ({
   headingTitle = "Program Dashboard",
@@ -390,13 +554,6 @@ const ProgramDashboard = ({
         icon={<LayoutDashboard className="size-5" />}
       />
 
-        {managementView ? (
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Map → health → performance. Open{" "}
-            <span className="font-medium text-foreground">Attention needed</span>{" "}
-            for follow-ups.
-          </p>
-        ) : null}
 
         {error ? (
           <Card>
@@ -426,6 +583,12 @@ const ProgramDashboard = ({
           restrictTehsils={restrictTehsils}
           scopeFilterYears={YEARS}
           scopeFilterMonths={MONTHS}
+          managementView={managementView}
+          todaySlot={
+            managementView ? (
+              <HqTodayWaterCard tehsils={allowedTehsils} />
+            ) : undefined
+          }
           mapSlot={
             showSystemsMap && mapPosition === "top" ? (
               <SystemsMapCard

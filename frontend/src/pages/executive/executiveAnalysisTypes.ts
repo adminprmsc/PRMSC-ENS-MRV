@@ -37,8 +37,15 @@ export type SolarSystemDetailRow = {
   disco_info?: string | null;
   bill_reference_number?: string | null;
   total_export_kwh: number;
+  total_export_off_peak_kwh?: number | null;
+  total_export_peak_kwh?: number | null;
   total_import_kwh: number;
+  total_import_off_peak_kwh?: number | null;
+  total_import_peak_kwh?: number | null;
   total_net_kwh: number;
+  total_net_off_peak_kwh?: number | null;
+  total_net_peak_kwh?: number | null;
+  any_tou_required?: boolean | null;
   months_logged: number;
   records_count: number;
   avg_export_kwh_per_month?: number | null;

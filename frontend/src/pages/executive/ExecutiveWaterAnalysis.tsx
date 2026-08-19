@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, Droplets } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import DataGrid from "@/components/DataGrid";
@@ -19,6 +19,7 @@ const ExecutiveWaterAnalysis = () => {
   const { getDashboardWaterSystemsDetail } = useProgramDashboardApi();
   const scope = useExecutiveScopeFilters();
   const baseColumns = useWaterAnalysisColumns();
+  const location = useLocation();
 
   const [rows, setRows] = useState<WaterSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ const ExecutiveWaterAnalysis = () => {
         cell: ({ row }) => {
           const systemId = row.original.water_system_id;
           const navState = {
-            from: "/hq/water",
+            from: location.pathname + location.search,
             metrics: row.original,
             year: scope.apiFilters.year,
             ...(scope.apiFilters.month != null
@@ -55,7 +56,7 @@ const ExecutiveWaterAnalysis = () => {
         },
       },
     ],
-    [baseColumns, scope.apiFilters.year, scope.apiFilters.month],
+    [baseColumns, scope.apiFilters.year, scope.apiFilters.month, location.pathname, location.search],
   );
 
   useEffect(() => {

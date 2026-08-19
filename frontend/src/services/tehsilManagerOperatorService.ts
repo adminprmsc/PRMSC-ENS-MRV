@@ -102,7 +102,7 @@ export const submitSolarMonthlyData = async (formData: AnyRecord) => {
 };
 
 /**
- * Upload meter/bill image. If `recordId` is omitted, the file is stored and `image_url`
+ * Upload meter/bill evidence. If `recordId` is omitted, the file is stored and `image_url`
  * is returned — pass that URL into save payloads (e.g. solar-supply-data).
  */
 export const uploadImage = async (

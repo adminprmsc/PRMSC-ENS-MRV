@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, Sun } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import DataGrid from "@/components/DataGrid";
@@ -19,6 +19,7 @@ const ExecutiveSolarAnalysis = () => {
   const { getDashboardSolarSystemsDetail } = useProgramDashboardApi();
   const scope = useExecutiveScopeFilters();
   const baseColumns = useSolarAnalysisColumns();
+  const location = useLocation();
 
   const [rows, setRows] = useState<SolarSystemDetailRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +36,7 @@ const ExecutiveSolarAnalysis = () => {
           <Link
             to={hqRoutes.solarSite(row.original.solar_system_id)}
             state={{
-              from: "/hq/solar",
+              from: location.pathname + location.search,
               metrics: row.original,
               year: scope.apiFilters.year,
             }}
@@ -47,7 +48,7 @@ const ExecutiveSolarAnalysis = () => {
         ),
       },
     ],
-    [baseColumns, scope.apiFilters.year],
+    [baseColumns, scope.apiFilters.year, location.pathname, location.search],
   );
 
   useEffect(() => {

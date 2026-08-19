@@ -735,7 +735,7 @@ export default function HqWaterSystemDetailPage() {
                               flowRateM3h={flowRateM3h}
                               latestId={latestId}
                               systemId={systemId}
-                              fromPath={location.pathname}
+                              fromPath={location.pathname + location.search}
                               onToggle={() => toggleDay(branch.day)}
                             />
                           );

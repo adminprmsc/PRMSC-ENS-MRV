@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CalendarClock,
   ClipboardList,
+  Cpu,
   Droplets,
   FileCheck,
   FileText,
@@ -210,6 +211,11 @@ const MainLayout = () => {
             path: hqRoutes.sitesProgress,
             icon: <ListChecks className="size-4 shrink-0 opacity-90" />,
             label: "Sites Progress",
+          },
+          {
+            path: hqRoutes.sitesTechInfo,
+            icon: <Cpu className="size-4 shrink-0 opacity-90" />,
+            label: "Sites Technical Info",
           },
         ],
       });

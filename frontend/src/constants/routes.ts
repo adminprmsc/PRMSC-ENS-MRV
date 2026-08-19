@@ -50,6 +50,7 @@ export const HQ_DASHBOARD = "/hq";
 export const hqRoutes = {
   dashboard: HQ_DASHBOARD,
   sitesProgress: `${HQ_DASHBOARD}/sites`,
+  sitesTechInfo: `${HQ_DASHBOARD}/sites-technical-info`,
   attention: `${HQ_DASHBOARD}/attention`,
   deleteRequests: `${HQ_DASHBOARD}/delete-requests`,
   waterAnalysis: `${HQ_DASHBOARD}/water`,

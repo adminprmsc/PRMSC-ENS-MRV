@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Area,
@@ -121,6 +121,10 @@ type OrganizationKpiPanelProps = {
   restrictTehsils?: boolean;
   scopeFilterYears?: number[];
   scopeFilterMonths?: string[];
+  /** When true hides heavy Performance / Trends / Demographics sections. */
+  managementView?: boolean;
+  /** Slot for a "today" card rendered above the health section. */
+  todaySlot?: React.ReactNode;
 };
 
 const waterDeliveryConfig = {
@@ -201,6 +205,88 @@ function ProgressStatusBadge({
   );
 }
 
+type SiteListItem = {
+  id: string;
+  unique_identifier?: string;
+  tehsil: string;
+  village: string;
+  settlement?: string | null;
+  logged: boolean;
+  logs_count: number;
+  days_logged?: number;
+  months_logged?: number;
+  last_log_date?: string | null;
+  lifetime_last_log_date?: string | null;
+  lifetime_last_log_year?: number | null;
+  lifetime_last_log_month?: number | null;
+};
+
+const MONTH_SHORT: Record<number, string> = {
+  1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+  7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+};
+
+function formatSiteLastLog(row: SiteListItem, isSolar: boolean): string {
+  if (isSolar) {
+    const y = row.lifetime_last_log_year;
+    const m = row.lifetime_last_log_month;
+    if (y && m) return `${MONTH_SHORT[m] ?? ""} ${y}`;
+    return "No log yet";
+  }
+  const d = row.last_log_date ?? row.lifetime_last_log_date;
+  if (!d) return "No log yet";
+  try {
+    return new Date(d + "T00:00:00").toLocaleDateString("en-PK", {
+      day: "2-digit", month: "short", year: "numeric",
+    });
+  } catch {
+    return d;
+  }
+}
+
+function SiteCoverageRow({
+  row,
+  isSolar,
+}: {
+  row: SiteListItem;
+  isSolar: boolean;
+}) {
+  const location = [row.settlement, row.village, row.tehsil]
+    .filter(Boolean)
+    .join(", ");
+  const uid = row.unique_identifier ?? row.id.slice(0, 8);
+  const logCount = isSolar ? (row.months_logged ?? row.logs_count) : row.logs_count;
+  const logUnit = isSolar ? "mo." : "logs";
+  const lastLog = formatSiteLastLog(row, isSolar);
+
+  return (
+    <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/40">
+      {row.logged ? (
+        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" />
+      ) : (
+        <Clock className="size-3.5 shrink-0 text-rose-400" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium">{location || uid}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {uid} · {logCount} {logUnit} · Last: {lastLog}
+        </p>
+      </div>
+      <Badge
+        variant="outline"
+        className={cn(
+          "shrink-0 text-[10px] font-medium",
+          row.logged
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-rose-200 bg-rose-50 text-rose-600",
+        )}
+      >
+        {row.logged ? "Logged" : "Pending"}
+      </Badge>
+    </div>
+  );
+}
+
 function HealthMetricCard({
   label,
   value,
@@ -209,6 +295,8 @@ function HealthMetricCard({
   loading,
   icon,
   progress,
+  sites,
+  isSolar,
 }: {
   label: string;
   value: string;
@@ -217,7 +305,20 @@ function HealthMetricCard({
   loading?: boolean;
   icon: React.ReactNode;
   progress?: number | null;
+  sites?: SiteListItem[];
+  isSolar?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const toggle = useCallback(() => setExpanded((v) => !v), []);
+
+  const PREVIEW = 4;
+  const shownSites = sites
+    ? expanded
+      ? sites
+      : sites.slice(0, PREVIEW)
+    : [];
+  const hasMore = (sites?.length ?? 0) > PREVIEW;
+
   return (
     <Card className="relative gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-foreground/10">
       <div className="absolute inset-y-0 left-0 w-1 bg-primary/70" />
@@ -242,6 +343,27 @@ function HealthMetricCard({
           <Skeleton className="h-1.5 w-full" />
         ) : null}
         <p className="text-xs leading-relaxed text-muted-foreground">{detail}</p>
+
+        {/* Per-site breakdown */}
+        {!loading && sites && sites.length > 0 && (
+          <div className="border-t border-border/50 pt-2 space-y-0.5 pr-1">
+            {shownSites.map((s) => (
+              <SiteCoverageRow key={s.id} row={s} isSolar={isSolar ?? false} />
+            ))}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={toggle}
+                className="mt-1 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+              >
+                <SlidersHorizontal className="size-3" />
+                {expanded
+                  ? "Show less"
+                  : `Show ${(sites.length - PREVIEW).toString()} more sites`}
+              </button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -513,6 +635,8 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
   restrictTehsils = false,
   scopeFilterYears = [],
   scopeFilterMonths = [],
+  managementView = false,
+  todaySlot,
 }: OrganizationKpiPanelProps) {
   const waterSystemsAll = summary.water_systems;
   const solarSystemsAll = summary.solar_systems;
@@ -623,7 +747,8 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
   } = derived;
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-5 animate-fade-in-up">
+      {/* SCOPE FILTER */}
       {scopeFilters && onScopeChange ? (
         <ScopeFilterControls
           filters={scopeFilters}
@@ -637,14 +762,17 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
         />
       ) : null}
 
-      {/* 1. LIVE FOOTPRINT (map-first) */}
+      {/* ── SECTION 1: PROGRAMME FOOTPRINT ─────────────────────────────── */}
       {mapSlot ? (
-        <section className="hq-section space-y-3">
-          <InfoSectionHeader
-            kind="map"
-            title="Programme footprint"
-            description={`${scopePhrase}${villagePhrase ? ` · ${villagePhrase}` : ""} · ${periodHint}`}
-            actions={
+        <Card className="overflow-hidden shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base font-semibold">Programme footprint</CardTitle>
+                <CardDescription className="text-xs">
+                  {scopePhrase}{villagePhrase ? ` · ${villagePhrase}` : ""} · {periodHint}
+                </CardDescription>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <LivePulseBadge syncing={loading} />
                 <Link
@@ -655,122 +783,120 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                   <ArrowRight className="size-3" />
                 </Link>
               </div>
-            }
-          />
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Facility mix
-            </span>
-            <Separator orientation="vertical" className="hidden h-4 sm:block" />
-            <Badge variant="outline" className="gap-1.5 font-normal">
-              <span className="size-2 rounded-full bg-[#2563eb]" />
-              {loading ? "…" : formatExecutiveMetric(summary.ohr_count)} water
-              {!loading && totalSites > 0 ? (
-                <span className="text-muted-foreground">({waterShare}%)</span>
-              ) : null}
-            </Badge>
-            <Badge variant="outline" className="gap-1.5 font-normal">
-              <span className="size-2 rounded-full bg-[#d97706]" />
-              {loading
-                ? "…"
-                : formatExecutiveMetric(summary.solar_facilities)}{" "}
-              solar
-              {!loading && totalSites > 0 ? (
-                <span className="text-muted-foreground">({solarShare}%)</span>
-              ) : null}
-            </Badge>
-            <Badge variant="secondary" className="font-normal">
-              {loading ? "…" : formatExecutiveMetric(totalSites)} total
-            </Badge>
-            {!loading && highPriorityCount > 0 ? (
-              <Badge
-                variant="outline"
-                className="border-rose-200 bg-rose-50 font-normal text-rose-800"
-              >
-                {highPriorityCount} high priority
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-4">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Facility mix
+              </span>
+              <Separator orientation="vertical" className="hidden h-4 sm:block" />
+              <Badge variant="outline" className="gap-1.5 font-normal">
+                <span className="size-2 rounded-full bg-[#2563eb]" />
+                {loading ? "…" : formatExecutiveMetric(summary.ohr_count)} water
+                {!loading && totalSites > 0 ? (
+                  <span className="text-muted-foreground">({waterShare}%)</span>
+                ) : null}
               </Badge>
-            ) : null}
-          </div>
-          <div className="w-full">{mapSlot}</div>
-        </section>
+              <Badge variant="outline" className="gap-1.5 font-normal">
+                <span className="size-2 rounded-full bg-[#d97706]" />
+                {loading ? "…" : formatExecutiveMetric(summary.solar_facilities)} solar
+                {!loading && totalSites > 0 ? (
+                  <span className="text-muted-foreground">({solarShare}%)</span>
+                ) : null}
+              </Badge>
+              <Badge variant="secondary" className="font-normal">
+                {loading ? "…" : formatExecutiveMetric(totalSites)} total
+              </Badge>
+              {!loading && highPriorityCount > 0 ? (
+                <Badge variant="outline" className="border-rose-200 bg-rose-50 font-normal text-rose-800">
+                  {highPriorityCount} high priority
+                </Badge>
+              ) : null}
+            </div>
+            <div className="w-full">{mapSlot}</div>
+          </CardContent>
+        </Card>
       ) : null}
 
-      <Separator />
+      {/* ── TODAY SLOT ──────────────────────────────────────────────────── */}
+      {todaySlot ?? null}
 
-      {/* 2. STATUS */}
-      <section className="hq-section">
-        <InfoSectionHeader
-          kind="status"
-          title="Programme health"
-          description={`Logging coverage · ${periodHint}`}
-        />
-        <div className="grid gap-3 sm:grid-cols-3">
-          <HealthMetricCard
-            label="Water logging"
-            icon={<Droplets className="size-4 text-blue-600" />}
-            value={`${waterLoggedPct}%`}
-            progress={waterLoggedPct}
-            tone={waterTone}
-            loading={loading}
-            detail={
-              loading
-                ? "Loading…"
-                : waterNotLogged > 0
-                  ? `${formatExecutiveMetric(waterSitesLogged)}/${formatExecutiveMetric(summary.ohr_count)} logged · ${formatExecutiveMetric(waterNotLogged)} open`
-                  : summary.ohr_count === 0
-                    ? "No water systems in view"
-                    : "All water systems logged"
-            }
-          />
-          <HealthMetricCard
-            label="Solar logging"
-            icon={<Sun className="size-4 text-amber-600" />}
-            value={`${solarLoggedPct}%`}
-            progress={solarLoggedPct}
-            tone={solarTone}
-            loading={loading}
-            detail={
-              loading
-                ? "Loading…"
-                : solarNotLogged > 0
-                  ? `${formatExecutiveMetric(solarSitesLogged)}/${formatExecutiveMetric(summary.solar_facilities)} logged · ${formatExecutiveMetric(solarNotLogged)} open`
-                  : summary.solar_facilities === 0
-                    ? "No solar systems in view"
-                    : "All solar systems logged"
-            }
-          />
-          <HealthMetricCard
-            label="Meter readiness"
-            icon={<Gauge className="size-4 text-slate-600" />}
-            value={
-              meterCoveragePct == null ? "—" : `${meterCoveragePct}%`
-            }
-            progress={meterCoveragePct}
-            tone={meterTone}
-            loading={loading}
-            detail={
-              loading
-                ? "Loading…"
-                : `${formatExecutiveMetric(summary.bulk_meters)}/${formatExecutiveMetric(summary.ohr_count)} with active meter`
-            }
-          />
-        </div>
-      </section>
+      {/* ── SECTION 2: PROGRAMME HEALTH ────────────────────────────────── */}
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+          <CardTitle className="text-base font-semibold">Programme health</CardTitle>
+          <CardDescription className="text-xs">Logging coverage · {periodHint}</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <HealthMetricCard
+              label="Water logging"
+              icon={<Droplets className="size-4 text-blue-600" />}
+              value={`${waterLoggedPct}%`}
+              progress={waterLoggedPct}
+              tone={waterTone}
+              loading={loading}
+              isSolar={false}
+              {...(waterSystemsAll ? { sites: waterSystemsAll as SiteListItem[] } : {})}
+              detail={
+                loading
+                  ? "Loading…"
+                  : waterNotLogged > 0
+                    ? `${formatExecutiveMetric(waterSitesLogged)}/${formatExecutiveMetric(summary.ohr_count)} logged · ${formatExecutiveMetric(waterNotLogged)} open`
+                    : summary.ohr_count === 0
+                      ? "No water systems in view"
+                      : "All water systems logged"
+              }
+            />
+            <HealthMetricCard
+              label="Solar logging"
+              icon={<Sun className="size-4 text-amber-600" />}
+              value={`${solarLoggedPct}%`}
+              progress={solarLoggedPct}
+              tone={solarTone}
+              loading={loading}
+              isSolar={true}
+              {...(solarSystemsAll ? { sites: solarSystemsAll as SiteListItem[] } : {})}
+              detail={
+                loading
+                  ? "Loading…"
+                  : solarNotLogged > 0
+                    ? `${formatExecutiveMetric(solarSitesLogged)}/${formatExecutiveMetric(summary.solar_facilities)} logged · ${formatExecutiveMetric(solarNotLogged)} open`
+                    : summary.solar_facilities === 0
+                      ? "No solar systems in view"
+                      : "All solar systems logged"
+              }
+            />
+            <HealthMetricCard
+              label="Meter readiness"
+              icon={<Gauge className="size-4 text-slate-600" />}
+              value={meterCoveragePct == null ? "—" : `${meterCoveragePct}%`}
+              progress={meterCoveragePct}
+              tone={meterTone}
+              loading={loading}
+              detail={
+                loading
+                  ? "Loading…"
+                  : `${formatExecutiveMetric(summary.bulk_meters)}/${formatExecutiveMetric(summary.ohr_count)} with active meter`
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* 3. ATTENTION SUMMARY */}
-      <section className="hq-section space-y-3">
-        <InfoSectionHeader
-          kind="issues"
-          title="Attention needed"
-          description={`${periodHint} · sites missing logs`}
-          actions={
-            !loading && adminIssues.length > 0 ? (
+      {/* ── SECTION 3: ATTENTION NEEDED ────────────────────────────────── */}
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-semibold">Attention needed</CardTitle>
+              <CardDescription className="text-xs">{periodHint} · sites missing logs</CardDescription>
+            </div>
+            {!loading && adminIssues.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {highPriorityCount > 0 ? (
-                  <Badge
-                    variant="outline"
-                    className="border-rose-300 bg-rose-50 font-normal text-rose-800"
-                  >
+                  <Badge variant="outline" className="border-rose-300 bg-rose-50 font-normal text-rose-800">
                     {highPriorityCount} high
                   </Badge>
                 ) : null}
@@ -778,11 +904,11 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                   {adminIssues.length} open
                 </Badge>
               </div>
-            ) : null
-          }
-        />
-        <Card className="gap-0 overflow-hidden py-0 ring-border/50 transition-shadow duration-300 hover:shadow-md">
-          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="py-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <div
                 className={cn(
@@ -822,315 +948,207 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
               Open register
               <ArrowRight className="size-3.5" />
             </Link>
-          </CardContent>
-        </Card>
-      </section>
+          </div>
+        </CardContent>
+      </Card>
 
-      <Separator />
+      {/* ── SECTION 4: COVERAGE DEMOGRAPHICS ───────────────────────────── */}
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+          <CardTitle className="text-base font-semibold">Coverage by tehsil</CardTitle>
+          <CardDescription className="text-xs">Logging breakdown per area · {periodHint}</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <CoverageDemographicsCharts
+            rows={rankedTehsils}
+            loading={loading}
+            waterLogged={waterSitesLogged}
+            waterTotal={summary.ohr_count}
+            solarLogged={solarSitesLogged}
+            solarTotal={summary.solar_facilities}
+            periodHint={periodHint}
+            scope={
+              scopeFilters
+                ? {
+                    tehsil: scopeFilters.tehsil,
+                    village: scopeFilters.village,
+                    year: scopeFilters.year,
+                    month: scopeFilters.month,
+                  }
+                : { year }
+            }
+          />
+        </CardContent>
+      </Card>
 
-      {/* 4. COVERAGE DEMOGRAPHICS */}
-      <CoverageDemographicsCharts
-        rows={rankedTehsils}
-        loading={loading}
-        waterLogged={waterSitesLogged}
-        waterTotal={summary.ohr_count}
-        solarLogged={solarSitesLogged}
-        solarTotal={summary.solar_facilities}
-        periodHint={periodHint}
-        scope={
-          scopeFilters
-            ? {
-                tehsil: scopeFilters.tehsil,
-                village: scopeFilters.village,
-                year: scopeFilters.year,
-                month: scopeFilters.month,
-              }
-            : { year }
-        }
-      />
-
-      <Separator />
-
-      {/* 5. PERFORMANCE */}
-      <section className="hq-section">
-        <InfoSectionHeader
-          kind="performance"
-          title="Period performance"
-          description={periodHint}
-        />
-        <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ExecutiveKpiRow loading={loading} periodTotals={periodTotals} />
-        </div>
-        <Card className="gap-0 overflow-hidden py-0 ring-border/50">
-          <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
-            <CardTitle className="text-base font-semibold">Logging progress</CardTitle>
-            <CardDescription>Share of facilities with at least one log</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-8 py-5 lg:grid-cols-2">
-            {loading ? (
-              <>
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Water — daily</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatExecutiveMetric(waterSitesLogged)} of{" "}
-                        {formatExecutiveMetric(summary.ohr_count)} logged
-                      </p>
-                    </div>
-                    <ProgressStatusBadge tone={waterTone} />
-                  </div>
-                  <Progress value={waterLoggedPct} className="h-2" />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>
-                      {formatExecutiveMetric(waterLogs)} logs received
-                    </span>
-                    <span className="font-mono tabular-nums text-foreground">
-                      {waterLoggedPct}%
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">Solar — monthly</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatExecutiveMetric(solarSitesLogged)} of{" "}
-                        {formatExecutiveMetric(summary.solar_facilities)} logged
-                      </p>
-                    </div>
-                    <ProgressStatusBadge tone={solarTone} />
-                  </div>
-                  <Progress value={solarLoggedPct} className="h-2" />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>
-                      {formatExecutiveMetric(solarLogs)} logs received
-                    </span>
-                    <span className="font-mono tabular-nums text-foreground">
-                      {solarLoggedPct}%
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <Separator />
-
-      {/* 6. TRENDS */}
-      <section className="hq-section">
-        <InfoSectionHeader
-          kind="trends"
-          title="Monthly trends"
-          description={year}
-        />
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="gap-0 overflow-hidden py-0 ring-border/50">
-            <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
-              <CardTitle className="text-base font-semibold">Water delivery</CardTitle>
-              <CardDescription className="text-xs">
-                Volume (m³) and year-to-date
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto py-4">
+      {/* ── SECTION 5: PERIOD PERFORMANCE ──────────────────────────────── */}
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+          <CardTitle className="text-base font-semibold">Period performance</CardTitle>
+          <CardDescription className="text-xs">{periodHint}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ExecutiveKpiRow loading={loading} periodTotals={periodTotals} />
+          </div>
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+            <p className="mb-3 text-sm font-semibold">Logging progress</p>
+            <p className="mb-4 text-xs text-muted-foreground">Share of facilities with at least one log</p>
+            <div className="grid gap-6 lg:grid-cols-2">
               {loading ? (
-                <Skeleton className="h-[280px] w-full" />
+                <>
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </>
               ) : (
-                <ChartContainer
-                  config={waterDeliveryConfig}
-                  className="h-[280px] min-w-[320px] w-full"
-                >
-                  <ComposedChart data={waterVolumeChartData}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="month"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                    />
-                    <YAxis
-                      yAxisId="left"
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v) => formatKpiValue(Number(v))}
-                      width={48}
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v) => formatKpiValue(Number(v))}
-                      width={48}
-                    />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent
-                          labelFormatter={(label) =>
-                            `${String(label)} · ${scopeTooltip}`
-                          }
-                          formatter={(value, name) => {
-                            const n = Number(value ?? 0);
-                            const label =
-                              name === "monthly"
-                                ? "Monthly delivery"
-                                : "Year-to-date";
-                            return [
-                              `${formatTooltipNumber(n)} m³`,
-                              label,
-                            ];
-                          }}
-                        />
-                      }
-                    />
-                    <Area
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="monthly"
-                      fill="var(--color-monthly)"
-                      fillOpacity={0.22}
-                      stroke="var(--color-monthly)"
-                      strokeWidth={2}
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="ytd"
-                      stroke="var(--color-ytd)"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </ComposedChart>
-                </ChartContainer>
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">Water — daily</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatExecutiveMetric(waterSitesLogged)} of {formatExecutiveMetric(summary.ohr_count)} logged
+                        </p>
+                      </div>
+                      <ProgressStatusBadge tone={waterTone} />
+                    </div>
+                    <Progress value={waterLoggedPct} className="h-2" />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{formatExecutiveMetric(waterLogs)} logs received</span>
+                      <span className="font-mono tabular-nums text-foreground">{waterLoggedPct}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">Solar — monthly</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatExecutiveMetric(solarSitesLogged)} of {formatExecutiveMetric(summary.solar_facilities)} logged
+                        </p>
+                      </div>
+                      <ProgressStatusBadge tone={solarTone} />
+                    </div>
+                    <Progress value={solarLoggedPct} className="h-2" />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{formatExecutiveMetric(solarLogs)} logs received</span>
+                      <span className="font-mono tabular-nums text-foreground">{solarLoggedPct}%</span>
+                    </div>
+                  </div>
+                </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-          <Card className="gap-0 overflow-hidden py-0 ring-border/50">
-            <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
-              <CardTitle className="text-base font-semibold">Pump runtime</CardTitle>
-              <CardDescription className="text-xs">
-                Operating hours
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto py-4">
+      {/* ── SECTION 6: MONTHLY TRENDS ──────────────────────────────────── */}
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
+          <CardTitle className="text-base font-semibold">Monthly trends</CardTitle>
+          <CardDescription className="text-xs">Year {year} · water delivery, pump runtime & solar energy</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+              <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
+                <p className="text-sm font-semibold">Water delivery</p>
+                <p className="text-xs text-muted-foreground">Volume (m³) and year-to-date</p>
+              </div>
+              <div className="overflow-x-auto p-4">
+                {loading ? (
+                  <Skeleton className="h-[260px] w-full" />
+                ) : (
+                  <ChartContainer config={waterDeliveryConfig} className="h-[260px] min-w-[320px] w-full">
+                    <ComposedChart data={waterVolumeChartData}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+                      <YAxis yAxisId="left" tickLine={false} axisLine={false} tickFormatter={(v) => formatKpiValue(Number(v))} width={48} />
+                      <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} tickFormatter={(v) => formatKpiValue(Number(v))} width={48} />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            labelFormatter={(label) => `${String(label)} · ${scopeTooltip}`}
+                            formatter={(value, name) => {
+                              const n = Number(value ?? 0);
+                              return [`${formatTooltipNumber(n)} m³`, name === "monthly" ? "Monthly delivery" : "Year-to-date"];
+                            }}
+                          />
+                        }
+                      />
+                      <Area yAxisId="left" type="monotone" dataKey="monthly" fill="var(--color-monthly)" fillOpacity={0.22} stroke="var(--color-monthly)" strokeWidth={2} />
+                      <Line yAxisId="right" type="monotone" dataKey="ytd" stroke="var(--color-ytd)" strokeWidth={2} dot={false} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                    </ComposedChart>
+                  </ChartContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+              <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
+                <p className="text-sm font-semibold">Pump runtime</p>
+                <p className="text-xs text-muted-foreground">Operating hours</p>
+              </div>
+              <div className="overflow-x-auto p-4">
+                {loading ? (
+                  <Skeleton className="h-[260px] w-full" />
+                ) : (
+                  <ChartContainer config={pumpRuntimeConfig} className="h-[260px] min-w-[320px] w-full">
+                    <ComposedChart data={pumpOnlyChartData}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+                      <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => formatKpiValue(Number(v))} width={48} />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            labelFormatter={(label) => `${String(label)} · ${scopeTooltip}`}
+                            formatter={(value) => [`${formatTooltipNumber(Number(value ?? 0))} h`, "Pump hours"]}
+                          />
+                        }
+                      />
+                      <Area type="monotone" dataKey="value" fill="var(--color-value)" fillOpacity={0.25} stroke="var(--color-value)" strokeWidth={2} />
+                    </ComposedChart>
+                  </ChartContainer>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+            <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
+              <p className="text-sm font-semibold">Solar energy balance</p>
+              <p className="text-xs text-muted-foreground">Grid export vs import (kWh)</p>
+            </div>
+            <div className="overflow-x-auto p-4">
               {loading ? (
                 <Skeleton className="h-[280px] w-full" />
               ) : (
-                <ChartContainer
-                  config={pumpRuntimeConfig}
-                  className="h-[280px] min-w-[320px] w-full"
-                >
-                  <ComposedChart data={pumpOnlyChartData}>
+                <ChartContainer config={solarEnergyConfig} className="h-[280px] min-w-[320px] w-full">
+                  <BarChart data={solarProgramChartData} barGap={4}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="month"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v) => formatKpiValue(Number(v))}
-                      width={48}
-                    />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => formatKpiValue(Number(v))} width={52} />
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          labelFormatter={(label) =>
-                            `${String(label)} · ${scopeTooltip}`
-                          }
-                          formatter={(value) => [
-                            `${formatTooltipNumber(Number(value ?? 0))} h`,
-                            "Pump hours",
+                          labelFormatter={(label) => `${String(label)} · ${scopeTooltip}`}
+                          formatter={(value, name) => [
+                            `${formatTooltipNumber(Number(value ?? 0))} kWh`,
+                            name === "solarKwh" ? "Solar export" : "Grid import",
                           ]}
                         />
                       }
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      fill="var(--color-value)"
-                      fillOpacity={0.25}
-                      stroke="var(--color-value)"
-                      strokeWidth={2}
-                    />
-                  </ComposedChart>
+                    <Bar dataKey="solarKwh" fill="var(--color-solarKwh)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="gridKwh" fill="var(--color-gridKwh)" radius={[4, 4, 0, 0]} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </BarChart>
                 </ChartContainer>
               )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="mt-4 gap-0 overflow-hidden py-0 ring-border/50">
-          <CardHeader className="border-b border-border/50 bg-muted/20 py-3.5 [.border-b]:pb-3.5">
-            <CardTitle className="text-base font-semibold">Solar energy balance</CardTitle>
-            <CardDescription className="text-xs">
-              Grid export vs import (kWh)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-x-auto py-4">
-            {loading ? (
-              <Skeleton className="h-[300px] w-full" />
-            ) : (
-              <ChartContainer
-                config={solarEnergyConfig}
-                className="h-[300px] min-w-[320px] w-full"
-              >
-                <BarChart data={solarProgramChartData} barGap={4}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => formatKpiValue(Number(v))}
-                    width={52}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelFormatter={(label) =>
-                          `${String(label)} · ${scopeTooltip}`
-                        }
-                        formatter={(value, name) => [
-                          `${formatTooltipNumber(Number(value ?? 0))} kWh`,
-                          name === "solarKwh" ? "Solar export" : "Grid import",
-                        ]}
-                      />
-                    }
-                  />
-                  <Bar
-                    dataKey="solarKwh"
-                    fill="var(--color-solarKwh)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="gridKwh"
-                    fill="var(--color-gridKwh)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 });

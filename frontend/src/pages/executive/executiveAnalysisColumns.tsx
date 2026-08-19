@@ -203,6 +203,28 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         ),
       },
       {
+        accessorKey: "total_export_off_peak_kwh",
+        header: "Export off-peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums text-amber-600">{fmtInt(row.original.total_export_off_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      },
+      {
+        accessorKey: "total_export_peak_kwh",
+        header: "Export peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums text-amber-800 font-medium">{fmtInt(row.original.total_export_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      },
+      {
         accessorKey: "total_import_kwh",
         header: "Import (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
@@ -211,12 +233,56 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         ),
       },
       {
+        accessorKey: "total_import_off_peak_kwh",
+        header: "Import off-peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums text-red-600">{fmtInt(row.original.total_import_off_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      },
+      {
+        accessorKey: "total_import_peak_kwh",
+        header: "Import peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums text-red-800 font-medium">{fmtInt(row.original.total_import_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      },
+      {
         accessorKey: "total_net_kwh",
         header: "Net (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
           <span className="tabular-nums font-medium">{fmtInt(getValue())}</span>
         ),
+      },
+      {
+        accessorKey: "total_net_off_peak_kwh",
+        header: "Net off-peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums">{fmtInt(row.original.total_net_off_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      },
+      {
+        accessorKey: "total_net_peak_kwh",
+        header: "Net peak",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.any_tou_required ? (
+            <span className="tabular-nums font-medium">{fmtInt(row.original.total_net_peak_kwh)}</span>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
       },
       {
         accessorKey: "months_logged",
@@ -303,8 +369,26 @@ export function solarSystemDetailFields(row: SolarSystemDetailRow) {
     { label: "DISCO", value: row.disco_info ?? "—" },
     { label: "Bill reference", value: row.bill_reference_number ?? "—" },
     { label: "Total export", value: `${fmtInt(row.total_export_kwh)} kWh` },
+    ...(row.any_tou_required
+      ? [
+          { label: "Export off-peak", value: `${fmtInt(row.total_export_off_peak_kwh)} kWh` },
+          { label: "Export peak", value: `${fmtInt(row.total_export_peak_kwh)} kWh` },
+        ]
+      : []),
     { label: "Total import", value: `${fmtInt(row.total_import_kwh)} kWh` },
+    ...(row.any_tou_required
+      ? [
+          { label: "Import off-peak", value: `${fmtInt(row.total_import_off_peak_kwh)} kWh` },
+          { label: "Import peak", value: `${fmtInt(row.total_import_peak_kwh)} kWh` },
+        ]
+      : []),
     { label: "Total net", value: `${fmtInt(row.total_net_kwh)} kWh` },
+    ...(row.any_tou_required
+      ? [
+          { label: "Net off-peak", value: `${fmtInt(row.total_net_off_peak_kwh)} kWh` },
+          { label: "Net peak", value: `${fmtInt(row.total_net_peak_kwh)} kWh` },
+        ]
+      : []),
     { label: "Months logged", value: fmtInt(row.months_logged) },
     { label: "Monthly records", value: fmtInt(row.records_count) },
     { label: "Avg export / month", value: `${fmtNum(row.avg_export_kwh_per_month)} kWh` },

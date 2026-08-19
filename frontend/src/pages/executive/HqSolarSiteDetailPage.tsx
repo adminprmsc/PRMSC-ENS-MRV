@@ -94,7 +94,7 @@ function recordTotals(row: SolarMonthlySupplyListItem) {
 }
 
 function monthLabel(month: number): string {
-  return month >= 1 && month <= 12 ? MONTH_NAMES[month] : `Month ${month}`;
+  return month >= 1 && month <= 12 ? (MONTH_NAMES[month] ?? `Month ${month}`) : `Month ${month}`;
 }
 
 function monthSortKey(row: SolarMonthlySupplyListItem): string {
@@ -577,7 +577,7 @@ export default function HqSolarSiteDetailPage() {
                             key={branch.key}
                             branch={branch}
                             open={expandedMonths.has(branch.key)}
-                            fromPath={location.pathname}
+                            fromPath={location.pathname + location.search}
                             onToggle={() => toggleMonth(branch.key)}
                           />
                         ))}

@@ -1507,17 +1507,17 @@ const SolarSupplyDataForm = () => {
                     id="solar-evidence-input"
                     type="file"
                     hidden
-                    accept="image/*"
+                    accept=".pdf,image/*"
                     onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
                   />
                   {!attachment ? (
                     <>
                       <Zap className="mx-auto mb-2 size-10 text-slate-300" />
                       <p className="text-sm font-medium text-slate-600">
-                        Tap to upload or replace bill photo
+                        Tap to upload or replace bill evidence
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        PNG or JPG — replaces stored file when you save
+                        PDF, PNG, or JPG - replaces stored file when you save
                       </p>
                     </>
                   ) : (

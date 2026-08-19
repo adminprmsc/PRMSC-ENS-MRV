@@ -624,7 +624,7 @@ export default function SolarMonthlyLogEditPage() {
             <Separator />
 
             <div className="space-y-2">
-              <Label>Electricity bill image</Label>
+              <Label>Electricity bill evidence</Label>
               {record.electricity_bill_image_url?.trim() && !attachment ? (
                 <a
                   href={record.electricity_bill_image_url}
@@ -648,17 +648,17 @@ export default function SolarMonthlyLogEditPage() {
                   id="solar-monthly-edit-evidence"
                   type="file"
                   hidden
-                  accept="image/*"
+                  accept=".pdf,image/*"
                   onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
                 />
                 {!attachment ? (
                   <>
                     <Zap className="mx-auto mb-2 size-10 text-muted-foreground/50" />
                     <p className="text-sm font-medium text-foreground">
-                      Tap to upload or replace bill photo
+                      Tap to upload or replace bill evidence
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      PNG or JPG — stored when you save
+                      PDF, PNG, or JPG - stored when you save
                     </p>
                   </>
                 ) : (

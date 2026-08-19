@@ -423,7 +423,7 @@ export class TubewellOperatorService {
       uploadResult = await this.storageService.uploadFileStorage(file, folder);
     } catch (exc) {
       throw new InternalServerErrorException({
-        message: 'Image upload failed',
+        message: 'File upload failed',
         error: String(exc),
       });
     }
@@ -527,9 +527,10 @@ export class TubewellOperatorService {
       systems = systems.filter((s) => s.village === filterVillage);
     }
 
-    const pendingDeletes = await this.tehsilAccess.pendingWaterDeleteResourceIds(
-      systems.map((s) => String(s.id)),
-    );
+    const pendingDeletes =
+      await this.tehsilAccess.pendingWaterDeleteResourceIds(
+        systems.map((s) => String(s.id)),
+      );
 
     return systems.map((s) => ({
       ...this.waterSystemToJson(s),
@@ -1410,7 +1411,9 @@ export class TubewellOperatorService {
           }
 
           if (
-            await this.tehsilAccess.isWaterSystemPendingDelete(String(system.id))
+            await this.tehsilAccess.isWaterSystemPendingDelete(
+              String(system.id),
+            )
           ) {
             errors.push(
               `Row ${i + 1}: this water system has a pending delete request — logging and submissions are blocked`,
