@@ -77,14 +77,22 @@ export class DashboardService {
     year?: number,
     settlement?: string,
   ) {
-    // Push location filters into the DB query — avoids full-table scans.
-    // Pass `undefined` (not `{}`) when there is no filter so TypeORM loads all rows.
-    const locWhere = this.locationWhere(tehsil, village, settlement);
-    const waterSystems = await this.waterSystemRepo.find(
-      locWhere ? { where: locWhere } : {},
+    // Load systems then filter in-memory (same proven path as before).
+    // Keep full entity rows — partial `select` previously omitted uniqueIdentifier
+    // and crashed sort via `.localeCompare` on undefined.
+    let waterSystems = await this.waterSystemRepo.find();
+    let solarSystems = await this.solarSystemRepo.find();
+    waterSystems = this.applyLocationFilters(
+      waterSystems,
+      tehsil,
+      village,
+      settlement,
     );
-    const solarSystems = await this.solarSystemRepo.find(
-      locWhere ? { where: locWhere } : {},
+    solarSystems = this.applyLocationFilters(
+      solarSystems,
+      tehsil,
+      village,
+      settlement,
     );
 
     const ohrCount = waterSystems.length;
