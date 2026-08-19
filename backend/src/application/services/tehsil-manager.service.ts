@@ -605,6 +605,20 @@ export class TehsilManagerService {
     const subByRec = new Map<string, Submission>();
     for (const s of subs) subByRec.set(String(s.recordId), s);
 
+    // Pre-load all operator users in one batch to eliminate the inner-loop N+1.
+    const operatorIds = [
+      ...new Set(
+        [...subByRec.values()]
+          .map((s) => s.operatorId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const operatorById = new Map<string, User>();
+    if (operatorIds.length) {
+      const users = await this.userRepo.findBy({ id: In(operatorIds) });
+      for (const u of users) operatorById.set(u.id, u);
+    }
+
     const items: Record<string, unknown>[] = [];
     for (const ws of systems) {
       try {
@@ -620,12 +634,9 @@ export class TehsilManagerService {
       for (const d of daysList) {
         const r = recByWsDay.get(`${ws.id}|${this.isoDate(d)}`);
         const sub = r ? subByRec.get(String(r.id)) : undefined;
-        let opUser: User | null = null;
-        if (sub?.operatorId) {
-          opUser = await this.userRepo.findOne({
-            where: { id: sub.operatorId },
-          });
-        }
+        const opUser: User | null = sub?.operatorId
+          ? (operatorById.get(sub.operatorId) ?? null)
+          : null;
 
         series.push({
           date: this.isoDate(d),
@@ -825,11 +836,21 @@ export class TehsilManagerService {
       }
     }
 
+    // Batch-load all daily water logs for the requested date in one query.
+    const waterSystemIds = waterSystems.map((ws) => ws.id);
+    const waterRecsBySystemId = new Map<string, WaterEnergyLoggingDaily>();
+    if (waterSystemIds.length) {
+      const waterRecs = await this.waterDailyRepo.find({
+        where: { waterSystemId: In(waterSystemIds), logDate: waterDay },
+        select: { id: true, waterSystemId: true, status: true },
+      });
+      for (const r of waterRecs)
+        waterRecsBySystemId.set(String(r.waterSystemId), r);
+    }
+
     const outWater: Record<string, unknown>[] = [];
     for (const ws of waterSystems) {
-      const rec = await this.waterDailyRepo.findOne({
-        where: { waterSystemId: ws.id, logDate: waterDay },
-      });
+      const rec = waterRecsBySystemId.get(String(ws.id)) ?? null;
       let bucket: string;
       if (!rec) bucket = 'missing';
       else if (rec.status === SUBMISSION_STATUS_DRAFTED) bucket = 'draft';
@@ -854,11 +875,25 @@ export class TehsilManagerService {
       });
     }
 
+    // Batch-load all solar monthly logs for the requested period in one query.
+    const solarSystemIds = solarSystems.map((ss) => ss.id);
+    const solarRecsBySystemId = new Map<string, SolarEnergyLoggingMonthly>();
+    if (solarSystemIds.length) {
+      const solarRecs = await this.solarMonthlyRepo.find({
+        where: {
+          solarSystemId: In(solarSystemIds),
+          year: solarYear,
+          month: solarMonth,
+        },
+        select: { id: true, solarSystemId: true },
+      });
+      for (const r of solarRecs)
+        solarRecsBySystemId.set(String(r.solarSystemId), r);
+    }
+
     const outSolar: Record<string, unknown>[] = [];
     for (const ss of solarSystems) {
-      const mrec = await this.solarMonthlyRepo.findOne({
-        where: { solarSystemId: ss.id, year: solarYear, month: solarMonth },
-      });
+      const mrec = solarRecsBySystemId.get(String(ss.id)) ?? null;
       outSolar.push({
         id: String(ss.id),
         tehsil: ss.tehsil,
@@ -3057,6 +3092,94 @@ export class TehsilManagerService {
     return { statusCode: 200, body: out as unknown as Record<string, unknown> };
   }
 
+  /**
+   * Bulk endpoint: returns ALL solar monthly log records for every solar system
+   * the user can access, optionally scoped to a single year. This replaces the
+   * frontend N+1 pattern of calling getSolarSupplyData once per site.
+   */
+  async getSolarMonthlyLogsByYear(
+    jwt: JwtContext,
+    query: { year?: string },
+  ): Promise<ServiceResult> {
+    const denied = this.assertMinRole(jwt, ADMIN);
+    if (denied) return denied;
+
+    const user = await this.loadActor(jwt);
+    if (!user) return { statusCode: 404, body: { message: 'User not found' } };
+
+    const allowedTehsilsSet = await this.rbac.userAssignedTehsils(user);
+    const allowedTehsils = [...allowedTehsilsSet];
+    if (!allowedTehsils.length) {
+      return { statusCode: 200, body: { records: [], sites: [] } };
+    }
+
+    const year = query.year ? parseInt(query.year, 10) : undefined;
+
+    // Fetch all accessible solar systems in one query.
+    const systems = await this.solarSystemRepo.find({
+      where: { tehsil: In(allowedTehsils) },
+      select: {
+        id: true,
+        tehsil: true,
+        village: true,
+        settlement: true,
+        uniqueIdentifier: true,
+        siteType: true,
+      },
+    });
+
+    if (!systems.length) {
+      return { statusCode: 200, body: { records: [], sites: [] } };
+    }
+
+    const systemIds = systems.map((s) => s.id);
+    const siteById = new Map(systems.map((s) => [s.id, s]));
+
+    // Fetch all monthly logs for those systems + year in one query.
+    const logWhere: Record<string, unknown> = { solarSystemId: In(systemIds) };
+    if (year) logWhere['year'] = year;
+
+    const logs = await this.solarMonthlyRepo.find({
+      where: logWhere as never,
+      order: { solarSystemId: 'ASC', year: 'ASC', month: 'ASC' },
+    });
+
+    const records = logs.map((r) => ({
+      id: String(r.id),
+      solar_system_id: String(r.solarSystemId),
+      tehsil: siteById.get(r.solarSystemId)?.tehsil ?? null,
+      village: siteById.get(r.solarSystemId)?.village ?? null,
+      settlement: siteById.get(r.solarSystemId)?.settlement ?? null,
+      site_type: siteById.get(r.solarSystemId)?.siteType ?? null,
+      unique_identifier:
+        siteById.get(r.solarSystemId)?.uniqueIdentifier ?? null,
+      year: r.year,
+      month: r.month,
+      export_off_peak: r.exportOffPeak,
+      export_peak: r.exportPeak,
+      import_off_peak: r.importOffPeak,
+      import_peak: r.importPeak,
+      net_off_peak: r.netOffPeak,
+      net_peak: r.netPeak,
+      remarks: r.remarks,
+      electricity_bill_image_url: r.electricityBillImageUrl,
+      created_at: r.createdAt?.toISOString() ?? null,
+      updated_at: r.updatedAt?.toISOString() ?? null,
+      ...this.solarMonthlyResponseFields(r),
+    }));
+
+    const sites = systems.map((s) => ({
+      id: s.id,
+      tehsil: s.tehsil,
+      village: s.village,
+      settlement: s.settlement,
+      unique_identifier: s.uniqueIdentifier,
+      site_type: s.siteType,
+    }));
+
+    return { statusCode: 200, body: { records, sites } };
+  }
+
   async getSolarSupplyDataRecord(
     jwt: JwtContext,
     recordId: string,
@@ -3403,7 +3526,9 @@ export class TehsilManagerService {
 
     // Resolve tehsil scope for this user — used to filter in-DB instead of
     // looping post-fetch through rbac.canAccessTehsil() (eliminates N+1).
-    const allowedTehsils = await this.rbac.userAssignedTehsils(currentUser!);
+    const allowedTehsils = [
+      ...(await this.rbac.userAssignedTehsils(currentUser!)),
+    ];
 
     // Single query: JOIN submissions → water_daily_log → water_system,
     // plus LEFT JOINs for operator and reviewer users.
@@ -3435,11 +3560,7 @@ export class TehsilManagerService {
         'ws.village               AS ws_village',
         'ws.tehsil                AS ws_tehsil',
       ])
-      .innerJoin(
-        'water_energy_logging_daily',
-        'log',
-        'log.id = sub.record_id',
-      )
+      .innerJoin('water_energy_logging_daily', 'log', 'log.id = sub.record_id')
       .innerJoin('water_systems', 'ws', 'ws.id = log.water_system_id')
       .leftJoin('users', 'op', 'op.id = sub.operator_id')
       .leftJoin('users', 'rv', 'rv.id = sub.reviewed_by')
@@ -3458,10 +3579,7 @@ export class TehsilManagerService {
     const rows = await qb.getRawMany<Record<string, unknown>>();
 
     const result = rows.map((r) => {
-      const logDateIso =
-        r.log_date != null
-          ? this.isoDate(r.log_date as Date | string)
-          : null;
+      const logDateIso = r.log_date != null ? this.isoDate(r.log_date) : null;
       const logParts = logDateIso?.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? null;
 
       const systemInfo: Record<string, unknown> = r.ws_id
@@ -3480,11 +3598,11 @@ export class TehsilManagerService {
                 : null,
             pump_start_time:
               r.pump_start_time != null
-                ? String(r.pump_start_time).slice(0, 8)
+                ? `${r.pump_start_time as string}`.slice(0, 8)
                 : null,
             pump_end_time:
               r.pump_end_time != null
-                ? String(r.pump_end_time).slice(0, 8)
+                ? `${r.pump_end_time as string}`.slice(0, 8)
                 : null,
             pump_operating_hours: r.pump_operating_hours,
             total_water_pumped: r.total_water_pumped,
@@ -3777,27 +3895,47 @@ export class TehsilManagerService {
     let logs = await qb.orderBy('log.created_at', 'DESC').limit(100).getMany();
 
     if (this.rbac.userRoleCode(currentUser!) === ADMIN) {
+      // Batch-load all referenced submissions to avoid N+1 per log entry.
+      const subIds = [
+        ...new Set(logs.map((lg) => lg.submissionId).filter(Boolean)),
+      ];
+      const subsForFilter = subIds.length
+        ? await this.submissionRepo.findBy({ id: In(subIds) })
+        : [];
+      const subMapForFilter = new Map(subsForFilter.map((s) => [s.id, s]));
+
+      const allowedTehsilsForAudit = [
+        ...(await this.rbac.userAssignedTehsils(currentUser!)),
+      ];
+      const allowedSet = new Set(
+        allowedTehsilsForAudit.map((t) => t.toLowerCase()),
+      );
+
       const filtered: VerificationLog[] = [];
       for (const lg of logs) {
-        const sub = await this.submissionRepo.findOne({
-          where: { id: lg.submissionId },
-        });
-        if (
-          sub &&
-          (await this.rbac.canAccessTehsil(
-            currentUser!,
-            await this.rbac.submissionTehsil(sub),
-          ))
-        ) {
+        const sub = subMapForFilter.get(lg.submissionId);
+        if (!sub) continue;
+        const tehsil = await this.rbac.submissionTehsil(sub);
+        if (!tehsil || allowedSet.has(tehsil.toLowerCase())) {
           filtered.push(lg);
         }
       }
       logs = filtered;
     }
 
+    // Batch-load all performer users in one query.
+    const performerIds = [
+      ...new Set(logs.map((lg) => lg.performedBy).filter(Boolean)),
+    ];
+    const performerById = new Map<string, User>();
+    if (performerIds.length) {
+      const users = await this.userRepo.findBy({ id: In(performerIds) });
+      for (const u of users) performerById.set(u.id, u);
+    }
+
     const result: Record<string, unknown>[] = [];
     for (const log of logs) {
-      const u = await this.userRepo.findOne({ where: { id: log.performedBy } });
+      const u = performerById.get(log.performedBy) ?? null;
       result.push({
         id: log.id,
         submission_id: log.submissionId,
@@ -3826,20 +3964,28 @@ export class TehsilManagerService {
     let acceptedSubs: Submission[];
 
     if (this.rbac.userRoleCode(currentUser!) === ADMIN) {
-      const allSubs = await this.submissionRepo.find({
-        where: { submissionType: 'water_system' },
-      });
-      const scoped: Submission[] = [];
-      for (const s of allSubs) {
-        if (
-          await this.rbac.canAccessTehsil(
-            currentUser!,
-            await this.rbac.submissionTehsil(s),
-          )
-        ) {
-          scoped.push(s);
-        }
-      }
+      // Resolve tehsils once and push the filter into the DB query — no per-row awaits.
+      const statsAllowedTehsils = [
+        ...(await this.rbac.userAssignedTehsils(currentUser!)),
+      ];
+      // Join submissions → water_daily_log → water_system to filter by tehsil.
+      const scopedSubs = await this.submissionRepo
+        .createQueryBuilder('sub')
+        .innerJoin(
+          'water_energy_logging_daily',
+          'log',
+          'log.id = sub.record_id',
+        )
+        .innerJoin('water_systems', 'ws', 'ws.id = log.water_system_id')
+        .where('sub.submission_type = :type', { type: 'water_system' })
+        .andWhere('ws.tehsil IN (:...tehsils)', {
+          tehsils: statsAllowedTehsils.length
+            ? statsAllowedTehsils
+            : ['__none__'],
+        })
+        .select(['sub.id', 'sub.status', 'sub.submittedAt', 'sub.reviewedAt'])
+        .getMany();
+      const scoped: Submission[] = scopedSubs;
       total = scoped.length;
       pending = scoped.filter(
         (s) => s.status === SUBMISSION_STATUS_SUBMITTED,

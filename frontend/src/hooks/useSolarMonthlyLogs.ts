@@ -1,14 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiErrorMessage } from "../lib/api-error";
-import {
-  getSolarSupplyData,
-  getSolarSystems,
-} from "../services/tehsilManagerOperatorService";
-import type {
-  SolarMonthlyLogTableRow,
-  SolarMonthlySupplyListItem,
-  SolarSystemRow,
-} from "../types/api";
+import { getSolarMonthlyLogsBulk } from "../services/tehsilManagerOperatorService";
+import type { SolarMonthlyLogTableRow } from "../types/api";
 
 function monthOrder(a: SolarMonthlyLogTableRow, b: SolarMonthlyLogTableRow): number {
   const loc =
@@ -23,55 +16,33 @@ function monthOrder(a: SolarMonthlyLogTableRow, b: SolarMonthlyLogTableRow): num
 }
 
 /**
- * Loads monthly solar supply rows for every registered solar site for the given calendar year.
- * Uses the service layer directly so effects only re-run when `year` changes (no hook identity churn).
+ * Loads all monthly solar supply rows for every accessible solar site in one
+ * request (GET /operator/solar-monthly-logs-bulk?year=YYYY).
+ * Results are cached by React Query — switching year only fetches once per session.
  */
 export function useSolarMonthlyLogs(year: number) {
-  const [rows, setRows] = useState<SolarMonthlyLogTableRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const sitesRaw = await getSolarSystems();
-      const sites = (Array.isArray(sitesRaw) ? sitesRaw : []) as SolarSystemRow[];
-      const chunks = await Promise.all(
-        sites.map(async (site) => {
-          try {
-            const data = await getSolarSupplyData({
-              solar_system_id: site.id,
-              year,
-            });
-            const list = (Array.isArray(data) ? data : []) as SolarMonthlySupplyListItem[];
-            return list.map(
-              (r): SolarMonthlyLogTableRow => ({
-                ...r,
-                solar_system_id: String(r.solar_system_id ?? site.id),
-                tehsil: site.tehsil,
-                village: site.village,
-                settlement: (site.settlement ?? "").trim(),
-                site_type: site.site_type ?? null,
-              }),
-            );
-          } catch {
-            return [] as SolarMonthlyLogTableRow[];
-          }
-        }),
-      );
-      setRows(chunks.flat().sort(monthOrder));
-    } catch (e: unknown) {
-      setError(getApiErrorMessage(e, "Could not load monthly solar logs"));
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [year]);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["solarMonthlyLogsBulk", year],
+    queryFn: async () => {
+      const res = await getSolarMonthlyLogsBulk(year);
+      return (res.records ?? []).sort(monthOrder);
+    },
+    staleTime: 2 * 60 * 1000,  // 2 min — solar logs don't change often
+    gcTime: 10 * 60 * 1000,    // keep in cache for 10 min
+    retry: 1,
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rows: SolarMonthlyLogTableRow[] = data ?? [];
+  const errorMsg = error ? getApiErrorMessage(error, "Could not load monthly solar logs") : null;
 
-  return { rows, loading, error, refetch: load };
+  return {
+    rows,
+    loading: isLoading,
+    error: errorMsg,
+    refetch: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["solarMonthlyLogsBulk", year] });
+    },
+  };
 }

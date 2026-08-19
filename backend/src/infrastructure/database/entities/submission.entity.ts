@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -16,6 +17,10 @@ import { Notification } from './notification.entity';
 import { VerificationLog } from './verification-log.entity';
 
 @Entity('submissions')
+@Index('IDX_submissions_status_type', ['status', 'submissionType'])
+@Index('IDX_submissions_operator_id', ['operatorId'])
+@Index('IDX_submissions_record_id', ['recordId'])
+@Index('IDX_submissions_submitted_at', ['submittedAt'])
 export class Submission {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
   id!: string;

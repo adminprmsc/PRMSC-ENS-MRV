@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
@@ -16,6 +17,8 @@ import { SolarEnergyLoggingMonthly } from './solar-energy-logging-monthly.entity
 import { SystemMeter } from './system-meter.entity';
 
 @Entity('solar_systems')
+@Index('IDX_solar_systems_tehsil', ['tehsil'])
+@Index('IDX_solar_systems_village', ['village'])
 export class SolarSystem {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
   id!: string;

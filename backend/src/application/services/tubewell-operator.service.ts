@@ -229,16 +229,37 @@ export class TubewellOperatorService {
       order: { createdAt: 'DESC' },
     });
 
+    // Batch-load all referenced log records and water systems in two queries.
+    const recordIds = [
+      ...new Set(submissions.map((s) => s.recordId).filter(Boolean)),
+    ];
+    const logRecordsMap = new Map<string, WaterEnergyLoggingDaily>();
+    const waterSystemsMap = new Map<string, WaterSystem>();
+    if (recordIds.length) {
+      const logRecords = await this.waterLogRepo.find({
+        where: { id: In(recordIds) },
+        select: { id: true, waterSystemId: true, logDate: true },
+      });
+      for (const r of logRecords) logRecordsMap.set(r.id, r);
+
+      const wsIds = [
+        ...new Set(logRecords.map((r) => r.waterSystemId).filter(Boolean)),
+      ];
+      if (wsIds.length) {
+        const systems = await this.waterSystemRepo.find({
+          where: { id: In(wsIds) },
+          select: { id: true, village: true, tehsil: true },
+        });
+        for (const s of systems) waterSystemsMap.set(s.id, s);
+      }
+    }
+
     const result = [];
     for (const sub of submissions) {
       let systemInfo: Record<string, unknown> = {};
-      const record = await this.waterLogRepo.findOne({
-        where: { id: sub.recordId },
-      });
+      const record = logRecordsMap.get(sub.recordId);
       if (record) {
-        const system = await this.waterSystemRepo.findOne({
-          where: { id: record.waterSystemId },
-        });
+        const system = waterSystemsMap.get(record.waterSystemId);
         if (system) {
           systemInfo = {
             village: system.village,
@@ -760,11 +781,22 @@ export class TubewellOperatorService {
       order: { createdAt: 'DESC' },
     });
 
+    // Batch-load all referenced water systems in one query.
+    const draftWsIds = [
+      ...new Set(drafts.map((d) => d.waterSystemId).filter(Boolean)),
+    ];
+    const draftSystemMap = new Map<string, WaterSystem>();
+    if (draftWsIds.length) {
+      const draftSystems = await this.waterSystemRepo.find({
+        where: { id: In(draftWsIds) },
+        select: { id: true, village: true, tehsil: true },
+      });
+      for (const s of draftSystems) draftSystemMap.set(s.id, s);
+    }
+
     const result = [];
     for (const draft of drafts) {
-      const system = await this.waterSystemRepo.findOne({
-        where: { id: draft.waterSystemId },
-      });
+      const system = draftSystemMap.get(draft.waterSystemId) ?? null;
       result.push({
         id: String(draft.id),
         system_id: String(draft.waterSystemId),

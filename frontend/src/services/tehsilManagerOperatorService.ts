@@ -326,6 +326,15 @@ export const getSolarSupplyData = async (filters: QueryFilters = {}) => {
   return response.data;
 };
 
+/** Bulk: all monthly logs for every accessible solar site for a given year (single request). */
+export const getSolarMonthlyLogsBulk = async (year: number) => {
+  const response = await api.get<{
+    records: import("../types/api").SolarMonthlyLogTableRow[];
+    sites: unknown[];
+  }>(`/operator/solar-monthly-logs-bulk${buildQueryString({ year: String(year) })}`);
+  return response.data;
+};
+
 export const saveSolarSupplyData = async (payload: AnyRecord) => {
   const response = await api.post("/operator/solar-supply-data", payload);
   return response.data;

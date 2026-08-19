@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
@@ -11,6 +12,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { SolarSystem } from './solar-system.entity';
 
 @Entity('solar_energy_logging_monthly')
+@Index('IDX_solar_monthly_solar_system_id', ['solarSystemId'])
+@Index('IDX_solar_monthly_system_year_month', ['solarSystemId', 'year', 'month'])
+@Index('IDX_solar_monthly_year_month', ['year', 'month'])
 export class SolarEnergyLoggingMonthly {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
   id!: string;

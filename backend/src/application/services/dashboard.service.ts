@@ -55,6 +55,20 @@ export class DashboardService {
     return `(${alias}.status IS NULL OR ${alias}.status != '${SUBMISSION_STATUS_REJECTED}')`;
   }
 
+  /** Build a TypeORM `where` object for location filtering pushed to the DB. */
+  private locationWhere(
+    tehsil?: string,
+    village?: string,
+    settlement?: string,
+  ) {
+    const where: Record<string, string> = {};
+    if (tehsil && tehsil !== 'All Tehsils') where['tehsil'] = tehsil;
+    if (village && village !== 'All Villages') where['village'] = village;
+    if (settlement && settlement !== 'All Settlements')
+      where['settlement'] = settlement;
+    return where;
+  }
+
   async getProgramSummary(
     tehsil?: string,
     village?: string,
@@ -62,20 +76,22 @@ export class DashboardService {
     year?: number,
     settlement?: string,
   ) {
-    let waterSystems = await this.waterSystemRepo.find();
-    let solarSystems: SolarSystem[] = await this.solarSystemRepo.find();
-    waterSystems = this.applyLocationFilters(
-      waterSystems,
-      tehsil,
-      village,
-      settlement,
-    );
-    solarSystems = this.applyLocationFilters(
-      solarSystems,
-      tehsil,
-      village,
-      settlement,
-    );
+    // Push location filters into the DB query — avoids full-table scans.
+    const locWhere = this.locationWhere(tehsil, village, settlement);
+    const waterSystems = await this.waterSystemRepo.find({
+      where: locWhere,
+      select: {
+        id: true,
+        tehsil: true,
+        village: true,
+        settlement: true,
+        bulkMeterInstalled: true,
+      },
+    });
+    const solarSystems = await this.solarSystemRepo.find({
+      where: locWhere,
+      select: { id: true, tehsil: true, village: true, settlement: true },
+    });
 
     const ohrCount = waterSystems.length;
     const solarFacilities = solarSystems.length;
@@ -808,13 +824,19 @@ export class DashboardService {
         'SUM(COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0))',
         'total_export_kwh',
       )
-      .addSelect('SUM(COALESCE(log.export_off_peak, 0))', 'total_export_off_peak_kwh')
+      .addSelect(
+        'SUM(COALESCE(log.export_off_peak, 0))',
+        'total_export_off_peak_kwh',
+      )
       .addSelect('SUM(COALESCE(log.export_peak, 0))', 'total_export_peak_kwh')
       .addSelect(
         'SUM(COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0))',
         'total_import_kwh',
       )
-      .addSelect('SUM(COALESCE(log.import_off_peak, 0))', 'total_import_off_peak_kwh')
+      .addSelect(
+        'SUM(COALESCE(log.import_off_peak, 0))',
+        'total_import_off_peak_kwh',
+      )
       .addSelect('SUM(COALESCE(log.import_peak, 0))', 'total_import_peak_kwh')
       .addSelect(
         'SUM(COALESCE(log.net_off_peak, 0) + COALESCE(log.net_peak, 0))',

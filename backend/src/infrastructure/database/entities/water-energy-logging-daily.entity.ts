@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
@@ -17,6 +18,10 @@ import {
 import { WaterSystem } from './water-system.entity';
 
 @Entity('water_energy_logging_daily')
+@Index('IDX_water_daily_water_system_id', ['waterSystemId'])
+@Index('IDX_water_daily_log_date', ['logDate'])
+@Index('IDX_water_daily_system_date', ['waterSystemId', 'logDate'])
+@Index('IDX_water_daily_status', ['status'])
 @Unique('uq_water_energy_logging_daily_sid_date_times', [
   'waterSystemId',
   'logDate',

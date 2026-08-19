@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
@@ -17,6 +18,8 @@ import { WaterEnergyLoggingDaily } from './water-energy-logging-daily.entity';
 import { WaterSystemCalibrationCertificate } from './water-system-calibration-certificate.entity';
 
 @Entity('water_systems')
+@Index('IDX_water_systems_tehsil', ['tehsil'])
+@Index('IDX_water_systems_village', ['village'])
 export class WaterSystem {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
   id!: string;

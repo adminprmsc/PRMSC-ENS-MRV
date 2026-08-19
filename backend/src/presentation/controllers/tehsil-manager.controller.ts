@@ -412,6 +412,22 @@ export class TehsilManagerController {
     );
   }
 
+  /** Bulk: all solar monthly logs for every accessible site, optionally filtered by year. */
+  @Get('solar-monthly-logs-bulk')
+  @UseGuards(JwtAuthGuard, MinRoleGuard)
+  @MinRole(ADMIN)
+  getSolarMonthlyLogsByYear(
+    @Req() req: Request,
+    @Query() query: { year?: string },
+  ) {
+    return this.respond(
+      this.tehsilManagerService.getSolarMonthlyLogsByYear(
+        this.jwtFromRequest(req),
+        query,
+      ),
+    );
+  }
+
   @Get('solar-supply-data')
   @UseGuards(JwtAuthGuard, MinRoleGuard)
   @MinRole(ADMIN)
