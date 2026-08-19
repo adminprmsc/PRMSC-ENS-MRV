@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useClientPagination } from "../../../../hooks/useClientPagination";
+import PaginatedListFooter from "../../../../components/PaginatedListFooter";
 import {
   DataListCard,
   DataTableHead,
@@ -109,6 +111,19 @@ export default function SolarMonthlyLogging() {
       return blob.includes(q);
     });
   }, [rows, search]);
+
+  const {
+    pageItems,
+    pageIndex,
+    pageSize,
+    pageCount,
+    total: pageTotal,
+    goToPage,
+    setPageSize,
+    resetPage,
+  } = useClientPagination(filtered, 25);
+
+  useMemo(() => { resetPage(); }, [search, year, resetPage]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -221,7 +236,7 @@ export default function SolarMonthlyLogging() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((r) => (
+                pageItems.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-2">
@@ -310,6 +325,14 @@ export default function SolarMonthlyLogging() {
             </TableBody>
           </Table>
         </DataTableWrap>
+        <PaginatedListFooter
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          pageCount={pageCount}
+          total={pageTotal}
+          onPageChange={goToPage}
+          onPageSizeChange={setPageSize}
+        />
       </DataListCard>
 
       <Dialog

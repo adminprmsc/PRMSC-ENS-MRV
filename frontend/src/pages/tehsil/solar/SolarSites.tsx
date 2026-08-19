@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Eye, Pencil, Plus, RefreshCcw, Sun, Trash2, Zap } from "lucide-react";
+import { useClientPagination } from "../../../hooks/useClientPagination";
+import PaginatedListFooter from "../../../components/PaginatedListFooter";
 
 import {
   DataListCard,
@@ -93,6 +95,20 @@ export default function SolarSites() {
     );
   }, [sites, search]);
 
+  const {
+    pageItems,
+    pageIndex,
+    pageSize,
+    pageCount,
+    total: pageTotal,
+    goToPage,
+    setPageSize,
+    resetPage,
+  } = useClientPagination(filtered, 25);
+
+  // Reset to first page whenever search changes
+  useMemo(() => { resetPage(); }, [search, resetPage]);
+
   const confirmDelete = async (reason: string) => {
     if (!pendingDelete?.id) return;
     setDeleting(true);
@@ -115,7 +131,7 @@ export default function SolarSites() {
       <PageHeader
         icon={<Sun className="text-amber-600" />}
         title="Solar systems"
-        description={`${filtered.length} registered sites`}
+        description={`${filtered.length} registered site${filtered.length !== 1 ? "s" : ""}`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -183,7 +199,7 @@ export default function SolarSites() {
               {filtered.length === 0 ? (
                 <DataTableEmpty colSpan={7} />
               ) : (
-                filtered.map((s) => (
+                pageItems.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell>
                       <p className="font-medium">{kv(s.village)}</p>
@@ -277,6 +293,14 @@ export default function SolarSites() {
             </TableBody>
           </Table>
         </DataTableWrap>
+        <PaginatedListFooter
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          pageCount={pageCount}
+          total={pageTotal}
+          onPageChange={goToPage}
+          onPageSizeChange={setPageSize}
+        />
       </DataListCard>
     </PageShell>
   );

@@ -3401,101 +3401,119 @@ export class TehsilManagerService {
       SUBMISSION_STATUS_REVERTED_BACK,
     ];
 
-    let submissions = await this.submissionRepo.find({
-      where: {
-        status: In(statuses),
-        submissionType: 'water_system',
-      },
-      order: { submittedAt: 'ASC' },
-    });
+    // Resolve tehsil scope for this user — used to filter in-DB instead of
+    // looping post-fetch through rbac.canAccessTehsil() (eliminates N+1).
+    const allowedTehsils = await this.rbac.userAssignedTehsils(currentUser!);
 
-    if (this.rbac.userRoleCode(currentUser!) === ADMIN) {
-      const filtered = [];
-      for (const s of submissions) {
-        if (
-          await this.rbac.canAccessTehsil(
-            currentUser!,
-            await this.rbac.submissionTehsil(s),
-          )
-        ) {
-          filtered.push(s);
-        }
-      }
-      submissions = filtered;
-    } else if (this.rbac.userRoleCode(currentUser!) === SUPER_ADMIN) {
-      const filtered = [];
-      for (const s of submissions) {
-        if (
-          await this.rbac.canAccessTehsil(
-            currentUser!,
-            await this.rbac.submissionTehsil(s),
-          )
-        ) {
-          filtered.push(s);
-        }
-      }
-      submissions = filtered;
+    // Single query: JOIN submissions → water_daily_log → water_system,
+    // plus LEFT JOINs for operator and reviewer users.
+    const qb = this.submissionRepo
+      .createQueryBuilder('sub')
+      .select([
+        'sub.id                   AS id',
+        'sub.record_id            AS record_id',
+        'sub.submission_type      AS submission_type',
+        'sub.status               AS status',
+        'sub.submitted_at         AS submitted_at',
+        'sub.reviewed_at          AS reviewed_at',
+        'sub.reviewed_by          AS reviewed_by',
+        'sub.approved_by          AS approved_by',
+        'sub.remarks              AS remarks',
+        'op.name                  AS operator_name',
+        'op.email                 AS operator_email',
+        'rv.name                  AS reviewed_by_name',
+        'log.id                   AS log_id',
+        'log.log_date             AS log_date',
+        'log.pump_start_time      AS pump_start_time',
+        'log.pump_end_time        AS pump_end_time',
+        'log.pump_operating_hours AS pump_operating_hours',
+        'log.total_water_pumped   AS total_water_pumped',
+        'log.bulk_meter_image_url AS bulk_meter_image_url',
+        'log.updated_at           AS log_updated_at',
+        'ws.id                    AS ws_id',
+        'ws.unique_identifier     AS ws_uid',
+        'ws.village               AS ws_village',
+        'ws.tehsil                AS ws_tehsil',
+      ])
+      .innerJoin(
+        'water_energy_logging_daily',
+        'log',
+        'log.id = sub.record_id',
+      )
+      .innerJoin('water_systems', 'ws', 'ws.id = log.water_system_id')
+      .leftJoin('users', 'op', 'op.id = sub.operator_id')
+      .leftJoin('users', 'rv', 'rv.id = sub.reviewed_by')
+      .where('sub.status IN (:...statuses)', { statuses })
+      .andWhere('sub.submission_type = :type', { type: 'water_system' })
+      .orderBy('sub.submitted_at', 'ASC');
+
+    // Restrict to the user's assigned tehsils directly in the DB query.
+    if (allowedTehsils.length > 0) {
+      qb.andWhere('ws.tehsil IN (:...tehsils)', { tehsils: allowedTehsils });
+    } else {
+      // User has no tehsil assignments — return empty list.
+      return { statusCode: 200, body: { submissions: [] } };
     }
 
-    const result: Record<string, unknown>[] = [];
-    for (const sub of submissions) {
-      const operator = sub.operatorId
-        ? await this.userRepo.findOne({ where: { id: sub.operatorId } })
-        : null;
-      const reviewer = sub.reviewedBy
-        ? await this.userRepo.findOne({ where: { id: sub.reviewedBy } })
-        : null;
-      let systemInfo: Record<string, unknown> = {};
+    const rows = await qb.getRawMany<Record<string, unknown>>();
 
-      const record = await this.waterDailyRepo.findOne({
-        where: { id: sub.recordId },
-      });
-      if (record) {
-        const system = await this.waterSystemRepo.findOne({
-          where: { id: record.waterSystemId },
-        });
-        if (system) {
-          const logDateIso = this.isoDate(record.logDate);
-          const logParts = logDateIso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-          systemInfo = {
-            id: system.id,
-            uid: system.uniqueIdentifier,
-            village: system.village,
-            tehsil: system.tehsil,
+    const result = rows.map((r) => {
+      const logDateIso =
+        r.log_date != null
+          ? this.isoDate(r.log_date as Date | string)
+          : null;
+      const logParts = logDateIso?.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? null;
+
+      const systemInfo: Record<string, unknown> = r.ws_id
+        ? {
+            id: r.ws_id,
+            uid: r.ws_uid,
+            village: r.ws_village,
+            tehsil: r.ws_tehsil,
             log_date: logDateIso,
             year: logParts ? Number(logParts[1]) : null,
             month: logParts ? Number(logParts[2]) : null,
             day: logParts ? Number(logParts[3]) : null,
-            last_edited_at: record.updatedAt?.toISOString() ?? null,
-            pump_start_time: record.pumpStartTime
-              ? record.pumpStartTime.slice(0, 8)
-              : null,
-            pump_end_time: record.pumpEndTime
-              ? record.pumpEndTime.slice(0, 8)
-              : null,
-            pump_operating_hours: record.pumpOperatingHours,
-            total_water_pumped: record.totalWaterPumped,
-            bulk_meter_image_url: record.bulkMeterImageUrl,
-          };
-        }
-      }
+            last_edited_at:
+              r.log_updated_at != null
+                ? new Date(r.log_updated_at as string).toISOString()
+                : null,
+            pump_start_time:
+              r.pump_start_time != null
+                ? String(r.pump_start_time).slice(0, 8)
+                : null,
+            pump_end_time:
+              r.pump_end_time != null
+                ? String(r.pump_end_time).slice(0, 8)
+                : null,
+            pump_operating_hours: r.pump_operating_hours,
+            total_water_pumped: r.total_water_pumped,
+            bulk_meter_image_url: r.bulk_meter_image_url,
+          }
+        : {};
 
-      result.push({
-        id: sub.id,
-        record_id: sub.recordId,
-        submission_type: sub.submissionType,
-        status: sub.status,
-        operator_name: operator?.name ?? 'Unknown',
-        operator_email: operator?.email ?? 'Unknown',
-        submitted_at: sub.submittedAt?.toISOString() ?? null,
-        reviewed_at: sub.reviewedAt?.toISOString() ?? null,
-        remarks: sub.remarks,
+      return {
+        id: r.id,
+        record_id: r.record_id,
+        submission_type: r.submission_type,
+        status: r.status,
+        operator_name: (r.operator_name as string | null) ?? 'Unknown',
+        operator_email: (r.operator_email as string | null) ?? 'Unknown',
+        submitted_at:
+          r.submitted_at != null
+            ? new Date(r.submitted_at as string).toISOString()
+            : null,
+        reviewed_at:
+          r.reviewed_at != null
+            ? new Date(r.reviewed_at as string).toISOString()
+            : null,
+        remarks: r.remarks,
         system_info: systemInfo,
-        reviewed_by: sub.reviewedBy,
-        reviewed_by_name: reviewer?.name ?? null,
-        approved_by: sub.approvedBy,
-      });
-    }
+        reviewed_by: r.reviewed_by,
+        reviewed_by_name: (r.reviewed_by_name as string | null) ?? null,
+        approved_by: r.approved_by,
+      };
+    });
 
     return { statusCode: 200, body: { submissions: result } };
   }
