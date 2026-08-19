@@ -5,6 +5,14 @@ import { DashboardService } from '../../application/services/dashboard.service';
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
+  private parseOptionalInt(raw?: string): number | undefined {
+    if (raw == null) return undefined;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return undefined;
+    const n = Number.parseInt(trimmed, 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+
   @Get('program-summary')
   getProgramSummary(
     @Query('tehsil') tehsil?: string,
@@ -16,8 +24,8 @@ export class DashboardController {
     return this.dashboardService.getProgramSummary(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
       settlement,
     );
   }
@@ -32,8 +40,8 @@ export class DashboardController {
     return this.dashboardService.getWaterSupplied(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
     );
   }
 
@@ -47,8 +55,8 @@ export class DashboardController {
     return this.dashboardService.getPumpHours(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
     );
   }
 
@@ -62,8 +70,8 @@ export class DashboardController {
     return this.dashboardService.getSolarGeneration(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
     );
   }
 
@@ -77,8 +85,8 @@ export class DashboardController {
     return this.dashboardService.getGridImport(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
     );
   }
 
@@ -93,8 +101,8 @@ export class DashboardController {
     return this.dashboardService.getWaterSystemsDetail(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
       settlement,
     );
   }
@@ -110,8 +118,8 @@ export class DashboardController {
     return this.dashboardService.getSolarSystemsDetail(
       tehsil,
       village,
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseOptionalInt(month),
+      this.parseOptionalInt(year),
       settlement,
     );
   }

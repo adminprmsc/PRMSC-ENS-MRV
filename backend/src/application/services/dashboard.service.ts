@@ -60,13 +60,14 @@ export class DashboardService {
     tehsil?: string,
     village?: string,
     settlement?: string,
-  ) {
-    const where: Record<string, string> = {};
-    if (tehsil && tehsil !== 'All Tehsils') where['tehsil'] = tehsil;
-    if (village && village !== 'All Villages') where['village'] = village;
+  ): { tehsil?: string; village?: string; settlement?: string } | undefined {
+    const where: { tehsil?: string; village?: string; settlement?: string } =
+      {};
+    if (tehsil && tehsil !== 'All Tehsils') where.tehsil = tehsil;
+    if (village && village !== 'All Villages') where.village = village;
     if (settlement && settlement !== 'All Settlements')
-      where['settlement'] = settlement;
-    return where;
+      where.settlement = settlement;
+    return Object.keys(where).length ? where : undefined;
   }
 
   async getProgramSummary(
@@ -77,9 +78,14 @@ export class DashboardService {
     settlement?: string,
   ) {
     // Push location filters into the DB query — avoids full-table scans.
+    // Pass `undefined` (not `{}`) when there is no filter so TypeORM loads all rows.
     const locWhere = this.locationWhere(tehsil, village, settlement);
-    const waterSystems = await this.waterSystemRepo.find({ where: locWhere });
-    const solarSystems = await this.solarSystemRepo.find({ where: locWhere });
+    const waterSystems = await this.waterSystemRepo.find(
+      locWhere ? { where: locWhere } : {},
+    );
+    const solarSystems = await this.solarSystemRepo.find(
+      locWhere ? { where: locWhere } : {},
+    );
 
     const ohrCount = waterSystems.length;
     const solarFacilities = solarSystems.length;
