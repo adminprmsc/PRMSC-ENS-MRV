@@ -13,8 +13,10 @@ export type TubewellSubmissionRow = {
     uid?: string;
     village?: string;
     tehsil?: string;
+    log_date?: string | null;
     year?: number;
     month?: number;
+    day?: number;
     last_edited_at?: string | null;
     pump_start_time?: string | null;
     pump_end_time?: string | null;
@@ -126,7 +128,10 @@ export function buildWaterSystemOptions(
     const v = String(s.village ?? "").trim();
     if (!id || !uid) continue;
     if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase()) continue;
-    map.set(id, { id, uid, tehsil: t || undefined, village: v || undefined });
+    const entry: { id: string; uid: string; village?: string; tehsil?: string } = { id, uid };
+    if (t) entry.tehsil = t;
+    if (v) entry.village = v;
+    map.set(id, entry);
   }
 
   for (const r of rows) {
@@ -137,12 +142,11 @@ export function buildWaterSystemOptions(
     if (!sysId || !uid) continue;
     if (tehsil !== "all" && t.toUpperCase() !== tehsil.toUpperCase()) continue;
     if (!map.has(sysId)) {
-      map.set(sysId, {
-        id: sysId,
-        uid,
-        village: (r.system_info?.village ?? "").trim() || undefined,
-        tehsil: t || undefined,
-      });
+      const entry: { id: string; uid: string; village?: string; tehsil?: string } = { id: sysId, uid };
+      const v2 = (r.system_info?.village ?? "").trim();
+      if (t) entry.tehsil = t;
+      if (v2) entry.village = v2;
+      map.set(sysId, entry);
     }
   }
 

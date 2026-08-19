@@ -1,6 +1,6 @@
 import Config from 'react-native-config';
 
-const PROD_API_URL = 'http://101.50.86.169/api';
+const PROD_API_URL = 'http://101.50.87.168/api';
 const DEV_API_URL = 'http://127.0.0.1:5001/api';
 
 const ENV = String((Config as unknown as { ENV?: unknown }).ENV ?? '')

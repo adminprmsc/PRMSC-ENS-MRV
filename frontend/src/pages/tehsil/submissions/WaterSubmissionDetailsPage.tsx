@@ -113,8 +113,10 @@ type DetailResponse = {
     remarks?: string | null;
   };
   record_data?: {
+    log_date?: string | null;
     year?: number | null;
     month?: number | null;
+    day?: number | null;
     last_edited_at?: string | null;
     pump_start_time?: string | null;
     pump_end_time?: string | null;
@@ -889,6 +891,24 @@ export default function WaterSubmissionDetailsPage({
                 />
               </div>
 
+              {record?.log_date ? (
+                <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+                  <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Log date (operator selected)
+                    </p>
+                    <p className="font-semibold tabular-nums">
+                      {new Date(record.log_date + "T00:00:00").toLocaleDateString("en-PK", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               <DetailGrid cols={6}>
                 <DetailItem
                   label="Email"

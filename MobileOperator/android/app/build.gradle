@@ -14,6 +14,13 @@ apply from: file("../../node_modules/react-native-config/android/dotenv.gradle")
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
+    def nodeBinary = System.getenv("NODE_BINARY")
+    if (nodeBinary == null || nodeBinary.isBlank()) {
+        def homebrewNode = "/opt/homebrew/bin/node"
+        nodeBinary = new File(homebrewNode).exists() ? homebrewNode : "node"
+    }
+    nodeExecutableAndArgs = [nodeBinary]
+
     /* Folders */
     //   The root of your project, i.e. where "package.json" lives. Default is '../..'
     // root = file("../../")

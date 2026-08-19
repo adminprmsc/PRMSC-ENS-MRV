@@ -53,6 +53,14 @@ import { useClientPagination } from "@/hooks/useClientPagination";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { getApiErrorMessage } from "../../../lib/api-error";
 import { formatPakistanDateTime, getPakistanYear } from "../../../utils/pakistanTime";
+
+/** Format a YYYY-MM-DD log_date string as "19 Aug 2026" */
+function fmtLogDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" });
+}
 import {
   buildWaterSystemOptions,
   filterTubewellSubmissions,
@@ -421,6 +429,7 @@ export default function TubewellSubmissionsHub() {
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Water system</TableHead>
+                      <TableHead>Log date</TableHead>
                       <TableHead>Operator email</TableHead>
                       <TableHead>Submitted</TableHead>
                       <TableHead>Last edited</TableHead>
@@ -447,13 +456,14 @@ export default function TubewellSubmissionsHub() {
                               <p className="text-xs text-muted-foreground">
                                 {(r.system_info?.village || "—") +
                                   " · " +
-                                  (r.system_info?.tehsil || "—") +
-                                  " · " +
-                                  (r.system_info?.month ?? "—") +
-                                  "/" +
-                                  (r.system_info?.year ?? "—")}
+                                  (r.system_info?.tehsil || "—")}
                               </p>
                             </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className="font-medium text-sm tabular-nums">
+                              {fmtLogDate(r.system_info?.log_date)}
+                            </span>
                           </TableCell>
                           <TableCell className="text-sm">
                             {r.operator_email || "—"}

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
-    "android:release": "react-native build-android --tasks assembleRelease",
+    "android:clean": "cd android && ./gradlew clean && rm -rf android/app/build android/app/.cxx ../node_modules/react-native-worklets/android/build",
+    "android:release": "NODE_BINARY=$(command -v node) react-native build-android --tasks assembleRelease --extra-params \"-PreactNativeArchitectures=arm64-v8a\"",
     "ios": "react-native run-ios",
     "ios:release": "ENVFILE=.env.production react-native run-ios --mode Release",
     "ios:clean": "watchman watch-del-all 2>/dev/null || true && rm -rf ios/build && cd ios && pod install && cd ..",

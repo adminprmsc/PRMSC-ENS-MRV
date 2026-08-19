@@ -2,7 +2,7 @@
 <network-security-config>
     <!-- Production VM uses plain HTTP until TLS is configured. -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">101.50.86.169</domain>
+        <domain includeSubdomains="false">101.50.87.168</domain>
     </domain-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
