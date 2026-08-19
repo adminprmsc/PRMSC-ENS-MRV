@@ -78,20 +78,8 @@ export class DashboardService {
   ) {
     // Push location filters into the DB query — avoids full-table scans.
     const locWhere = this.locationWhere(tehsil, village, settlement);
-    const waterSystems = await this.waterSystemRepo.find({
-      where: locWhere,
-      select: {
-        id: true,
-        tehsil: true,
-        village: true,
-        settlement: true,
-        bulkMeterInstalled: true,
-      },
-    });
-    const solarSystems = await this.solarSystemRepo.find({
-      where: locWhere,
-      select: { id: true, tehsil: true, village: true, settlement: true },
-    });
+    const waterSystems = await this.waterSystemRepo.find({ where: locWhere });
+    const solarSystems = await this.solarSystemRepo.find({ where: locWhere });
 
     const ohrCount = waterSystems.length;
     const solarFacilities = solarSystems.length;
@@ -308,7 +296,7 @@ export class DashboardService {
         const logs = stats?.logs_count ?? 0;
         return {
           id: String(ws.id),
-          unique_identifier: ws.uniqueIdentifier,
+          unique_identifier: ws.uniqueIdentifier ?? '',
           tehsil: ws.tehsil || 'Unknown',
           village: ws.village || '—',
           settlement: ws.settlement ?? null,
@@ -326,7 +314,7 @@ export class DashboardService {
         return (
           a.tehsil.localeCompare(b.tehsil) ||
           a.village.localeCompare(b.village) ||
-          a.unique_identifier.localeCompare(b.unique_identifier)
+          (a.unique_identifier || '').localeCompare(b.unique_identifier || '')
         );
       });
 
@@ -339,7 +327,7 @@ export class DashboardService {
           (ss as { siteType?: string | null }).siteType ?? null;
         return {
           id: String(ss.id),
-          unique_identifier: ss.uniqueIdentifier,
+          unique_identifier: ss.uniqueIdentifier ?? '',
           tehsil: ss.tehsil || 'Unknown',
           village: ss.village || '—',
           settlement: ss.settlement ?? null,
@@ -356,7 +344,7 @@ export class DashboardService {
         return (
           a.tehsil.localeCompare(b.tehsil) ||
           a.village.localeCompare(b.village) ||
-          a.unique_identifier.localeCompare(b.unique_identifier)
+          (a.unique_identifier || '').localeCompare(b.unique_identifier || '')
         );
       });
 
