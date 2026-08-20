@@ -16,6 +16,7 @@ export class DashboardController {
   @Get('program-summary')
   getProgramSummary(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('settlement') settlement?: string,
     @Query('month') month?: string,
@@ -27,12 +28,14 @@ export class DashboardController {
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
       settlement,
+      tehsils,
     );
   }
 
   @Get('water-supplied')
   getWaterSupplied(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
@@ -42,12 +45,14 @@ export class DashboardController {
       village,
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
+      tehsils,
     );
   }
 
   @Get('pump-hours')
   getPumpHours(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
@@ -57,12 +62,14 @@ export class DashboardController {
       village,
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
+      tehsils,
     );
   }
 
   @Get('solar-generation')
   getSolarGeneration(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
@@ -72,12 +79,14 @@ export class DashboardController {
       village,
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
+      tehsils,
     );
   }
 
   @Get('grid-import')
   getGridImport(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('month') month?: string,
     @Query('year') year?: string,
@@ -87,12 +96,14 @@ export class DashboardController {
       village,
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
+      tehsils,
     );
   }
 
   @Get('water-systems-detail')
   getWaterSystemsDetail(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('settlement') settlement?: string,
     @Query('month') month?: string,
@@ -104,12 +115,14 @@ export class DashboardController {
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
       settlement,
+      tehsils,
     );
   }
 
   @Get('solar-systems-detail')
   getSolarSystemsDetail(
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
     @Query('settlement') settlement?: string,
     @Query('month') month?: string,
@@ -121,6 +134,7 @@ export class DashboardController {
       this.parseOptionalInt(month),
       this.parseOptionalInt(year),
       settlement,
+      tehsils,
     );
   }
 }

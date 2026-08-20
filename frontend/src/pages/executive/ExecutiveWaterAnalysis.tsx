@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, Droplets } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -7,23 +7,22 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { useProgramDashboardApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
-import { fetchScopedWaterSystems } from "./fetchExecutiveScopedDashboard";
 import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
+import { useExecutiveWaterSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 const ExecutiveWaterAnalysis = () => {
-  const { getDashboardWaterSystemsDetail } = useProgramDashboardApi();
   const scope = useExecutiveScopeFilters();
   const baseColumns = useWaterAnalysisColumns();
   const location = useLocation();
 
-  const [rows, setRows] = useState<WaterSystemDetailRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data: rows = [], isLoading, error } = useExecutiveWaterSystemsDetail(
+    scope.apiFilters,
+    scope.allowedTehsils,
+  );
 
   const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
     () => [
@@ -59,39 +58,14 @@ const ExecutiveWaterAnalysis = () => {
     [baseColumns, scope.apiFilters.year, scope.apiFilters.month, location.pathname, location.search],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const list = await fetchScopedWaterSystems(
-          getDashboardWaterSystemsDetail,
-          scope.apiFilters,
-          scope.allowedTehsils,
-        );
-        if (!cancelled) setRows(list);
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            getApiErrorMessage(err, "Failed to load water system analysis"),
-          );
-          setRows([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [scope.apiFilters, scope.allowedTehsils, getDashboardWaterSystemsDetail]);
-
   const getRowId = useCallback(
     (row: WaterSystemDetailRow) => row.water_system_id,
     [],
   );
+
+  const errorMessage = error
+    ? getApiErrorMessage(error, "Failed to load water system analysis")
+    : "";
 
   return (
     <PageShell>
@@ -115,15 +89,15 @@ const ExecutiveWaterAnalysis = () => {
         onApply={scope.applyFilters}
       />
 
-      {loading ? (
+      {isLoading ? (
         <DataGridSkeleton rows={10} columns={9} />
-      ) : error ? (
+      ) : errorMessage ? (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : (
         <DataGrid
-          title="Systems"
+          title="Sites"
           rows={rows}
           columns={columns}
           exportFileName={`water-systems-${scope.activeFilters.year}-${scope.activeFilters.tehsil}`}

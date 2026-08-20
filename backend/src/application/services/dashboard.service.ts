@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import {
   METER_TYPE_TUBEWELL,
   SUBMISSION_STATUS_REJECTED,
@@ -37,9 +37,19 @@ export class DashboardService {
 
   private applyLocationFilters<
     T extends { tehsil?: string; village?: string; settlement?: string | null },
-  >(items: T[], tehsil?: string, village?: string, settlement?: string): T[] {
+  >(
+    items: T[],
+    tehsil?: string,
+    village?: string,
+    settlement?: string,
+    tehsilsCsv?: string,
+  ): T[] {
     let result = items;
-    if (tehsil && tehsil !== 'All Tehsils') {
+    const tehsilScope = this.resolveTehsilScope(tehsil, tehsilsCsv);
+    if (tehsilScope?.length) {
+      const allowed = new Set(tehsilScope);
+      result = result.filter((i) => i.tehsil != null && allowed.has(i.tehsil));
+    } else if (tehsil && tehsil !== 'All Tehsils') {
       result = result.filter((i) => i.tehsil === tehsil);
     }
     if (village && village !== 'All Villages') {
@@ -49,6 +59,54 @@ export class DashboardService {
       result = result.filter((i) => (i.settlement ?? '') === settlement);
     }
     return result;
+  }
+
+  /** Single tehsil, explicit multi-tehsil list (CSV), or undefined = all tehsils. */
+  private resolveTehsilScope(
+    tehsil?: string,
+    tehsilsCsv?: string,
+  ): string[] | undefined {
+    const t = tehsil?.trim();
+    if (t && t !== 'All Tehsils') return [t];
+    const csv = tehsilsCsv?.trim();
+    if (!csv) return undefined;
+    return [
+      ...new Set(
+        csv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ];
+  }
+
+  private applyTehsilScopeToQb<T extends object>(
+    qb: SelectQueryBuilder<T>,
+    alias: string,
+    tehsil?: string,
+    tehsilsCsv?: string,
+  ): void {
+    const scope = this.resolveTehsilScope(tehsil, tehsilsCsv);
+    if (scope?.length === 1) {
+      qb.andWhere(`${alias}.tehsil = :_dashScopeTehsil`, {
+        _dashScopeTehsil: scope[0],
+      });
+    } else if (scope && scope.length > 1) {
+      qb.andWhere(`${alias}.tehsil IN (:..._dashScopeTehsils)`, {
+        _dashScopeTehsils: scope,
+      });
+    }
+  }
+
+  private needsSystemJoinForScope(
+    tehsil?: string,
+    village?: string,
+    tehsilsCsv?: string,
+  ): boolean {
+    const scope = this.resolveTehsilScope(tehsil, tehsilsCsv);
+    return (
+      (scope?.length ?? 0) > 0 || Boolean(village && village !== 'All Villages')
+    );
   }
 
   private logNotRejectedQb(alias = 'log') {
@@ -76,6 +134,7 @@ export class DashboardService {
     month?: number,
     year?: number,
     settlement?: string,
+    tehsils?: string,
   ) {
     // Load systems then filter in-memory (same proven path as before).
     // Keep full entity rows — partial `select` previously omitted uniqueIdentifier
@@ -87,12 +146,14 @@ export class DashboardService {
       tehsil,
       village,
       settlement,
+      tehsils,
     );
     solarSystems = this.applyLocationFilters(
       solarSystems,
       tehsil,
       village,
       settlement,
+      tehsils,
     );
 
     const ohrCount = waterSystems.length;
@@ -441,19 +502,15 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    tehsils?: string,
   ) {
     let qb = this.waterLogRepo
       .createQueryBuilder('log')
       .where(this.logNotRejectedQb('log'));
 
-    if (
-      (tehsil && tehsil !== 'All Tehsils') ||
-      (village && village !== 'All Villages')
-    ) {
+    if (this.needsSystemJoinForScope(tehsil, village, tehsils)) {
       qb = qb.innerJoin(WaterSystem, 'ws', 'ws.id = log.water_system_id');
-      if (tehsil && tehsil !== 'All Tehsils') {
-        qb = qb.andWhere('ws.tehsil = :tehsil', { tehsil });
-      }
+      this.applyTehsilScopeToQb(qb, 'ws', tehsil, tehsils);
       if (village && village !== 'All Villages') {
         qb = qb.andWhere('ws.village = :village', { village });
       }
@@ -548,6 +605,7 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    tehsils?: string,
   ) {
     let qb = this.waterLogRepo
       .createQueryBuilder('log')
@@ -557,14 +615,9 @@ export class DashboardService {
       .groupBy('EXTRACT(MONTH FROM log.log_date)')
       .orderBy('month');
 
-    if (
-      (tehsil && tehsil !== 'All Tehsils') ||
-      (village && village !== 'All Villages')
-    ) {
+    if (this.needsSystemJoinForScope(tehsil, village, tehsils)) {
       qb = qb.innerJoin(WaterSystem, 'ws', 'ws.id = log.water_system_id');
-      if (tehsil && tehsil !== 'All Tehsils') {
-        qb = qb.andWhere('ws.tehsil = :tehsil', { tehsil });
-      }
+      this.applyTehsilScopeToQb(qb, 'ws', tehsil, tehsils);
       if (village && village !== 'All Villages') {
         qb = qb.andWhere('ws.village = :village', { village });
       }
@@ -604,6 +657,7 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    tehsils?: string,
   ) {
     return this.aggregateSolarMonthly(
       tehsil,
@@ -612,6 +666,7 @@ export class DashboardService {
       year,
       'export',
       'solar_generation_kwh',
+      tehsils,
     );
   }
 
@@ -620,6 +675,7 @@ export class DashboardService {
     village?: string,
     month?: number,
     year?: number,
+    tehsils?: string,
   ) {
     return this.aggregateSolarMonthly(
       tehsil,
@@ -628,6 +684,7 @@ export class DashboardService {
       year,
       'import',
       'grid_import_kwh',
+      tehsils,
     );
   }
 
@@ -638,6 +695,7 @@ export class DashboardService {
     year?: number,
     field: 'export' | 'import' = 'export',
     label = 'total',
+    tehsils?: string,
   ) {
     const offPeak =
       field === 'export' ? 'log.export_off_peak' : 'log.import_off_peak';
@@ -650,14 +708,9 @@ export class DashboardService {
       .groupBy('log.month')
       .orderBy('log.month');
 
-    if (
-      (tehsil && tehsil !== 'All Tehsils') ||
-      (village && village !== 'All Villages')
-    ) {
+    if (this.needsSystemJoinForScope(tehsil, village, tehsils)) {
       qb = qb.innerJoin(SolarSystem, 'ss', 'ss.id = log.solar_system_id');
-      if (tehsil && tehsil !== 'All Tehsils') {
-        qb = qb.andWhere('ss.tehsil = :tehsil', { tehsil });
-      }
+      this.applyTehsilScopeToQb(qb, 'ss', tehsil, tehsils);
       if (village && village !== 'All Villages') {
         qb = qb.andWhere('ss.village = :village', { village });
       }
@@ -686,6 +739,7 @@ export class DashboardService {
     month?: number,
     year?: number,
     settlement?: string,
+    tehsils?: string,
   ) {
     let rangeStart: string | null = null;
     let rangeEndExclusive: string | null = null;
@@ -704,10 +758,21 @@ export class DashboardService {
       fetchEndExclusive = rangeEndExclusive;
     }
 
-    let systems = await this.waterSystemRepo.find({
-      order: { tehsil: 'ASC', village: 'ASC', uniqueIdentifier: 'ASC' },
-    });
-    systems = this.applyLocationFilters(systems, tehsil, village, settlement);
+    let systemsQb = this.waterSystemRepo
+      .createQueryBuilder('ws')
+      .orderBy('ws.tehsil', 'ASC')
+      .addOrderBy('ws.village', 'ASC')
+      .addOrderBy('ws.uniqueIdentifier', 'ASC');
+    this.applyTehsilScopeToQb(systemsQb, 'ws', tehsil, tehsils);
+    if (village && village !== 'All Villages') {
+      systemsQb = systemsQb.andWhere('ws.village = :village', { village });
+    }
+    if (settlement && settlement !== 'All Settlements') {
+      systemsQb = systemsQb.andWhere('ws.settlement = :settlement', {
+        settlement,
+      });
+    }
+    const systems = await systemsQb.getMany();
 
     if (!systems.length) {
       return { rows: [], meta: { month, year } };
@@ -719,6 +784,11 @@ export class DashboardService {
       .where('log.water_system_id IN (:...ids)', { ids: systemIds })
       .andWhere(this.logNotRejectedQb('log'));
 
+    if (rangeStart) {
+      logsQb = logsQb.andWhere('log.log_date >= :start', {
+        start: rangeStart,
+      });
+    }
     if (fetchEndExclusive) {
       logsQb = logsQb.andWhere('log.log_date < :end', {
         end: fetchEndExclusive,
@@ -810,6 +880,7 @@ export class DashboardService {
     month?: number,
     year?: number,
     settlement?: string,
+    tehsils?: string,
   ) {
     let qb = this.solarLogRepo
       .createQueryBuilder('log')
@@ -869,9 +940,7 @@ export class DashboardService {
       .addOrderBy('ss.village')
       .addOrderBy('ss.unique_identifier');
 
-    if (tehsil && tehsil !== 'All Tehsils') {
-      qb = qb.andWhere('ss.tehsil = :tehsil', { tehsil });
-    }
+    this.applyTehsilScopeToQb(qb, 'ss', tehsil, tehsils);
     if (village && village !== 'All Villages') {
       qb = qb.andWhere('ss.village = :village', { village });
     }

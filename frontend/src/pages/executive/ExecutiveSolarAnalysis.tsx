@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, Sun } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -7,23 +7,22 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { useProgramDashboardApi } from "@/hooks";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
-import { fetchScopedSolarSystems } from "./fetchExecutiveScopedDashboard";
 import { useSolarAnalysisColumns } from "./executiveAnalysisColumns";
 import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
+import { useExecutiveSolarSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 const ExecutiveSolarAnalysis = () => {
-  const { getDashboardSolarSystemsDetail } = useProgramDashboardApi();
   const scope = useExecutiveScopeFilters();
   const baseColumns = useSolarAnalysisColumns();
   const location = useLocation();
 
-  const [rows, setRows] = useState<SolarSystemDetailRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data: rows = [], isLoading, error } = useExecutiveSolarSystemsDetail(
+    scope.apiFilters,
+    scope.allowedTehsils,
+  );
 
   const columns = useMemo<Array<ColumnDef<SolarSystemDetailRow>>>(
     () => [
@@ -51,34 +50,11 @@ const ExecutiveSolarAnalysis = () => {
     [baseColumns, scope.apiFilters.year, location.pathname, location.search],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const list = await fetchScopedSolarSystems(
-          getDashboardSolarSystemsDetail,
-          scope.apiFilters,
-          scope.allowedTehsils,
-        );
-        if (!cancelled) setRows(list);
-      } catch (err) {
-        if (!cancelled) {
-          setError(getApiErrorMessage(err, "Failed to load solar system analysis"));
-          setRows([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [scope.apiFilters, scope.allowedTehsils, getDashboardSolarSystemsDetail]);
-
   const getRowId = useCallback((row: SolarSystemDetailRow) => row.solar_system_id, []);
+
+  const errorMessage = error
+    ? getApiErrorMessage(error, "Failed to load solar system analysis")
+    : "";
 
   return (
     <PageShell>
@@ -102,11 +78,11 @@ const ExecutiveSolarAnalysis = () => {
         onApply={scope.applyFilters}
       />
 
-      {loading ? (
+      {isLoading ? (
         <DataGridSkeleton rows={10} columns={9} />
-      ) : error ? (
+      ) : errorMessage ? (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : (
         <DataGrid

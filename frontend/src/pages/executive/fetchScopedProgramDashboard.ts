@@ -1,5 +1,5 @@
 import type { QueryFilters } from "@/services/types";
-import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
+import { buildScopedApiFilters } from "./buildScopedApiFilters";
 
 export type ProgramTehsilFootprint = {
   tehsil: string;
@@ -67,34 +67,6 @@ export type ProgramMonthlyRow = {
   solar_generation_kwh?: number;
   grid_import_kwh?: number;
 };
-
-function mergeMonthlyRows(rows: ProgramMonthlyRow[][]): ProgramMonthlyRow[] {
-  const byMonth = new Map<number, ProgramMonthlyRow>();
-
-  for (const group of rows) {
-    for (const row of group) {
-      const m = row.month;
-      if (m < 1 || m > 12) continue;
-      const prev = byMonth.get(m) ?? { month: m };
-      byMonth.set(m, {
-        month: m,
-        total_water_pumped:
-          Number(prev.total_water_pumped ?? 0) +
-          Number(row.total_water_pumped ?? 0),
-        pump_operating_hours:
-          Number(prev.pump_operating_hours ?? 0) +
-          Number(row.pump_operating_hours ?? 0),
-        solar_generation_kwh:
-          Number(prev.solar_generation_kwh ?? 0) +
-          Number(row.solar_generation_kwh ?? 0),
-        grid_import_kwh:
-          Number(prev.grid_import_kwh ?? 0) + Number(row.grid_import_kwh ?? 0),
-      });
-    }
-  }
-
-  return [...byMonth.values()].sort((a, b) => a.month - b.month);
-}
 
 function emptySummary(): ProgramSummary {
   return {
@@ -188,78 +160,6 @@ function normalizeSummary(raw: ProgramSummary | undefined): ProgramSummary {
   };
 }
 
-function mergeTehsilFootprints(
-  groups: ProgramTehsilFootprint[][],
-): ProgramTehsilFootprint[] {
-  const byTehsil = new Map<string, ProgramTehsilFootprint>();
-  for (const group of groups) {
-    for (const row of group) {
-      const key = row.tehsil || "Unknown";
-      const prev = byTehsil.get(key) ?? {
-        tehsil: key,
-        water_sites: 0,
-        solar_sites: 0,
-        water_logs: 0,
-        solar_logs: 0,
-        water_sites_logged: 0,
-        solar_sites_logged: 0,
-      };
-      byTehsil.set(key, {
-        tehsil: key,
-        water_sites: prev.water_sites + Number(row.water_sites ?? 0),
-        solar_sites: prev.solar_sites + Number(row.solar_sites ?? 0),
-        water_logs: prev.water_logs + Number(row.water_logs ?? 0),
-        solar_logs: prev.solar_logs + Number(row.solar_logs ?? 0),
-        water_sites_logged:
-          prev.water_sites_logged + Number(row.water_sites_logged ?? 0),
-        solar_sites_logged:
-          prev.solar_sites_logged + Number(row.solar_sites_logged ?? 0),
-      });
-    }
-  }
-  return [...byTehsil.values()].sort((a, b) => a.tehsil.localeCompare(b.tehsil));
-}
-
-function mergeWaterSystems(
-  groups: ProgramWaterSystemCoverage[][],
-): ProgramWaterSystemCoverage[] {
-  const byId = new Map<string, ProgramWaterSystemCoverage>();
-  for (const group of groups) {
-    for (const row of group) {
-      if (!row.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-  }
-  return [...byId.values()].sort((a, b) => {
-    if (a.logged !== b.logged) return a.logged ? 1 : -1;
-    return (
-      a.tehsil.localeCompare(b.tehsil) ||
-      a.village.localeCompare(b.village) ||
-      a.unique_identifier.localeCompare(b.unique_identifier)
-    );
-  });
-}
-
-function mergeSolarSystems(
-  groups: ProgramSolarSystemCoverage[][],
-): ProgramSolarSystemCoverage[] {
-  const byId = new Map<string, ProgramSolarSystemCoverage>();
-  for (const group of groups) {
-    for (const row of group) {
-      if (!row.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-  }
-  return [...byId.values()].sort((a, b) => {
-    if (a.logged !== b.logged) return a.logged ? 1 : -1;
-    return (
-      a.tehsil.localeCompare(b.tehsil) ||
-      a.village.localeCompare(b.village) ||
-      a.unique_identifier.localeCompare(b.unique_identifier)
-    );
-  });
-}
-
 export async function fetchScopedProgramDashboard(
   apiFilters: QueryFilters,
   allowedTehsils: string[],
@@ -271,72 +171,19 @@ export async function fetchScopedProgramDashboard(
     grid: (filters: QueryFilters) => Promise<ProgramMonthlyRow[] | undefined>;
   },
 ) {
-  const tehsil = String(apiFilters.tehsil ?? "");
-  if (tehsil !== ALL_ASSIGNED_TEHSILS || allowedTehsils.length === 0) {
-    const [summary, water, pump, solar, grid] = await Promise.all([
-      fetchers.summary(apiFilters),
-      fetchers.water(apiFilters),
-      fetchers.pump(apiFilters),
-      fetchers.solar(apiFilters),
-      fetchers.grid(apiFilters),
-    ]);
-    return {
-      summary: normalizeSummary(summary),
-      water: water ?? [],
-      pump: pump ?? [],
-      solar: solar ?? [],
-      grid: grid ?? [],
-    };
-  }
-
-  const perTehsil = await Promise.all(
-    allowedTehsils.map(async (t) => {
-      const f = { ...apiFilters, tehsil: t };
-      const [summary, water, pump, solar, grid] = await Promise.all([
-        fetchers.summary(f),
-        fetchers.water(f),
-        fetchers.pump(f),
-        fetchers.solar(f),
-        fetchers.grid(f),
-      ]);
-      return { summary: normalizeSummary(summary), water, pump, solar, grid };
-    }),
-  );
-
-  const summary = perTehsil.reduce(
-    (acc, row) => ({
-      ohr_count: acc.ohr_count + row.summary.ohr_count,
-      solar_facilities: acc.solar_facilities + row.summary.solar_facilities,
-      bulk_meters: acc.bulk_meters + row.summary.bulk_meters,
-      water_logs_count:
-        (acc.water_logs_count ?? 0) + (row.summary.water_logs_count ?? 0),
-      solar_logs_count:
-        (acc.solar_logs_count ?? 0) + (row.summary.solar_logs_count ?? 0),
-      water_sites_logged:
-        (acc.water_sites_logged ?? 0) + (row.summary.water_sites_logged ?? 0),
-      solar_sites_logged:
-        (acc.solar_sites_logged ?? 0) + (row.summary.solar_sites_logged ?? 0),
-      by_tehsil: [] as ProgramTehsilFootprint[],
-      water_systems: [] as ProgramWaterSystemCoverage[],
-      solar_systems: [] as ProgramSolarSystemCoverage[],
-    }),
-    emptySummary(),
-  );
-  summary.by_tehsil = mergeTehsilFootprints(
-    perTehsil.map((r) => r.summary.by_tehsil ?? []),
-  );
-  summary.water_systems = mergeWaterSystems(
-    perTehsil.map((r) => r.summary.water_systems ?? []),
-  );
-  summary.solar_systems = mergeSolarSystems(
-    perTehsil.map((r) => r.summary.solar_systems ?? []),
-  );
-
+  const scopedFilters = buildScopedApiFilters(apiFilters, allowedTehsils);
+  const [summary, water, pump, solar, grid] = await Promise.all([
+    fetchers.summary(scopedFilters),
+    fetchers.water(scopedFilters),
+    fetchers.pump(scopedFilters),
+    fetchers.solar(scopedFilters),
+    fetchers.grid(scopedFilters),
+  ]);
   return {
-    summary,
-    water: mergeMonthlyRows(perTehsil.map((r) => r.water ?? [])),
-    pump: mergeMonthlyRows(perTehsil.map((r) => r.pump ?? [])),
-    solar: mergeMonthlyRows(perTehsil.map((r) => r.solar ?? [])),
-    grid: mergeMonthlyRows(perTehsil.map((r) => r.grid ?? [])),
+    summary: normalizeSummary(summary),
+    water: water ?? [],
+    pump: pump ?? [],
+    solar: solar ?? [],
+    grid: grid ?? [],
   };
 }
