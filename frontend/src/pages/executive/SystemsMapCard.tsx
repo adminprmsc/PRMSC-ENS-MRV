@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import L from "leaflet";
@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { hqRoutes } from "@/constants/routes";
+import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { getApiErrorMessage } from "../../lib/api-error";
 import { toast } from "sonner";
 import {
@@ -380,12 +381,15 @@ function SiteDetailPanel({
   solarCoverage: ProgramSolarSystemCoverage[];
   onClose: () => void;
 }) {
+  const location = useLocation();
   const water = waterCoverage.find((s) => s.id === point.systemId);
   const solar = solarCoverage.find((s) => s.id === point.systemId);
-  const detailHref =
+  const detailHref = buildHqDetailHref(
     point.type === "water"
       ? hqRoutes.waterSystem(point.systemId)
-      : hqRoutes.solarSite(point.systemId);
+      : hqRoutes.solarSite(point.systemId),
+    { from: location.pathname + location.search },
+  );
 
   return (
     <div className="rounded-lg border border-border/70 bg-background p-3 shadow-sm">
@@ -499,6 +503,8 @@ function SiteDetailPanel({
       <div className="mt-3 flex justify-end">
         <Link
           to={detailHref}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium hover:bg-muted"
         >
           Explore more

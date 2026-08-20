@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowRight,
@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { SOLAR_SITE_TYPES } from "@/constants/solarSiteTypes";
 import { hqRoutes } from "@/constants/routes";
+import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgramDashboardApi } from "@/hooks";
 import {
@@ -111,7 +112,13 @@ function statusBadge(logged: boolean) {
   );
 }
 
-function WaterSiteDetails({ row }: { row: WaterGridRow }) {
+function WaterSiteDetails({
+  row,
+  returnPath,
+}: {
+  row: WaterGridRow;
+  returnPath: string;
+}) {
   const progressHint = Math.min(100, row.days_logged * 10);
   const progress = row.logged ? Math.max(progressHint, 8) : 0;
   return (
@@ -121,8 +128,11 @@ function WaterSiteDetails({ row }: { row: WaterGridRow }) {
       badge={statusBadge(row.logged)}
       progress={progress}
       progressHint={`${progress}% period progress`}
-      actionHref={hqRoutes.waterSystem(row.id)}
+      actionHref={buildHqDetailHref(hqRoutes.waterSystem(row.id), {
+        from: returnPath,
+      })}
       actionLabel="Open site"
+      openInNewTab
       fields={[
         {
           label: "Location",
@@ -154,7 +164,13 @@ function WaterSiteDetails({ row }: { row: WaterGridRow }) {
   );
 }
 
-function SolarSiteDetails({ row }: { row: SolarGridRow }) {
+function SolarSiteDetails({
+  row,
+  returnPath,
+}: {
+  row: SolarGridRow;
+  returnPath: string;
+}) {
   const progressHint = Math.min(100, row.months_logged * 25);
   const progress = row.logged ? Math.max(progressHint, 8) : 0;
   return (
@@ -164,8 +180,11 @@ function SolarSiteDetails({ row }: { row: SolarGridRow }) {
       badge={statusBadge(row.logged)}
       progress={progress}
       progressHint={`${progress}% period progress`}
-      actionHref={hqRoutes.solarSite(row.id)}
+      actionHref={buildHqDetailHref(hqRoutes.solarSite(row.id), {
+        from: returnPath,
+      })}
       actionLabel="Open site"
+      openInNewTab
       fields={[
         {
           label: "Site type",
@@ -191,6 +210,8 @@ function SolarSiteDetails({ row }: { row: SolarGridRow }) {
 }
 
 const ExecutiveSitesProgress = () => {
+  const location = useLocation();
+  const returnPath = location.pathname + location.search;
   const { user } = useAuth();
   const { getDashboardProgramSummary } = useProgramDashboardApi();
   const {
@@ -421,7 +442,11 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={hqRoutes.waterSystem(row.original.id)}
+            to={buildHqDetailHref(hqRoutes.waterSystem(row.original.id), {
+              from: returnPath,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -432,7 +457,7 @@ const ExecutiveSitesProgress = () => {
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
     ],
-    [],
+    [returnPath],
   );
 
   const solarColumns = useMemo<Array<ColumnDef<SolarGridRow, unknown>>>(
@@ -502,7 +527,11 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={hqRoutes.solarSite(row.original.id)}
+            to={buildHqDetailHref(hqRoutes.solarSite(row.original.id), {
+              from: returnPath,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -513,7 +542,7 @@ const ExecutiveSitesProgress = () => {
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
     ],
-    [],
+    [returnPath],
   );
 
   const tehsilOptions = useMemo(
@@ -756,7 +785,9 @@ const ExecutiveSitesProgress = () => {
               rows={waterRows}
               columns={waterColumns}
               getRowId={(row) => row.id}
-              renderRowDetails={(row) => <WaterSiteDetails row={row} />}
+              renderRowDetails={(row) => (
+                <WaterSiteDetails row={row} returnPath={returnPath} />
+              )}
             />
           )}
         </TabsContent>
@@ -772,7 +803,9 @@ const ExecutiveSitesProgress = () => {
               rows={solarRows}
               columns={solarColumns}
               getRowId={(row) => row.id}
-              renderRowDetails={(row) => <SolarSiteDetails row={row} />}
+              renderRowDetails={(row) => (
+                <SolarSiteDetails row={row} returnPath={returnPath} />
+              )}
             />
           )}
         </TabsContent>

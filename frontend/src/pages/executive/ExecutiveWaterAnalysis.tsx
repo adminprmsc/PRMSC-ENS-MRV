@@ -7,7 +7,7 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { buildHqDetailHref } from "@/lib/hq-navigation";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
@@ -33,19 +33,19 @@ const ExecutiveWaterAnalysis = () => {
         meta: { filterVariant: "none" },
         cell: ({ row }) => {
           const systemId = row.original.water_system_id;
-          const navState = {
-            from: location.pathname + location.search,
-            metrics: row.original,
-            year: scope.apiFilters.year,
-            ...(scope.apiFilters.month != null
-              ? { month: scope.apiFilters.month }
-              : {}),
-          };
+          const returnPath = location.pathname + location.search;
 
           return (
             <Link
-              to={hqRoutes.waterSystem(systemId)}
-              state={navState}
+              to={buildHqDetailHref(hqRoutes.waterSystem(systemId), {
+                from: returnPath,
+                year: Number(scope.apiFilters.year),
+                ...(scope.apiFilters.month != null
+                  ? { month: Number(scope.apiFilters.month) }
+                  : {}),
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
             >
               Explore

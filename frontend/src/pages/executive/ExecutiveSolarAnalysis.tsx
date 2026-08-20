@@ -7,6 +7,7 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
+import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { useSolarAnalysisColumns } from "./executiveAnalysisColumns";
@@ -33,12 +34,12 @@ const ExecutiveSolarAnalysis = () => {
         meta: { filterVariant: "none" },
         cell: ({ row }) => (
           <Link
-            to={hqRoutes.solarSite(row.original.solar_system_id)}
-            state={{
+            to={buildHqDetailHref(hqRoutes.solarSite(row.original.solar_system_id), {
               from: location.pathname + location.search,
-              metrics: row.original,
-              year: scope.apiFilters.year,
-            }}
+              year: Number(scope.apiFilters.year),
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
           >
             Explore

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   BookOpen,
@@ -22,7 +22,7 @@ import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { useClientPagination } from "@/hooks/useClientPagination";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { readHqDetailSearchParams } from "@/lib/hq-navigation";
 import {
   getSolarSupplyData,
   getSolarSystem,
@@ -122,8 +122,11 @@ export default function HqSolarSiteDetailPage() {
   const systemId = String(id ?? "").trim();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
-  const displayYear = state.year ?? new Date().getFullYear();
+  const queryContext = readHqDetailSearchParams(searchParams.toString());
+  const displayYear =
+    state.year ?? queryContext.year ?? new Date().getFullYear();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,7 +138,8 @@ export default function HqSolarSiteDetailPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
-  const backTo = state.from?.trim() || hqRoutes.solarAnalysis;
+  const backTo =
+    state.from?.trim() || queryContext.from?.trim() || hqRoutes.solarAnalysis;
   const metrics = state.metrics;
 
   const loadAll = async () => {
@@ -285,7 +289,7 @@ export default function HqSolarSiteDetailPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(backTo)}>
               <ArrowLeft className="size-4" />
-              Back to analysis
+              Back to previous page
             </Button>
             <Button
               variant="outline"

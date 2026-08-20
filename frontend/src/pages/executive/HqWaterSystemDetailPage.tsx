@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   BookOpen,
@@ -30,6 +30,7 @@ import {
   formatPakistanDateTime,
   formatPakistanIsoDateLabel,
 } from "@/utils/pakistanTime";
+import { readHqDetailSearchParams } from "@/lib/hq-navigation";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
 import { submissionLogDateKey } from "./hqSubmissionTypes";
@@ -199,20 +200,24 @@ export default function HqWaterSystemDetailPage() {
   const systemId = String(id ?? "").trim();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
+  const queryContext = readHqDetailSearchParams(searchParams.toString());
+
+  const backTo =
+    state.from?.trim() || queryContext.from?.trim() || hqRoutes.waterAnalysis;
+  const scopeYear = state.year ?? queryContext.year;
+  const scopeMonth = state.month ?? queryContext.month;
+  const metrics = state.metrics;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [system, setSystem] = useState<WaterSystemRow | null>(null);
-  /** YYYY-MM-DD filter for exploring a single log day */
   const [dayFilter, setDayFilter] = useState("");
-  /** Secondary system registry details — collapsed by default */
   const [systemDetailsOpen, setSystemDetailsOpen] = useState(false);
   const { submissions, loading: logsLoading, error: logsError, reload } =
     useHqSubmissions();
 
-  const backTo = state.from?.trim() || hqRoutes.waterAnalysis;
-  const metrics = state.metrics;
   const bulkMeter = Boolean(system?.bulk_meter_installed);
   const flowRateM3h = numOrNull(system?.pump_flow_rate);
 
@@ -220,15 +225,15 @@ export default function HqWaterSystemDetailPage() {
     const filterOpts: { waterSystemId: string; scope?: HqSubmissionScope } = {
       waterSystemId: systemId,
     };
-    if (state.year != null || state.month != null) {
+    if (scopeYear != null || scopeMonth != null) {
       filterOpts.scope = {
-        ...(state.year != null ? { year: state.year } : {}),
-        ...(state.month != null ? { month: state.month } : {}),
+        ...(scopeYear != null ? { year: scopeYear } : {}),
+        ...(scopeMonth != null ? { month: scopeMonth } : {}),
       };
     }
     const rows = filterApprovedSubmissions(submissions, filterOpts);
     return rows;
-  }, [submissions, systemId, state.year, state.month]);
+  }, [submissions, systemId, scopeYear, scopeMonth]);
 
   const dayStats = useMemo(() => {
     const map = new Map<
@@ -331,7 +336,7 @@ export default function HqWaterSystemDetailPage() {
   useEffect(() => {
     daysPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayBranches.length, state.year, state.month, dayFilter]);
+  }, [dayBranches.length, scopeYear, scopeMonth, dayFilter]);
 
   const loadSystem = async () => {
     if (!systemId) {
@@ -377,7 +382,7 @@ export default function HqWaterSystemDetailPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(backTo)}>
               <ArrowLeft className="size-4" />
-              Back to analysis
+              Back to previous page
             </Button>
             <Button
               variant="outline"

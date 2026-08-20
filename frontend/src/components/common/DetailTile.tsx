@@ -20,6 +20,7 @@ type DetailTileProps = {
   fields: DetailTileField[];
   actionHref?: string;
   actionLabel?: string;
+  openInNewTab?: boolean;
   children?: ReactNode;
   className?: string;
 };
@@ -34,6 +35,7 @@ export function DetailTile({
   fields,
   actionHref,
   actionLabel = "Open",
+  openInNewTab = false,
   children,
   className,
 }: DetailTileProps) {
@@ -69,6 +71,8 @@ export function DetailTile({
         {actionHref ? (
           <Link
             to={actionHref}
+            target={openInNewTab ? "_blank" : undefined}
+            rel={openInNewTab ? "noopener noreferrer" : undefined}
             onClick={(e) => e.stopPropagation()}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
