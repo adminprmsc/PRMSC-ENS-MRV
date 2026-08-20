@@ -49,6 +49,8 @@ import {
   TableRow,
 } from "../../../../components/ui/table";
 import { tehsilRoutes } from "../../../../constants/routes";
+import { useLocationCatalog } from "../../../../hooks/useLocationCatalog";
+import { SearchableOptionField } from "../../../../components/common/SearchableOptionField";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import {
   getWaterSystems,
@@ -108,6 +110,7 @@ export default function WaterSystemEditPage() {
   const fmtDate = formatPakistanDate;
 
   const [formData, setFormData] = useState({
+    settlement: "",
     latitude: "",
     longitude: "",
     pump_model: "",
@@ -130,6 +133,15 @@ export default function WaterSystemEditPage() {
   });
 
   const lastLoadedKey = useRef<string>("");
+
+  const { settlementsFor } = useLocationCatalog();
+  const settlementOptions = useMemo(
+    () =>
+      system?.tehsil && system?.village
+        ? settlementsFor(system.tehsil, system.village)
+        : [],
+    [system?.tehsil, system?.village, settlementsFor],
+  );
 
   const isResolved = Boolean(systemId);
   const showShimmers = loadingInitial || (Boolean(key) && !isResolved);
@@ -174,6 +186,7 @@ export default function WaterSystemEditPage() {
       setMeterHistory(Array.isArray(detail.meters) ? detail.meters : []);
 
       setFormData({
+        settlement: String(detail.settlement ?? match.settlement ?? ""),
         latitude: detail.latitude != null ? String(detail.latitude) : "",
         longitude: detail.longitude != null ? String(detail.longitude) : "",
         pump_model: String(detail.pump_model ?? ""),
@@ -268,12 +281,13 @@ export default function WaterSystemEditPage() {
         meter_serial_number,
         meter_accuracy_class,
         installation_date,
+        settlement,
         ...rest
       } = formData;
       await updateWaterSystem(systemId, {
         tehsil: system?.tehsil,
         village: system?.village,
-        settlement: system?.settlement ?? "",
+        settlement: settlement.trim(),
         ...rest,
         current_meter: {
           meter_type: "tubewell",
@@ -425,8 +439,8 @@ export default function WaterSystemEditPage() {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Identity and location are locked. Only editable fields are shown
-              below.
+              Tehsil and village are locked. You can update settlement and the
+              fields below.
             </p>
           </div>
         </div>
@@ -443,7 +457,9 @@ export default function WaterSystemEditPage() {
         <Card className="mb-6 border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">System</CardTitle>
-            <CardDescription>Read-only identity & location</CardDescription>
+            <CardDescription>
+              Tehsil and village are locked; settlement can be corrected here
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {showShimmers ? (
@@ -478,12 +494,29 @@ export default function WaterSystemEditPage() {
                   <p className="text-[11px] text-muted-foreground">Village</p>
                   <p className="mt-1 font-medium">{system?.village || "—"}</p>
                 </div>
-                <div className="rounded-lg border bg-background p-3 md:col-span-2">
-                  <p className="text-[11px] text-muted-foreground">
+                <div className="space-y-2 rounded-lg border bg-background p-3 md:col-span-2">
+                  <Label className="text-[11px] text-muted-foreground">
                     Settlement
-                  </p>
-                  <p className="mt-1 font-medium">
-                    {system?.settlement || "—"}
+                  </Label>
+                  <SearchableOptionField
+                    hideLabel
+                    label="Settlement"
+                    value={formData.settlement}
+                    options={settlementOptions}
+                    allValue=""
+                    allLabel="None"
+                    disabled={saving || !isResolved || !system?.village}
+                    placeholder={
+                      system?.village
+                        ? "Type to find a settlement…"
+                        : "Village required"
+                    }
+                    onChange={(v) =>
+                      setFormData((prev) => ({ ...prev, settlement: v }))
+                    }
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Optional — choose from the catalog or clear to remove.
                   </p>
                 </div>
               </>

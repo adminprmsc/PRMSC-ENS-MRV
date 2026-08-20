@@ -1558,15 +1558,31 @@ export class TehsilManagerService {
       };
     }
     if ('settlement' in data) {
-      const incoming = this.coerceString(data.settlement).trim() || null;
-      const current = this.coerceString(system.settlement).trim() || null;
+      const incoming = this.coerceString(data.settlement).trim();
+      const current = this.coerceString(system.settlement).trim();
       if (incoming !== current) {
-        return {
-          statusCode: 400,
-          body: {
-            message: 'Cannot change settlement on an existing water system',
-          },
-        };
+        try {
+          if (incoming) {
+            await this.locationsService.assertSettlementExists(
+              system.tehsil,
+              system.village,
+              incoming,
+            );
+          }
+          system.settlement = incoming || null;
+        } catch (e) {
+          if (e instanceof BadRequestException) {
+            const resp = e.getResponse();
+            return {
+              statusCode: 400,
+              body:
+                typeof resp === 'string'
+                  ? { message: resp }
+                  : (resp as Record<string, unknown>),
+            };
+          }
+          throw e;
+        }
       }
     }
 
@@ -2742,15 +2758,31 @@ export class TehsilManagerService {
       };
     }
     if ('settlement' in data) {
-      const incoming = this.coerceString(data.settlement).trim() || null;
-      const current = this.coerceString(system.settlement).trim() || null;
+      const incoming = this.coerceString(data.settlement).trim();
+      const current = this.coerceString(system.settlement).trim();
       if (incoming !== current) {
-        return {
-          statusCode: 400,
-          body: {
-            message: 'Cannot change settlement on an existing solar site',
-          },
-        };
+        try {
+          if (incoming) {
+            await this.locationsService.assertSettlementExists(
+              system.tehsil,
+              system.village,
+              incoming,
+            );
+          }
+          system.settlement = incoming || null;
+        } catch (e) {
+          if (e instanceof BadRequestException) {
+            const resp = e.getResponse();
+            return {
+              statusCode: 400,
+              body:
+                typeof resp === 'string'
+                  ? { message: resp }
+                  : (resp as Record<string, unknown>),
+            };
+          }
+          throw e;
+        }
       }
     }
 

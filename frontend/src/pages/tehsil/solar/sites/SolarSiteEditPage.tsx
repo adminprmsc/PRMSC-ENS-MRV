@@ -41,6 +41,8 @@ import {
 import { SOLAR_SITE_TYPES } from "../../../../constants/solarSiteTypes";
 import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
 import { tehsilRoutes } from "../../../../constants/routes";
+import { useLocationCatalog } from "../../../../hooks/useLocationCatalog";
+import { SearchableOptionField } from "../../../../components/common/SearchableOptionField";
 import { getApiErrorMessage } from "../../../../lib/api-error";
 import { TypeToConfirmDeleteDialog } from "../../../../components/TypeToConfirmDeleteDialog";
 import {
@@ -93,6 +95,7 @@ export default function SolarSiteEditPage() {
     useState<MeterUpdateMode>("update_current");
 
   const [formData, setFormData] = useState({
+    settlement: "",
     latitude: "",
     longitude: "",
     installation_location: "",
@@ -112,6 +115,16 @@ export default function SolarSiteEditPage() {
   });
 
   const lastLoadedId = useRef<string>("");
+
+  const { settlementsFor } = useLocationCatalog();
+  const settlementOptions = useMemo(
+    () =>
+      site?.tehsil && site?.village
+        ? settlementsFor(site.tehsil, site.village)
+        : [],
+    [site?.tehsil, site?.village, settlementsFor],
+  );
+
   const isResolved = Boolean(site?.id);
   const showShimmers = loadingInitial || (Boolean(id) && !isResolved);
 
@@ -131,6 +144,7 @@ export default function SolarSiteEditPage() {
       );
 
       setFormData({
+        settlement: String(s.settlement ?? ""),
         latitude: s.latitude != null ? String(s.latitude) : "",
         longitude: s.longitude != null ? String(s.longitude) : "",
         installation_location: (
@@ -227,11 +241,12 @@ export default function SolarSiteEditPage() {
         });
         return;
       }
+      const { settlement, installation_location_other, ...restForm } = formData;
       await updateSolarSystem(site!.id, {
         tehsil: site?.tehsil,
         village: site?.village,
-        settlement: site?.settlement ?? "",
-        ...formData,
+        settlement: settlement.trim(),
+        ...restForm,
         installation_location,
         installation_location_other: undefined,
         site_type: formData.site_type.trim() || null,
@@ -325,7 +340,8 @@ export default function SolarSiteEditPage() {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Location is locked. Update technical and metering fields below.
+              Tehsil and village are locked. You can update settlement and the
+              technical fields below.
             </p>
           </div>
         </div>
@@ -342,7 +358,9 @@ export default function SolarSiteEditPage() {
         <Card className="mb-6 border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Site</CardTitle>
-            <CardDescription>Read-only identity & location</CardDescription>
+            <CardDescription>
+              Tehsil and village are locked; settlement can be corrected here
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {showShimmers ? (
@@ -377,11 +395,30 @@ export default function SolarSiteEditPage() {
                   <p className="text-[11px] text-muted-foreground">Village</p>
                   <p className="mt-1 font-medium">{site?.village || "—"}</p>
                 </div>
-                <div className="rounded-lg border bg-background p-3 md:col-span-2">
-                  <p className="text-[11px] text-muted-foreground">
+                <div className="space-y-2 rounded-lg border bg-background p-3 md:col-span-2">
+                  <Label className="text-[11px] text-muted-foreground">
                     Settlement
+                  </Label>
+                  <SearchableOptionField
+                    hideLabel
+                    label="Settlement"
+                    value={formData.settlement}
+                    options={settlementOptions}
+                    allValue=""
+                    allLabel="None"
+                    disabled={saving || deleting || !isResolved || !site?.village}
+                    placeholder={
+                      site?.village
+                        ? "Type to find a settlement…"
+                        : "Village required"
+                    }
+                    onChange={(v) =>
+                      setFormData((prev) => ({ ...prev, settlement: v }))
+                    }
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Optional — choose from the catalog or clear to remove.
                   </p>
-                  <p className="mt-1 font-medium">{site?.settlement || "—"}</p>
                 </div>
                 <div className="rounded-lg border bg-background p-3 md:col-span-2">
                   <p className="text-[11px] text-muted-foreground">Site type</p>

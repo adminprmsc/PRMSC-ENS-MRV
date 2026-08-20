@@ -887,8 +887,12 @@ export class DashboardService {
 
     const results = await qb.getRawMany<Record<string, unknown>>();
     const rows = results.map((r) => {
-      const str = (v: unknown) =>
-        v == null ? '0' : typeof v === 'string' ? v : String(v);
+      const str = (v: unknown): string => {
+        if (v == null) return '0';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'number' || typeof v === 'boolean') return `${v}`;
+        return '0';
+      };
       const expKwh = parseFloat(str(r.total_export_kwh));
       const expOffPeak = parseFloat(str(r.total_export_off_peak_kwh));
       const expPeak = parseFloat(str(r.total_export_peak_kwh));
