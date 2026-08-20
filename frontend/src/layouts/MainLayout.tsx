@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -92,6 +92,24 @@ const navLinkClass = (isActive: boolean, alert = false, collapsed = false) =>
         ? "text-rose-100/85 hover:bg-rose-500/15 hover:text-rose-50"
         : "text-sidebar-muted hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
   );
+
+/** Sidebar stays in the same tab — unlike Explore/Open actions on analysis grids. */
+function sameTabSidebarNav(
+  event: MouseEvent<HTMLAnchorElement>,
+  path: string,
+  navigate: (path: string) => void,
+) {
+  if (
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey ||
+    event.button !== 0
+  ) {
+    event.preventDefault();
+    navigate(path);
+  }
+}
 
 function titleCaseLabel(value: string): string {
   return value
@@ -503,6 +521,11 @@ const MainLayout = () => {
                       key={`${section.title}-${item.path}`}
                       to={item.path}
                       end={item.end ?? false}
+                      onClick={(e) => sameTabSidebarNav(e, item.path, navigate)}
+                      onAuxClick={(e) => {
+                        e.preventDefault();
+                        navigate(item.path);
+                      }}
                       className={({ isActive }) =>
                         navLinkClass(isActive, section.emphasis === "alert", false)
                       }
@@ -528,6 +551,13 @@ const MainLayout = () => {
                         <NavLink
                           to={item.path}
                           end={item.end ?? false}
+                          onClick={(e) =>
+                            sameTabSidebarNav(e, item.path, navigate)
+                          }
+                          onAuxClick={(e) => {
+                            e.preventDefault();
+                            navigate(item.path);
+                          }}
                           className={({ isActive }) =>
                             navLinkClass(
                               isActive,
