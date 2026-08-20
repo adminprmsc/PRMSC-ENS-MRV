@@ -846,7 +846,15 @@ export class DashboardService {
       )
       .addSelect('SUM(COALESCE(log.net_off_peak, 0))', 'total_net_off_peak_kwh')
       .addSelect('SUM(COALESCE(log.net_peak, 0))', 'total_net_peak_kwh')
-      .addSelect('BOOL_OR(log.tou_required)', 'any_tou_required')
+      // tou_required is not a DB column — derive from peak fields (same as save/normalize logic)
+      .addSelect(
+        `BOOL_OR(
+          log.export_peak IS NOT NULL
+          OR log.import_peak IS NOT NULL
+          OR log.net_peak IS NOT NULL
+        )`,
+        'any_tou_required',
+      )
       .addSelect('COUNT(DISTINCT log.month)', 'months_logged')
       .addSelect('COUNT(log.id)', 'records_count')
       .groupBy('ss.id')
