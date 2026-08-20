@@ -341,7 +341,7 @@ export class TehsilManagerController {
   @MinRole(ADMIN)
   getSolarSystems(
     @Req() req: Request,
-    @Query() query: { tehsil?: string; village?: string },
+    @Query() query: { tehsil?: string; tehsils?: string; village?: string },
   ) {
     return this.respond(
       this.tehsilManagerService.getSolarSystems(

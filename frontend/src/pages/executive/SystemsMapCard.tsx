@@ -48,6 +48,7 @@ import {
 import type { QueryFilters } from "../../services/types";
 import type { SolarSystemRow, WaterSystemRow } from "../../types/api";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
+import { buildScopedApiFilters } from "./buildScopedApiFilters";
 import type {
   ProgramSolarSystemCoverage,
   ProgramWaterSystemCoverage,
@@ -539,97 +540,37 @@ export default function SystemsMapCard({
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const village = mapFilters.village;
+      const q = buildScopedApiFilters(mapListQuery(mapFilters), allowedTehsils);
+      const [waterResult, solarResult] = await Promise.allSettled([
+        getWaterSystems(q),
+        getSolarSystems(q),
+      ]);
 
-      const fetchListsForTehsil = async (tehsil: string) => {
-        const q: QueryFilters = { tehsil, village };
-        const [waterResult, solarResult] = await Promise.allSettled([
-          getWaterSystems(q),
-          getSolarSystems(q),
-        ]);
-        return {
-          water:
-            waterResult.status === "fulfilled"
-              ? (normalizeListPayload(waterResult.value) as WaterSystemRow[])
-              : [],
-          solar:
-            solarResult.status === "fulfilled"
-              ? (normalizeListPayload(solarResult.value) as SolarSystemRow[])
-              : [],
-          waterError:
-            waterResult.status === "rejected" ? waterResult.reason : null,
-          solarError:
-            solarResult.status === "rejected" ? solarResult.reason : null,
-        };
-      };
-
-      let water: WaterSystemRow[] = [];
-      let solar: SolarSystemRow[] = [];
-
-      if (
-        mapFilters.tehsil === ALL_ASSIGNED_TEHSILS &&
-        allowedTehsils.length > 0
-      ) {
-        const results = await Promise.all(
-          allowedTehsils.map((tehsil) => fetchListsForTehsil(tehsil)),
+      if (waterResult.status === "rejected") {
+        toast.error(
+          getApiErrorMessage(
+            waterResult.reason,
+            "Failed to load water systems for map",
+          ),
         );
-        const waterById = new Map<string, WaterSystemRow>();
-        const solarById = new Map<string, SolarSystemRow>();
-        for (const result of results) {
-          if (result.waterError) {
-            toast.error(
-              getApiErrorMessage(
-                result.waterError,
-                "Failed to load water systems for map",
-              ),
-            );
-          }
-          if (result.solarError) {
-            toast.error(
-              getApiErrorMessage(
-                result.solarError,
-                "Failed to load solar systems for map",
-              ),
-            );
-          }
-          for (const row of result.water) waterById.set(String(row.id), row);
-          for (const row of result.solar) solarById.set(String(row.id), row);
-        }
-        water = [...waterById.values()];
-        solar = [...solarById.values()];
-      } else {
-        const q = mapListQuery(mapFilters);
-        const [waterResult, solarResult] = await Promise.allSettled([
-          getWaterSystems(q),
-          getSolarSystems(q),
-        ]);
-
-        if (waterResult.status === "rejected") {
-          toast.error(
-            getApiErrorMessage(
-              waterResult.reason,
-              "Failed to load water systems for map",
-            ),
-          );
-        }
-        if (solarResult.status === "rejected") {
-          toast.error(
-            getApiErrorMessage(
-              solarResult.reason,
-              "Failed to load solar systems for map",
-            ),
-          );
-        }
-
-        water =
-          waterResult.status === "fulfilled"
-            ? (normalizeListPayload(waterResult.value) as WaterSystemRow[])
-            : [];
-        solar =
-          solarResult.status === "fulfilled"
-            ? (normalizeListPayload(solarResult.value) as SolarSystemRow[])
-            : [];
       }
+      if (solarResult.status === "rejected") {
+        toast.error(
+          getApiErrorMessage(
+            solarResult.reason,
+            "Failed to load solar systems for map",
+          ),
+        );
+      }
+
+      const water =
+        waterResult.status === "fulfilled"
+          ? (normalizeListPayload(waterResult.value) as WaterSystemRow[])
+          : [];
+      const solar =
+        solarResult.status === "fulfilled"
+          ? (normalizeListPayload(solarResult.value) as SolarSystemRow[])
+          : [];
 
       setRegistryTotals({ water: water.length, solar: solar.length });
 

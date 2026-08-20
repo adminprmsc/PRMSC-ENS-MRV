@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
+import {
+  intersectTehsilScope,
+  resolveTehsilScope,
+} from '../../domain/utils/tehsil-scope.util';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import {
   normalizeSolarSiteType,
@@ -2224,7 +2228,7 @@ export class TehsilManagerService {
 
   async getSolarSystems(
     jwt: JwtContext,
-    query: { tehsil?: string; village?: string },
+    query: { tehsil?: string; tehsils?: string; village?: string },
   ): Promise<ServiceResult> {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
@@ -2235,10 +2239,20 @@ export class TehsilManagerService {
     const ts = [...(await this.rbac.userAssignedTehsils(user))];
     const filterTehsil = query.tehsil;
     const filterVillage = query.village;
+    const tehsilsCsv = query.tehsils;
 
     let systems: SolarSystem[];
     if (ts.length) {
-      systems = await this.solarSystemRepo.find({ where: { tehsil: In(ts) } });
+      const queryTehsils = intersectTehsilScope(ts, filterTehsil, tehsilsCsv);
+      if (!queryTehsils.length) {
+        return {
+          statusCode: 200,
+          body: [] as unknown as Record<string, unknown>,
+        };
+      }
+      systems = await this.solarSystemRepo.find({
+        where: { tehsil: In(queryTehsils) },
+      });
     } else {
       return {
         statusCode: 200,
@@ -2246,7 +2260,11 @@ export class TehsilManagerService {
       };
     }
 
-    if (filterTehsil && filterTehsil !== 'All Tehsils') {
+    const tehsilScope = resolveTehsilScope(filterTehsil, tehsilsCsv);
+    if (tehsilScope?.length) {
+      const allowed = new Set(tehsilScope);
+      systems = systems.filter((s) => s.tehsil != null && allowed.has(s.tehsil));
+    } else if (filterTehsil && filterTehsil !== 'All Tehsils') {
       systems = systems.filter((s) => s.tehsil === filterTehsil);
     }
     if (filterVillage && filterVillage !== 'All Villages') {

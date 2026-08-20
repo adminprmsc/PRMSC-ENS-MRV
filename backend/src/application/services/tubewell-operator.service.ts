@@ -25,6 +25,10 @@ import {
   WATER_LOG_OPERATOR_EDITABLE,
   normalizeWaterSubmissionStatus,
 } from '../../domain/constants/submission.constants';
+import {
+  intersectTehsilScope,
+  resolveTehsilScope,
+} from '../../domain/utils/tehsil-scope.util';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import {
   getCalendarDay,
@@ -513,6 +517,7 @@ export class TubewellOperatorService {
     userId: string,
     filterTehsil?: string,
     filterVillage?: string,
+    tehsilsCsv?: string,
   ) {
     const user = await this.userService.getUserById(userId);
     if (!user) {
@@ -533,15 +538,23 @@ export class TubewellOperatorService {
         relations: { meters: true },
       });
     } else if (ts.length) {
+      const queryTehsils = intersectTehsilScope(ts, filterTehsil, tehsilsCsv);
+      if (!queryTehsils.length) {
+        return [];
+      }
       systems = await this.waterSystemRepo.find({
-        where: { tehsil: In(ts) },
+        where: { tehsil: In(queryTehsils) },
         relations: { meters: true },
       });
     } else {
       return [];
     }
 
-    if (filterTehsil && filterTehsil !== 'All Tehsils') {
+    const tehsilScope = resolveTehsilScope(filterTehsil, tehsilsCsv);
+    if (tehsilScope?.length) {
+      const allowed = new Set(tehsilScope);
+      systems = systems.filter((s) => s.tehsil != null && allowed.has(s.tehsil));
+    } else if (filterTehsil && filterTehsil !== 'All Tehsils') {
       systems = systems.filter((s) => s.tehsil === filterTehsil);
     }
     if (filterVillage && filterVillage !== 'All Villages') {

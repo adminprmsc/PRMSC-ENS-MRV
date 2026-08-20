@@ -125,12 +125,14 @@ export class TubewellOperatorController {
   getWaterSystems(
     @CurrentUser() userId: string,
     @Query('tehsil') tehsil?: string,
+    @Query('tehsils') tehsils?: string,
     @Query('village') village?: string,
   ) {
     return this.tubewellOperatorService.getWaterSystems(
       userId,
       tehsil,
       village,
+      tehsils,
     );
   }
 

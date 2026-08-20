@@ -3,6 +3,7 @@ import {
   ALL_SETTLEMENTS,
   ALL_VILLAGES,
 } from "@/hooks/useLocationCatalog";
+import { buildScopedApiFilters } from "./buildScopedApiFilters";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
 export { ALL_VILLAGES, ALL_SETTLEMENTS };
@@ -51,21 +52,12 @@ export async function fetchRegisteredLocationSites(
 ): Promise<RegisteredLocationSite[]> {
   if (allowedTehsils.length === 0) return [];
 
-  const results = await Promise.allSettled(
-    allowedTehsils.map((tehsil) =>
-      fetchList({ tehsil, village: ALL_VILLAGES }),
-    ),
+  const scoped = buildScopedApiFilters(
+    { tehsil: ALL_ASSIGNED_TEHSILS, village: ALL_VILLAGES },
+    allowedTehsils,
   );
-
-  const byKey = new Map<string, RegisteredLocationSite>();
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue;
-    for (const site of toLocationSites(result.value)) {
-      const key = `${site.tehsil}|${site.village}|${site.settlement ?? ""}`;
-      byKey.set(key, site);
-    }
-  }
-  return [...byKey.values()];
+  const data = await fetchList(scoped);
+  return toLocationSites(data);
 }
 
 export function buildRegisteredLocationCascade(
