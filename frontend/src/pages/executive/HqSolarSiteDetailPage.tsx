@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { useClientPagination } from "@/hooks/useClientPagination";
 import { readHqDetailSearchParams } from "@/lib/hq-navigation";
+import { getApiErrorMessage } from "@/lib/api-error";
 import {
   getSolarSupplyData,
   getSolarSystem,
