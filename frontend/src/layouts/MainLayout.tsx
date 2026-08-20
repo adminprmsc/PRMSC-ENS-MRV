@@ -66,7 +66,6 @@ type NavItem = {
   label: string;
   end?: boolean;
   badge?: number;
-  openInNewTab?: boolean;
 };
 
 type NavSection = {
@@ -212,7 +211,6 @@ const MainLayout = () => {
             path: hqRoutes.sitesProgress,
             icon: <ListChecks className="size-4 shrink-0 opacity-90" />,
             label: "Sites Progress",
-            openInNewTab: true,
           },
           {
             path: hqRoutes.sitesTechInfo,
@@ -228,13 +226,11 @@ const MainLayout = () => {
             path: hqRoutes.waterAnalysis,
             icon: <Droplets className="size-4 shrink-0 opacity-90" />,
             label: "Water analysis",
-            openInNewTab: true,
           },
           {
             path: hqRoutes.solarAnalysis,
             icon: <Sun className="size-4 shrink-0 opacity-90" />,
             label: "Solar analysis",
-            openInNewTab: true,
           },
         ],
       });
@@ -507,8 +503,6 @@ const MainLayout = () => {
                       key={`${section.title}-${item.path}`}
                       to={item.path}
                       end={item.end ?? false}
-                      target={item.openInNewTab ? "_blank" : undefined}
-                      rel={item.openInNewTab ? "noopener noreferrer" : undefined}
                       className={({ isActive }) =>
                         navLinkClass(isActive, section.emphasis === "alert", false)
                       }
@@ -534,8 +528,6 @@ const MainLayout = () => {
                         <NavLink
                           to={item.path}
                           end={item.end ?? false}
-                          target={item.openInNewTab ? "_blank" : undefined}
-                          rel={item.openInNewTab ? "noopener noreferrer" : undefined}
                           className={({ isActive }) =>
                             navLinkClass(
                               isActive,
