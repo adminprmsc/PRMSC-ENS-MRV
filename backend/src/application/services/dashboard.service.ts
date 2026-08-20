@@ -885,26 +885,35 @@ export class DashboardService {
       qb = qb.andWhere('log.year = :year', { year });
     }
 
-    const results = await qb.getRawMany<Record<string, string>>();
+    const results = await qb.getRawMany<Record<string, unknown>>();
     const rows = results.map((r) => {
-      const expKwh = parseFloat(r.total_export_kwh || '0');
-      const expOffPeak = parseFloat(r.total_export_off_peak_kwh || '0');
-      const expPeak = parseFloat(r.total_export_peak_kwh || '0');
-      const impKwh = parseFloat(r.total_import_kwh || '0');
-      const impOffPeak = parseFloat(r.total_import_off_peak_kwh || '0');
-      const impPeak = parseFloat(r.total_import_peak_kwh || '0');
-      const netTotal = parseFloat(r.total_net_kwh || '0');
-      const netOffPeak = parseFloat(r.total_net_off_peak_kwh || '0');
-      const netPeak = parseFloat(r.total_net_peak_kwh || '0');
-      const mLogged = parseInt(r.months_logged || '0', 10);
-      const recs = parseInt(r.records_count || '0', 10);
+      const str = (v: unknown) =>
+        v == null ? '0' : typeof v === 'string' ? v : String(v);
+      const expKwh = parseFloat(str(r.total_export_kwh));
+      const expOffPeak = parseFloat(str(r.total_export_off_peak_kwh));
+      const expPeak = parseFloat(str(r.total_export_peak_kwh));
+      const impKwh = parseFloat(str(r.total_import_kwh));
+      const impOffPeak = parseFloat(str(r.total_import_off_peak_kwh));
+      const impPeak = parseFloat(str(r.total_import_peak_kwh));
+      const netTotal = parseFloat(str(r.total_net_kwh));
+      const netOffPeak = parseFloat(str(r.total_net_off_peak_kwh));
+      const netPeak = parseFloat(str(r.total_net_peak_kwh));
+      const mLogged = parseInt(str(r.months_logged), 10);
+      const recs = parseInt(str(r.records_count), 10);
+      const touRaw = r.any_tou_required;
+      const anyTou =
+        touRaw === true ||
+        touRaw === 'true' ||
+        touRaw === 't' ||
+        touRaw === 1 ||
+        touRaw === '1';
       return {
         solar_system_id: r.solar_system_id,
         unique_identifier: r.unique_identifier,
         tehsil: r.tehsil,
         village: r.village,
         settlement: r.settlement,
-        site_type: r.site_type ?? null,
+        site_type: (r.site_type as string | null) ?? null,
         disco_info: r.disco_info,
         bill_reference_number: r.bill_reference_number,
         total_export_kwh: expKwh,
@@ -916,7 +925,7 @@ export class DashboardService {
         total_net_kwh: netTotal,
         total_net_off_peak_kwh: netOffPeak,
         total_net_peak_kwh: netPeak,
-        any_tou_required: r.any_tou_required === 'true',
+        any_tou_required: anyTou,
         months_logged: mLogged,
         records_count: recs,
         avg_export_kwh_per_month: mLogged > 0 ? expKwh / mLogged : null,
