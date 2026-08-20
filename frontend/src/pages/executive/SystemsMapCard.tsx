@@ -47,7 +47,6 @@ import {
 } from "../../services/tehsilManagerOperatorService";
 import type { QueryFilters } from "../../services/types";
 import type { SolarSystemRow, WaterSystemRow } from "../../types/api";
-import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import { buildScopedApiFilters } from "./buildScopedApiFilters";
 import type {
   ProgramSolarSystemCoverage,
