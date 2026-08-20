@@ -7,12 +7,12 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { useWaterAnalysisColumns } from "./executiveAnalysisColumns";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
+import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveWaterSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 const ExecutiveWaterAnalysis = () => {
@@ -20,10 +20,11 @@ const ExecutiveWaterAnalysis = () => {
   const baseColumns = useWaterAnalysisColumns();
   const location = useLocation();
 
-  const { data: rows = [], isLoading, error } = useExecutiveWaterSystemsDetail(
-    scope.apiFilters,
-    scope.allowedTehsils,
-  );
+  const {
+    data: rows = [],
+    isLoading,
+    error,
+  } = useExecutiveWaterSystemsDetail(scope.apiFilters, scope.allowedTehsils);
 
   const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
     () => [
@@ -34,19 +35,23 @@ const ExecutiveWaterAnalysis = () => {
         meta: { filterVariant: "none" },
         cell: ({ row }) => {
           const systemId = row.original.water_system_id;
-          const returnPath = location.pathname + location.search;
+          const navState = {
+            from: location.pathname + location.search,
+            metrics: row.original,
+            year: scope.apiFilters.year,
+            ...(scope.apiFilters.month != null
+              ? { month: scope.apiFilters.month }
+              : {}),
+          };
 
           return (
             <Link
-              to={buildHqDetailHref(hqRoutes.waterSystem(systemId), {
-                from: returnPath,
-                year: Number(scope.apiFilters.year),
-                ...(scope.apiFilters.month != null
-                  ? { month: Number(scope.apiFilters.month) }
-                  : {}),
-              })}
-              target="_blank"
-              rel="noopener noreferrer"
+              to={withHqReturnPath(
+                hqRoutes.waterSystem(systemId),
+                location.pathname + location.search,
+              )}
+              state={navState}
+              {...HQ_NEW_TAB_LINK_PROPS}
               className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
             >
               Explore
@@ -56,7 +61,13 @@ const ExecutiveWaterAnalysis = () => {
         },
       },
     ],
-    [baseColumns, scope.apiFilters.year, scope.apiFilters.month, location.pathname, location.search],
+    [
+      baseColumns,
+      scope.apiFilters.year,
+      scope.apiFilters.month,
+      location.pathname,
+      location.search,
+    ],
   );
 
   const getRowId = useCallback(

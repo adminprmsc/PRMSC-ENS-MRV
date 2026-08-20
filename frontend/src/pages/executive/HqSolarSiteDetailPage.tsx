@@ -21,8 +21,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
+import { HQ_NEW_TAB_LINK_PROPS, resolveHqReturnPath, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useClientPagination } from "@/hooks/useClientPagination";
-import { readHqDetailSearchParams } from "@/lib/hq-navigation";
 import { getApiErrorMessage } from "@/lib/api-error";
 import {
   getSolarSupplyData,
@@ -89,13 +89,14 @@ function recordTotals(row: SolarMonthlySupplyListItem) {
     row.import_total ??
     Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0);
   const netKwh =
-    row.net_total ??
-    Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
+    row.net_total ?? Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
   return { exportKwh, importKwh, netKwh };
 }
 
 function monthLabel(month: number): string {
-  return month >= 1 && month <= 12 ? (MONTH_NAMES[month] ?? `Month ${month}`) : `Month ${month}`;
+  return month >= 1 && month <= 12
+    ? (MONTH_NAMES[month] ?? `Month ${month}`)
+    : `Month ${month}`;
 }
 
 function monthSortKey(row: SolarMonthlySupplyListItem): string {
@@ -125,9 +126,7 @@ export default function HqSolarSiteDetailPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
-  const queryContext = readHqDetailSearchParams(searchParams.toString());
-  const displayYear =
-    state.year ?? queryContext.year ?? new Date().getFullYear();
+  const displayYear = state.year ?? new Date().getFullYear();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -139,8 +138,7 @@ export default function HqSolarSiteDetailPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
-  const backTo =
-    state.from?.trim() || queryContext.from?.trim() || hqRoutes.solarAnalysis;
+  const backTo = resolveHqReturnPath(state, searchParams, hqRoutes.solarAnalysis);
   const metrics = state.metrics;
 
   const loadAll = async () => {
@@ -235,9 +233,9 @@ export default function HqSolarSiteDetailPage() {
 
   const monthOptions = useMemo(
     () =>
-      Array.from(
-        new Set(records.map((r) => monthSortKey(r))),
-      ).sort((a, b) => b.localeCompare(a)),
+      Array.from(new Set(records.map((r) => monthSortKey(r)))).sort((a, b) =>
+        b.localeCompare(a),
+      ),
     [records],
   );
 
@@ -288,7 +286,11 @@ export default function HqSolarSiteDetailPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(backTo)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(backTo)}
+            >
               <ArrowLeft className="size-4" />
               Back to previous page
             </Button>
@@ -512,7 +514,9 @@ export default function HqSolarSiteDetailPage() {
                 </p>
               ) : monthBranches.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                  <p className="text-sm font-medium">No records for this month</p>
+                  <p className="text-sm font-medium">
+                    No records for this month
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -528,11 +532,16 @@ export default function HqSolarSiteDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
                     <p className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">
-                        {monthBranches.reduce((n, b) => n + b.records.length, 0)}
+                        {monthBranches.reduce(
+                          (n, b) => n + b.records.length,
+                          0,
+                        )}
                       </span>{" "}
                       record
-                      {monthBranches.reduce((n, b) => n + b.records.length, 0) ===
-                      1
+                      {monthBranches.reduce(
+                        (n, b) => n + b.records.length,
+                        0,
+                      ) === 1
                         ? ""
                         : "s"}{" "}
                       ·{" "}
@@ -664,7 +673,8 @@ function MonthTreeBranch({
             <span
               className={cn(
                 "flex size-7 shrink-0 items-center justify-center rounded-md border border-border/80 bg-background text-muted-foreground transition-colors duration-200",
-                open && "border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+                open &&
+                  "border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
               )}
             >
               <ChevronRight
@@ -792,8 +802,12 @@ function MonthTreeBranch({
                           </div>
                         </div>
                         <Link
-                          to={hqRoutes.solarRecordDetails(row.id)}
+                          to={withHqReturnPath(
+                            hqRoutes.solarRecordDetails(row.id),
+                            fromPath,
+                          )}
                           state={{ from: fromPath }}
+                          {...HQ_NEW_TAB_LINK_PROPS}
                           className={cn(
                             buttonVariants({ size: "sm" }),
                             "h-8 shrink-0",

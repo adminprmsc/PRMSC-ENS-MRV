@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -70,6 +70,7 @@ import {
 import { Skeleton } from "../../../components/ui/skeleton";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
+import { resolveHqReturnPath } from "@/lib/hqDetailLink";
 import { tehsilRoutes, hqRoutes } from "../../../constants/routes";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { getApiErrorMessage } from "../../../lib/api-error";
@@ -538,6 +539,7 @@ export default function WaterSubmissionDetailsPage({
   const submissionId = String(id ?? "").trim();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const {
     getWaterSubmissionDetailForTehsilManager,
     acceptWaterSubmission,
@@ -556,10 +558,11 @@ export default function WaterSubmissionDetailsPage({
   const [acting, setActing] = useState(false);
 
   const backTo = useMemo(() => {
-    const from = (location.state as { from?: string } | null)?.from;
-    if (typeof from === "string" && from.trim()) return from;
-    return readOnly ? hqRoutes.waterAnalysis : tehsilRoutes.waterSubmissions;
-  }, [location.state, readOnly]);
+    const fallback = readOnly
+      ? hqRoutes.waterAnalysis
+      : tehsilRoutes.waterSubmissions;
+    return resolveHqReturnPath(location.state, searchParams, fallback);
+  }, [location.state, searchParams, readOnly]);
 
   const load = async () => {
     if (!submissionId) {

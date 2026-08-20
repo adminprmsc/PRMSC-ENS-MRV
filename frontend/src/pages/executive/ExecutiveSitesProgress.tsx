@@ -35,7 +35,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { SOLAR_SITE_TYPES } from "@/constants/solarSiteTypes";
 import { hqRoutes } from "@/constants/routes";
-import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgramDashboardApi } from "@/hooks";
 import {
@@ -44,6 +43,7 @@ import {
 } from "@/hooks/useLocationCatalog";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
+import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import {
   fetchScopedProgramDashboard,
   type ProgramSolarSystemCoverage,
@@ -112,13 +112,7 @@ function statusBadge(logged: boolean) {
   );
 }
 
-function WaterSiteDetails({
-  row,
-  returnPath,
-}: {
-  row: WaterGridRow;
-  returnPath: string;
-}) {
+function WaterSiteDetails({ row }: { row: WaterGridRow }) {
   const progressHint = Math.min(100, row.days_logged * 10);
   const progress = row.logged ? Math.max(progressHint, 8) : 0;
   return (
@@ -128,11 +122,8 @@ function WaterSiteDetails({
       badge={statusBadge(row.logged)}
       progress={progress}
       progressHint={`${progress}% period progress`}
-      actionHref={buildHqDetailHref(hqRoutes.waterSystem(row.id), {
-        from: returnPath,
-      })}
+      actionHref={hqRoutes.waterSystem(row.id)}
       actionLabel="Open site"
-      openInNewTab
       fields={[
         {
           label: "Location",
@@ -164,13 +155,7 @@ function WaterSiteDetails({
   );
 }
 
-function SolarSiteDetails({
-  row,
-  returnPath,
-}: {
-  row: SolarGridRow;
-  returnPath: string;
-}) {
+function SolarSiteDetails({ row }: { row: SolarGridRow }) {
   const progressHint = Math.min(100, row.months_logged * 25);
   const progress = row.logged ? Math.max(progressHint, 8) : 0;
   return (
@@ -180,11 +165,8 @@ function SolarSiteDetails({
       badge={statusBadge(row.logged)}
       progress={progress}
       progressHint={`${progress}% period progress`}
-      actionHref={buildHqDetailHref(hqRoutes.solarSite(row.id), {
-        from: returnPath,
-      })}
+      actionHref={hqRoutes.solarSite(row.id)}
       actionLabel="Open site"
-      openInNewTab
       fields={[
         {
           label: "Site type",
@@ -210,9 +192,9 @@ function SolarSiteDetails({
 }
 
 const ExecutiveSitesProgress = () => {
+  const { user } = useAuth();
   const location = useLocation();
   const returnPath = location.pathname + location.search;
-  const { user } = useAuth();
   const { getDashboardProgramSummary } = useProgramDashboardApi();
   const {
     tehsils: catalogTehsils,
@@ -442,11 +424,8 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={buildHqDetailHref(hqRoutes.waterSystem(row.original.id), {
-              from: returnPath,
-            })}
-            target="_blank"
-            rel="noopener noreferrer"
+            to={withHqReturnPath(hqRoutes.waterSystem(row.original.id), returnPath)}
+            {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -527,11 +506,8 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={buildHqDetailHref(hqRoutes.solarSite(row.original.id), {
-              from: returnPath,
-            })}
-            target="_blank"
-            rel="noopener noreferrer"
+            to={withHqReturnPath(hqRoutes.solarSite(row.original.id), returnPath)}
+            {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -785,9 +761,7 @@ const ExecutiveSitesProgress = () => {
               rows={waterRows}
               columns={waterColumns}
               getRowId={(row) => row.id}
-              renderRowDetails={(row) => (
-                <WaterSiteDetails row={row} returnPath={returnPath} />
-              )}
+              renderRowDetails={(row) => <WaterSiteDetails row={row} />}
             />
           )}
         </TabsContent>
@@ -803,9 +777,7 @@ const ExecutiveSitesProgress = () => {
               rows={solarRows}
               columns={solarColumns}
               getRowId={(row) => row.id}
-              renderRowDetails={(row) => (
-                <SolarSiteDetails row={row} returnPath={returnPath} />
-              )}
+              renderRowDetails={(row) => <SolarSiteDetails row={row} />}
             />
           )}
         </TabsContent>

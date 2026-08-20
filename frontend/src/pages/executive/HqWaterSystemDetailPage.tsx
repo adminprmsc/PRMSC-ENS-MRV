@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
+import { HQ_NEW_TAB_LINK_PROPS, resolveHqReturnPath, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useClientPagination } from "@/hooks/useClientPagination";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getWaterSystem } from "@/services/tehsilManagerOperatorService";
@@ -30,7 +31,6 @@ import {
   formatPakistanDateTime,
   formatPakistanIsoDateLabel,
 } from "@/utils/pakistanTime";
-import { readHqDetailSearchParams } from "@/lib/hq-navigation";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
 import { submissionLogDateKey } from "./hqSubmissionTypes";
@@ -202,22 +202,19 @@ export default function HqWaterSystemDetailPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
-  const queryContext = readHqDetailSearchParams(searchParams.toString());
-
-  const backTo =
-    state.from?.trim() || queryContext.from?.trim() || hqRoutes.waterAnalysis;
-  const scopeYear = state.year ?? queryContext.year;
-  const scopeMonth = state.month ?? queryContext.month;
-  const metrics = state.metrics;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [system, setSystem] = useState<WaterSystemRow | null>(null);
+  /** YYYY-MM-DD filter for exploring a single log day */
   const [dayFilter, setDayFilter] = useState("");
+  /** Secondary system registry details — collapsed by default */
   const [systemDetailsOpen, setSystemDetailsOpen] = useState(false);
   const { submissions, loading: logsLoading, error: logsError, reload } =
     useHqSubmissions();
 
+  const backTo = resolveHqReturnPath(state, searchParams, hqRoutes.waterAnalysis);
+  const metrics = state.metrics;
   const bulkMeter = Boolean(system?.bulk_meter_installed);
   const flowRateM3h = numOrNull(system?.pump_flow_rate);
 
@@ -225,15 +222,15 @@ export default function HqWaterSystemDetailPage() {
     const filterOpts: { waterSystemId: string; scope?: HqSubmissionScope } = {
       waterSystemId: systemId,
     };
-    if (scopeYear != null || scopeMonth != null) {
+    if (state.year != null || state.month != null) {
       filterOpts.scope = {
-        ...(scopeYear != null ? { year: scopeYear } : {}),
-        ...(scopeMonth != null ? { month: scopeMonth } : {}),
+        ...(state.year != null ? { year: state.year } : {}),
+        ...(state.month != null ? { month: state.month } : {}),
       };
     }
     const rows = filterApprovedSubmissions(submissions, filterOpts);
     return rows;
-  }, [submissions, systemId, scopeYear, scopeMonth]);
+  }, [submissions, systemId, state.year, state.month]);
 
   const dayStats = useMemo(() => {
     const map = new Map<
@@ -336,7 +333,7 @@ export default function HqWaterSystemDetailPage() {
   useEffect(() => {
     daysPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayBranches.length, scopeYear, scopeMonth, dayFilter]);
+  }, [dayBranches.length, state.year, state.month, dayFilter]);
 
   const loadSystem = async () => {
     if (!systemId) {
@@ -957,8 +954,12 @@ function DayTreeBranch({
                           )}
                           <td className="whitespace-nowrap px-3 py-2 text-right">
                             <Link
-                              to={hqRoutes.waterSubmissionDetails(row.id)}
+                              to={withHqReturnPath(
+                                hqRoutes.waterSubmissionDetails(row.id),
+                                fromPath,
+                              )}
                               state={{ from: fromPath, systemId }}
+                              {...HQ_NEW_TAB_LINK_PROPS}
                               className={cn(
                                 buttonVariants({
                                   size: "sm",

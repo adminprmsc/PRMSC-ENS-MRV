@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Loader2, RotateCcw, Sun } from "lucide-react";
 
 import { PageHeader, PageShell } from "@/components/layout";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
+import { resolveHqReturnPath } from "@/lib/hqDetailLink";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getSolarSupplyRecord } from "@/services/tehsilManagerOperatorService";
 import type { SolarMonthlySupplyRecordDetail } from "@/types/api";
@@ -55,15 +56,16 @@ export default function HqSolarRecordViewPage() {
   const recordId = String(id ?? "").trim();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [record, setRecord] = useState<SolarMonthlySupplyRecordDetail | null>(null);
 
-  const backTo = useMemo(() => {
-    const from = (location.state as { from?: string } | null)?.from;
-    return typeof from === "string" && from.trim() ? from : hqRoutes.solarAnalysis;
-  }, [location.state]);
+  const backTo = useMemo(
+    () => resolveHqReturnPath(location.state, searchParams, hqRoutes.solarAnalysis),
+    [location.state, searchParams],
+  );
 
   const load = async () => {
     if (!recordId) {

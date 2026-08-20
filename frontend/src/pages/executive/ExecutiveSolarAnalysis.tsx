@@ -7,12 +7,12 @@ import { PageHeader, PageShell } from "@/components/layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DataGridSkeleton from "@/components/DataGridSkeleton";
 import { hqRoutes } from "@/constants/routes";
-import { buildHqDetailHref } from "@/lib/hq-navigation";
 import { getApiErrorMessage } from "@/lib/api-error";
 import ExecutiveScopeFiltersCard from "./ExecutiveScopeFiltersCard";
 import { useSolarAnalysisColumns } from "./executiveAnalysisColumns";
 import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
+import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveSolarSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 const ExecutiveSolarAnalysis = () => {
@@ -34,12 +34,16 @@ const ExecutiveSolarAnalysis = () => {
         meta: { filterVariant: "none" },
         cell: ({ row }) => (
           <Link
-            to={buildHqDetailHref(hqRoutes.solarSite(row.original.solar_system_id), {
+            to={withHqReturnPath(
+              hqRoutes.solarSite(row.original.solar_system_id),
+              location.pathname + location.search,
+            )}
+            state={{
               from: location.pathname + location.search,
-              year: Number(scope.apiFilters.year),
-            })}
-            target="_blank"
-            rel="noopener noreferrer"
+              metrics: row.original,
+              year: scope.apiFilters.year,
+            }}
+            {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
           >
             Explore
