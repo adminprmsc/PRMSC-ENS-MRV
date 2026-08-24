@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Production VM uses plain HTTP until TLS is configured. -->
+    <!-- Production uses HTTP until TLS is enabled on mrv.essprmsc.com (port 443). -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">101.50.87.168</domain>
+        <domain includeSubdomains="false">mrv.essprmsc.com</domain>
     </domain-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>

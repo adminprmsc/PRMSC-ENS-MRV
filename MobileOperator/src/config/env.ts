@@ -1,6 +1,7 @@
 import Config from 'react-native-config';
 
-const PROD_API_URL = 'http://101.50.87.168/api';
+// Use HTTPS once TLS is enabled on the VM (see deploy/DOMAIN.md).
+const PROD_API_URL = 'http://mrv.essprmsc.com/api';
 const DEV_API_URL = 'http://127.0.0.1:5001/api';
 
 const ENV = String((Config as unknown as { ENV?: unknown }).ENV ?? '')

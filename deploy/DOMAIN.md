@@ -25,6 +25,8 @@ PUBLIC_ORIGIN=https://mrv.essprmsc.com
 PASSWORD_RESET_FRONTEND_URL=https://mrv.essprmsc.com
 ```
 
+**Mobile app** (`MobileOperator/src/config/env.ts`): uses `http://mrv.essprmsc.com/api` until HTTPS (port 443) is live on the VM. After TLS is enabled, switch to `https://mrv.essprmsc.com/api` and rebuild the release APK/IPA.
+
 Then redeploy:
 
 ```bash
