@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Production URL** | https://mrv-system.essprmsc.com |
+| **Production URL** | https://mrv.essprmsc.com |
 | **VM IP** | `101.50.87.168` |
 | **Platform ops** | [essprmsc-platform](https://github.com/YOUR_ORG/essprmsc-platform) |
 
@@ -21,8 +21,8 @@ MRV-specific HTTPS steps:
 After HTTPS is enabled, set in `.env.docker`:
 
 ```env
-PUBLIC_ORIGIN=https://mrv-system.essprmsc.com
-PASSWORD_RESET_FRONTEND_URL=https://mrv-system.essprmsc.com
+PUBLIC_ORIGIN=https://mrv.essprmsc.com
+PASSWORD_RESET_FRONTEND_URL=https://mrv.essprmsc.com
 ```
 
 Then redeploy:
