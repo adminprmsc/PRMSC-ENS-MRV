@@ -14,7 +14,11 @@ import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
  * HQ analysis scope filters — tehsil / village / settlement options come from
  * the DB location catalog (single source of truth).
  */
-export function useExecutiveScopeFilters() {
+export function useExecutiveScopeFilters(options?: {
+  /** When false, omit year/month from UI and API (Solar analysis). */
+  showPeriodFilters?: boolean;
+}) {
+  const showPeriodFilters = options?.showPeriodFilters ?? true;
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const {
@@ -152,16 +156,18 @@ export function useExecutiveScopeFilters() {
     const base: Record<string, string | number> = {
       tehsil: activeFilters.tehsil,
       village: activeFilters.village,
-      year: Number(activeFilters.year),
     };
-    if (activeFilters.month !== "All Months") {
-      base.month = Number(activeFilters.month);
+    if (showPeriodFilters) {
+      base.year = Number(activeFilters.year);
+      if (activeFilters.month !== "All Months") {
+        base.month = Number(activeFilters.month);
+      }
     }
     if (activeFilters.settlement !== ALL_SETTLEMENTS) {
       base.settlement = activeFilters.settlement;
     }
     return base;
-  }, [activeFilters]);
+  }, [activeFilters, showPeriodFilters]);
 
   const activeScopeLabel = useMemo(() => {
     const tehsil =
@@ -178,12 +184,15 @@ export function useExecutiveScopeFilters() {
       activeFilters.settlement === ALL_SETTLEMENTS
         ? "All settlements"
         : activeFilters.settlement;
+    if (!showPeriodFilters) {
+      return `${tehsil} · ${village} · ${settlement}`;
+    }
     const month =
       activeFilters.month === "All Months"
         ? "All months"
         : EXECUTIVE_MONTH_LABEL(Number(activeFilters.month));
     return `${tehsil} · ${village} · ${settlement} · ${activeFilters.year} · ${month}`;
-  }, [activeFilters, allowedTehsils.length, restrictTehsils]);
+  }, [activeFilters, allowedTehsils.length, restrictTehsils, showPeriodFilters]);
 
   const applyFilters = useCallback(() => {
     setActiveFilters(filters);

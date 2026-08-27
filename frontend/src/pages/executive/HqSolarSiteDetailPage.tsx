@@ -12,11 +12,22 @@ import {
 } from "lucide-react";
 
 import { CopyableId } from "@/components/common/CopyableId";
-import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import { kv, PageHeader, PageShell, StatCard } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
 import { cn } from "@/lib/utils";
@@ -31,6 +42,7 @@ import {
 import type { SolarMonthlySupplyListItem, SolarSystemRow } from "@/types/api";
 import { formatPakistanDateTime } from "@/utils/pakistanTime";
 import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
+import { EXECUTIVE_MONTHS, EXECUTIVE_YEARS } from "./executiveAnalysisTypes";
 import PaginatedListFooter from "./PaginatedListFooter";
 
 const MONTH_NAMES = [
@@ -124,9 +136,21 @@ export default function HqSolarSiteDetailPage() {
   const systemId = String(id ?? "").trim();
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
-  const displayYear = state.year ?? new Date().getFullYear();
+
+  const initialYear = String(
+    searchParams.get("year")?.trim() ||
+      state.year ||
+      new Date().getFullYear(),
+  );
+  const initialMonth =
+    searchParams.get("month")?.trim() || "All Months";
+
+  const [filterYear, setFilterYear] = useState(initialYear);
+  const [filterMonth, setFilterMonth] = useState(initialMonth);
+  const [activeYear, setActiveYear] = useState(initialYear);
+  const [activeMonth, setActiveMonth] = useState(initialMonth);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,11 +159,23 @@ export default function HqSolarSiteDetailPage() {
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsError, setRecordsError] = useState("");
   const [siteDetailsOpen, setSiteDetailsOpen] = useState(false);
-  const [monthFilter, setMonthFilter] = useState("");
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   const backTo = resolveHqReturnPath(state, searchParams, hqRoutes.solarAnalysis);
   const metrics = state.metrics;
+  const activeYearNum = Number(activeYear);
+
+  const applyPeriodFilters = () => {
+    setActiveYear(filterYear);
+    setActiveMonth(filterMonth);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("year", filterYear);
+      if (filterMonth === "All Months") next.delete("month");
+      else next.set("month", filterMonth);
+      return next;
+    });
+  };
 
   const loadAll = async () => {
     if (!systemId) {
@@ -160,7 +196,7 @@ export default function HqSolarSiteDetailPage() {
           tehsil: res.tehsil,
           village: res.village,
           settlement: res.settlement ?? "",
-          year: String(displayYear),
+          year: activeYear,
         });
         setRecords(
           Array.isArray(data) ? (data as SolarMonthlySupplyListItem[]) : [],
@@ -183,7 +219,15 @@ export default function HqSolarSiteDetailPage() {
   useEffect(() => {
     void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemId, displayYear]);
+  }, [systemId, activeYear]);
+
+  const periodScopeLabel = useMemo(() => {
+    const monthLabelText =
+      activeMonth === "All Months"
+        ? "All months"
+        : (EXECUTIVE_MONTHS[Number(activeMonth) - 1] ?? activeMonth);
+    return `${activeYear} · ${monthLabelText}`;
+  }, [activeYear, activeMonth]);
 
   const title = site?.unique_identifier
     ? kv(site.unique_identifier)
@@ -193,9 +237,11 @@ export default function HqSolarSiteDetailPage() {
 
   const monthBranches = useMemo((): MonthBranch[] => {
     const byMonth = new Map<string, SolarMonthlySupplyListItem[]>();
+    const monthNum =
+      activeMonth === "All Months" ? null : Number(activeMonth);
     for (const row of records) {
+      if (monthNum != null && row.month !== monthNum) continue;
       const key = monthSortKey(row);
-      if (monthFilter && key !== monthFilter) continue;
       const list = byMonth.get(key);
       if (list) list.push(row);
       else byMonth.set(key, [row]);
@@ -221,7 +267,7 @@ export default function HqSolarSiteDetailPage() {
         const first = sorted[0];
         return {
           key,
-          year: first?.year ?? displayYear,
+          year: first?.year ?? activeYearNum,
           month: first?.month ?? 0,
           records: sorted,
           exportKwh,
@@ -229,32 +275,9 @@ export default function HqSolarSiteDetailPage() {
           netKwh,
         };
       });
-  }, [records, monthFilter, displayYear]);
+  }, [records, activeMonth, activeYearNum]);
 
-  const monthOptions = useMemo(
-    () =>
-      Array.from(new Set(records.map((r) => monthSortKey(r)))).sort((a, b) =>
-        b.localeCompare(a),
-      ),
-    [records],
-  );
-
-  const latestMonthKey = monthOptions[0] ?? "";
-
-  const monthPickerLabel = (key: string) => {
-    const [y, m] = key.split("-");
-    const month = Number(m);
-    const count = records.filter((r) => monthSortKey(r) === key).length;
-    return `${monthLabel(month)} ${y} · ${count} record${count === 1 ? "" : "s"}`;
-  };
-
-  useEffect(() => {
-    if (monthFilter) {
-      setExpandedMonths(new Set([monthFilter]));
-      return;
-    }
-    setExpandedMonths(new Set(latestMonthKey ? [latestMonthKey] : []));
-  }, [monthFilter, latestMonthKey]);
+  const latestMonthKey = monthBranches[0]?.key ?? "";
 
   const toggleMonth = (key: string) => {
     setExpandedMonths((prev) => {
@@ -268,9 +291,18 @@ export default function HqSolarSiteDetailPage() {
   const monthsPagination = useClientPagination(monthBranches, 8);
 
   useEffect(() => {
+    if (activeMonth !== "All Months") {
+      const key = `${activeYear}-${String(activeMonth).padStart(2, "0")}`;
+      setExpandedMonths(new Set([key]));
+      return;
+    }
+    setExpandedMonths(new Set(latestMonthKey ? [latestMonthKey] : []));
+  }, [activeMonth, activeYear, latestMonthKey]);
+
+  useEffect(() => {
     monthsPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthBranches.length, displayYear, monthFilter]);
+  }, [monthBranches.length, activeYear, activeMonth]);
 
   return (
     <PageShell>
@@ -446,58 +478,121 @@ export default function HqSolarSiteDetailPage() {
             <CardHeader className="border-b border-border/60 bg-muted/20 py-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarDays className="size-4 text-muted-foreground" />
-                Monthly energy records ({displayYear})
+                Monthly energy records
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                Months group as branches. Expand for peak / off-peak detail and
-                open a record — newest update first within a month.
+                Filter by year and month, then expand a branch for peak / off-peak
+                detail — newest update first within a month.
               </p>
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">Period filters</p>
+                <Badge variant="secondary" className="font-normal">
+                  {periodScopeLabel}
+                </Badge>
+              </div>
+
+              <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Field className="min-w-0 gap-1">
+                  <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Year
+                  </FieldLabel>
+                  <Select
+                    value={filterYear}
+                    onValueChange={(v) => setFilterYear(v ?? filterYear)}
+                  >
+                    <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXECUTIVE_YEARS.map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field className="min-w-0 gap-1">
+                  <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Month
+                  </FieldLabel>
+                  <Select
+                    value={filterMonth}
+                    onValueChange={(v) => setFilterMonth(v ?? filterMonth)}
+                  >
+                    <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All Months">All months</SelectItem>
+                      {EXECUTIVE_MONTHS.map((label, index) => (
+                        <SelectItem key={label} value={String(index + 1)}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <div className="col-span-2 flex items-end sm:col-span-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 w-full sm:w-auto sm:min-w-[6rem]"
+                    onClick={applyPeriodFilters}
+                    disabled={recordsLoading}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </FieldGroup>
+
               {!recordsLoading && !recordsError && records.length > 0 ? (
-                <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3">
-                  <div className="min-w-0 flex-1 sm:max-w-md">
-                    <SearchableOptionField
-                      label="Jump to month"
-                      value={monthFilter}
-                      options={monthOptions}
-                      allValue=""
-                      allLabel={`All months · ${records.length} records · ${monthOptions.length} months`}
-                      placeholder="Search month (Jun, 2026-06…)…"
-                      maxResults={24}
-                      onChange={setMonthFilter}
-                      optionLabel={monthPickerLabel}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:ms-auto sm:pb-px">
-                    {latestMonthKey ? (
-                      <Button
-                        type="button"
-                        variant={
-                          monthFilter === latestMonthKey
-                            ? "secondary"
-                            : "outline"
-                        }
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => setMonthFilter(latestMonthKey)}
-                      >
-                        Latest month
-                      </Button>
-                    ) : null}
-                    {monthFilter ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs text-muted-foreground"
-                        onClick={() => setMonthFilter("")}
-                      >
-                        Show all months
-                      </Button>
-                    ) : null}
-                  </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {latestMonthKey ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        const [, m] = latestMonthKey.split("-");
+                        setFilterMonth(String(Number(m)));
+                        setActiveMonth(String(Number(m)));
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev);
+                          next.set("year", activeYear);
+                          next.set("month", String(Number(m)));
+                          return next;
+                        });
+                      }}
+                    >
+                      Latest month
+                    </Button>
+                  ) : null}
+                  {activeMonth !== "All Months" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-muted-foreground"
+                      onClick={() => {
+                        setFilterMonth("All Months");
+                        setActiveMonth("All Months");
+                        setSearchParams((prev) => {
+                          const next = new URLSearchParams(prev);
+                          next.delete("month");
+                          return next;
+                        });
+                      }}
+                    >
+                      Show all months
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -510,19 +605,27 @@ export default function HqSolarSiteDetailPage() {
                 <p className="text-sm text-destructive">{recordsError}</p>
               ) : records.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No monthly records for {displayYear} at this site.
+                  No monthly records for {activeYear} at this site.
                 </p>
               ) : monthBranches.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
                   <p className="text-sm font-medium">
-                    No records for this month
+                    No records for {periodScopeLabel}
                   </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     className="mt-3 h-8"
-                    onClick={() => setMonthFilter("")}
+                    onClick={() => {
+                      setFilterMonth("All Months");
+                      setActiveMonth("All Months");
+                      setSearchParams((prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.delete("month");
+                        return next;
+                      });
+                    }}
                   >
                     Show all months
                   </Button>

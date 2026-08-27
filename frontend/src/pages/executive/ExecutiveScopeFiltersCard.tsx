@@ -32,6 +32,8 @@ type ExecutiveScopeFiltersCardProps = {
   settlementOptions: string[];
   villageEnabled: boolean;
   settlementEnabled: boolean;
+  /** When false, hide year/month (e.g. Solar analysis — location only). */
+  showPeriodFilters?: boolean;
   locationMeta?: {
     siteCount: number;
     villageCount: number;
@@ -123,6 +125,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   settlementOptions,
   villageEnabled,
   settlementEnabled,
+  showPeriodFilters = true,
   locationMeta,
   locationsLoading,
   onUpdate,
@@ -146,7 +149,13 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
           </Badge>
         </div>
 
-        <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <FieldGroup
+          className={
+            showPeriodFilters
+              ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
+              : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+          }
+        >
           <FilterSelect
             label="Tehsil"
             value={filters.tehsil}
@@ -180,29 +189,33 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
             onChange={(v) => onUpdate("settlement", v)}
           />
 
-          <FilterSelect
-            label="Year"
-            value={filters.year}
-            placeholder="Year"
-            options={EXECUTIVE_YEARS.map(String)}
-            onChange={(v) => onUpdate("year", v)}
-          />
+          {showPeriodFilters ? (
+            <>
+              <FilterSelect
+                label="Year"
+                value={filters.year}
+                placeholder="Year"
+                options={EXECUTIVE_YEARS.map(String)}
+                onChange={(v) => onUpdate("year", v)}
+              />
 
-          <FilterSelect
-            label="Month"
-            value={filters.month}
-            placeholder="Month"
-            options={[
-              "All Months",
-              ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
-            ]}
-            optionLabel={(v) =>
-              v === "All Months"
-                ? "All months"
-                : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
-            }
-            onChange={(v) => onUpdate("month", v)}
-          />
+              <FilterSelect
+                label="Month"
+                value={filters.month}
+                placeholder="Month"
+                options={[
+                  "All Months",
+                  ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
+                ]}
+                optionLabel={(v) =>
+                  v === "All Months"
+                    ? "All months"
+                    : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
+                }
+                onChange={(v) => onUpdate("month", v)}
+              />
+            </>
+          ) : null}
 
           <div className="flex items-end">
             <Button type="button" size="sm" className="h-8 w-full" onClick={onApply}>

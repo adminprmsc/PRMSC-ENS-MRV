@@ -16,7 +16,7 @@ import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveSolarSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 const ExecutiveSolarAnalysis = () => {
-  const scope = useExecutiveScopeFilters();
+  const scope = useExecutiveScopeFilters({ showPeriodFilters: false });
   const baseColumns = useSolarAnalysisColumns();
   const location = useLocation();
 
@@ -41,7 +41,6 @@ const ExecutiveSolarAnalysis = () => {
             state={{
               from: location.pathname + location.search,
               metrics: row.original,
-              year: scope.apiFilters.year,
             }}
             {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
@@ -52,7 +51,7 @@ const ExecutiveSolarAnalysis = () => {
         ),
       },
     ],
-    [baseColumns, scope.apiFilters.year, location.pathname, location.search],
+    [baseColumns, location.pathname, location.search],
   );
 
   const getRowId = useCallback((row: SolarSystemDetailRow) => row.solar_system_id, []);
@@ -66,7 +65,7 @@ const ExecutiveSolarAnalysis = () => {
       <PageHeader
         icon={<Sun className="text-amber-600" />}
         title="Solar analysis"
-        description="Filter by area and year, then open a site to review monthly records."
+        description="Filter by tehsil, village, and settlement, then open a site to review records."
       />
 
       <ExecutiveScopeFiltersCard
@@ -77,6 +76,7 @@ const ExecutiveSolarAnalysis = () => {
         settlementOptions={scope.settlementOptions}
         villageEnabled={scope.villageEnabled}
         settlementEnabled={scope.settlementEnabled}
+        showPeriodFilters={false}
         locationMeta={scope.locationMeta}
         locationsLoading={scope.catalogLoading}
         onUpdate={scope.updateFilter}
@@ -94,7 +94,7 @@ const ExecutiveSolarAnalysis = () => {
           title="Sites"
           rows={rows}
           columns={columns}
-          exportFileName={`solar-systems-${scope.activeFilters.year}-${scope.activeFilters.tehsil}`}
+          exportFileName={`solar-systems-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
           getRowId={getRowId}
           initialPageSize={25}
         />
