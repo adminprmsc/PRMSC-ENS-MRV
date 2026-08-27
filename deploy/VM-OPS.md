@@ -360,6 +360,8 @@ curl -s http://101.50.86.169/api/health
 | Postgres restart loop    | Usually PG version mismatch — see [README.md](./README.md); may need `down -v` + restore |
 | Login fails after deploy | New `JWT_SECRET_KEY` — users must log in again                                           |
 | CORS errors in browser   | Check `PUBLIC_ORIGIN=http://101.50.86.169` in `.env.docker`, rebuild backend             |
+| Upload 500 / `EAI_AGAIN` | VM DNS broken — backend can't reach Supabase storage. See **DNS / uploads** below          |
+| `Could not resolve host: github.com` | Fix VM DNS (`/etc/resolv.conf`) then `git pull` works                  |
 | Container not running    | `docker compose --env-file .env.docker ps -a` then `logs <service>`                      |
 | Out of disk              | `df -h` and `docker system df`                                                           |
 
@@ -368,6 +370,39 @@ Free unused Docker images/build cache (safe on a tight VM):
 ```bash
 docker system prune -f
 ```
+
+### DNS / uploads (`getaddrinfo EAI_AGAIN`)
+
+Symptom: file upload returns 500, backend log shows e.g.
+`File upload to storage failed: getaddrinfo EAI_AGAIN …storage.supabase.co`.
+
+The VM (or Docker embedded DNS) cannot resolve external hostnames. Fix on the **host** and recreate **backend**:
+
+```bash
+# Host resolver (temporary until reboot — ask Nayatel for permanent DNS if needed)
+echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf
+
+# Test from host
+ping -c 2 hyadnyrczyftkgdqyjhr.storage.supabase.co
+
+cd ~/PRMSC-ENS-MRV
+git pull --ff-only origin main   # includes dns: 8.8.8.8 on backend in docker-compose.yml
+docker compose --env-file .env.docker up -d --force-recreate backend
+
+# Test from inside backend container
+docker compose --env-file .env.docker exec backend node -e \
+  "require('dns').lookup('hyadnyrczyftkgdqyjhr.storage.supabase.co', (e,a)=>console.log(e||a))"
+```
+
+If `git pull` still fails, add under `backend:` in `docker-compose.yml` manually:
+
+```yaml
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+```
+
+Then `docker compose --env-file .env.docker up -d --force-recreate backend`.
 
 ---
 
