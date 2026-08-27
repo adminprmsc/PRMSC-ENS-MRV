@@ -13,6 +13,12 @@ import { getWaterSystem } from "../../../../services/tehsilManagerOperatorServic
 import type { WaterSystemRow } from "../../../../types/api";
 import Toast from "../../../../components/Toast";
 import { formatPakistanDateTime } from "../../../../utils/pakistanTime";
+import { formatPumpCapacityKw } from "../../../../utils/waterPump";
+
+function unitValue(value: unknown, unit: string): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return `${value} ${unit}`;
+}
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -154,7 +160,18 @@ export default function WaterSystemViewPage() {
                 />
                 <DetailRow label="Pump model" value={kv(system.pump_model)} />
                 <DetailRow label="Pump serial" value={kv(system.pump_serial_number)} />
-                <DetailRow label="Flow rate" value={kv(system.pump_flow_rate)} />
+                <DetailRow
+                  label="Horsepower"
+                  value={unitValue(system.pump_horse_power, "HP")}
+                />
+                <DetailRow
+                  label="Pump capacity"
+                  value={formatPumpCapacityKw(system.pump_horse_power)}
+                />
+                <DetailRow
+                  label="Flow rate"
+                  value={unitValue(system.pump_flow_rate, "m³/h")}
+                />
                 {system.bulk_meter_installed ? (
                   <>
                     <DetailRow label="Meter model" value={kv(system.meter_model)} />
@@ -175,11 +192,15 @@ export default function WaterSystemViewPage() {
                   <>
                     <DetailRow
                       label="Tank capacity"
-                      value={kv(system.ohr_tank_capacity)}
+                      value={unitValue(system.ohr_tank_capacity, "m³")}
                     />
                     <DetailRow
-                      label="Fill required"
-                      value={kv(system.ohr_fill_required)}
+                      label="Design fill time"
+                      value={unitValue(system.ohr_fill_required, "min")}
+                    />
+                    <DetailRow
+                      label="Actual fill time"
+                      value={unitValue(system.time_to_fill, "min")}
                     />
                   </>
                 )}

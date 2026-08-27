@@ -31,6 +31,7 @@ import {
   formatPakistanDateTime,
   formatPakistanIsoDateLabel,
 } from "@/utils/pakistanTime";
+import { formatPumpCapacityKw } from "@/utils/waterPump";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
 import { submissionLogDateKey } from "./hqSubmissionTypes";
@@ -519,6 +520,14 @@ export default function HqWaterSystemDetailPage() {
                     value={kv(system.pump_serial_number)}
                   />
                   <MetaItem
+                    label="Horsepower"
+                    value={formatWithUnit(system.pump_horse_power, "HP")}
+                  />
+                  <MetaItem
+                    label="Pump capacity"
+                    value={formatPumpCapacityKw(system.pump_horse_power)}
+                  />
+                  <MetaItem
                     label={`Flow rate (${FLOW_RATE_UNIT})`}
                     value={kv(system.pump_flow_rate)}
                   />
@@ -545,11 +554,15 @@ export default function HqWaterSystemDetailPage() {
                     <>
                       <MetaItem
                         label="Tank capacity"
-                        value={kv(system.ohr_tank_capacity)}
+                        value={formatWithUnit(system.ohr_tank_capacity, "m³")}
                       />
                       <MetaItem
-                        label="Fill required"
-                        value={kv(system.ohr_fill_required)}
+                        label="Design fill time"
+                        value={formatWithUnit(system.ohr_fill_required, "min")}
+                      />
+                      <MetaItem
+                        label="Actual fill time"
+                        value={formatWithUnit(system.time_to_fill, "min")}
                       />
                     </>
                   )}

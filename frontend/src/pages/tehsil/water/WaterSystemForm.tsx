@@ -52,6 +52,9 @@ import { getApiErrorMessage } from "../../../lib/api-error";
 import { SearchableOptionField } from "../../../components/common/SearchableOptionField";
 import { useLocationCatalog } from "../../../hooks/useLocationCatalog";
 import { cn } from "../../../lib/utils";
+import {
+  pumpCapacityKwInputValue,
+} from "../../../utils/waterPump";
 
 function FormField({
   label,
@@ -178,6 +181,9 @@ const WaterSystemForm = () => {
     setFormData({
       ...formData,
       [name]: value,
+      ...(name === "pump_horse_power" && {
+        pump_capacity: pumpCapacityKwInputValue(Number(value)),
+      }),
       ...(name === "tehsil" && { village: "", settlement: "" }),
       ...(name === "village" && { settlement: "" }),
     });
@@ -288,7 +294,7 @@ const WaterSystemForm = () => {
     bulk_meter_installed: "Bulk meter installed",
     ohr_tank_capacity: "Tank capacity (m3)",
     ohr_fill_required: "Design time to fill tank (minutes)",
-    pump_capacity: "Pump capacity (kW)",
+    pump_capacity: "Pump capacity (kW, from HP)",
     pump_head: "Pump head (m)",
     pump_horse_power: "Pump horse power (HP)",
     time_to_fill: "Actual time to fill the tank",
@@ -312,7 +318,6 @@ const WaterSystemForm = () => {
           : ([
               "ohr_tank_capacity",
               "ohr_fill_required",
-              "pump_capacity",
               "pump_head",
               "time_to_fill",
             ] as Array<keyof typeof formData>)
@@ -704,10 +709,11 @@ const WaterSystemForm = () => {
                           inputMode="decimal"
                           name="pump_capacity"
                           value={formData.pump_capacity}
-                          onChange={handleChange}
-                          className={inputClass}
-                          placeholder="e.g. 5"
+                          readOnly
+                          className={cn(inputClass, "bg-muted/40")}
+                          placeholder="Calculated from HP"
                           disabled={loading}
+                          aria-readonly
                         />
                       </FormField>
                       <FormField label="Pump head (m)" required>

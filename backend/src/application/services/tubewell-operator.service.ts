@@ -37,6 +37,7 @@ import {
   toIsoDateString,
   toIsoDateTimeString,
 } from '../../domain/utils/date.util';
+import { pumpCapacityKwFromHp } from '../../domain/utils/water-pump.util';
 import { UserService } from './user.service';
 import { StorageService } from './storage.service';
 import { WorkflowService } from './workflow.service';
@@ -1897,7 +1898,7 @@ export class TubewellOperatorService {
       bulk_meter_installed: s.bulkMeterInstalled ?? null,
       ohr_tank_capacity: s.ohrTankCapacity,
       ohr_fill_required: s.ohrFillRequired,
-      pump_capacity: s.pumpCapacity,
+      pump_capacity: pumpCapacityKwFromHp(s.pumpHorsePower),
       pump_head: s.pumpHead,
       pump_horse_power: s.pumpHorsePower,
       time_to_fill: s.timeToFill,

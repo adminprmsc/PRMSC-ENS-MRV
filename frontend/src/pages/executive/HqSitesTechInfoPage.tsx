@@ -34,6 +34,7 @@ import {
   getWaterSystems,
 } from "@/services/tehsilManagerOperatorService";
 import type { SolarSystemRow, WaterSystemRow } from "@/types/api";
+import { formatPumpCapacityKw } from "@/utils/waterPump";
 
 /* ─── helpers ─── */
 
@@ -186,7 +187,7 @@ function WaterSiteCard({
               <SpecItem label="Model" value={val(s.pump_model)} />
               <SpecItem label="Serial number" value={val(s.pump_serial_number)} />
               <SpecItem label="Horsepower" value={val(s.pump_horse_power, "HP")} />
-              <SpecItem label="Capacity" value={val(s.pump_capacity, "kW")} />
+              <SpecItem label="Capacity" value={formatPumpCapacityKw(s.pump_horse_power)} />
               <SpecItem label="Head" value={val(s.pump_head, "m")} />
               <SpecItem label="Flow rate" value={val(s.pump_flow_rate, "m³/h")} />
               <SpecItem label="Water intake depth" value={val(s.depth_of_water_intake, "m")} />
@@ -202,8 +203,8 @@ function WaterSiteCard({
             />
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
               <SpecItem label="Tank capacity" value={val(s.ohr_tank_capacity, "m³")} />
-              <SpecItem label="Fill required" value={val(s.ohr_fill_required, "m³")} />
-              <SpecItem label="Time to fill" value={val(s.time_to_fill, "hr")} />
+              <SpecItem label="Design fill time" value={val(s.ohr_fill_required, "min")} />
+              <SpecItem label="Actual fill time" value={val(s.time_to_fill, "min")} />
             </div>
           </div>
 

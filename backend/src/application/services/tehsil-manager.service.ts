@@ -7,6 +7,7 @@ import {
   intersectTehsilScope,
   resolveTehsilScope,
 } from '../../domain/utils/tehsil-scope.util';
+import { pumpCapacityKwFromHp } from '../../domain/utils/water-pump.util';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import {
   normalizeSolarSiteType,
@@ -450,7 +451,6 @@ export class TehsilManagerService {
     const missing = this.requireFields(payload, [
       'ohr_tank_capacity',
       'ohr_fill_required',
-      'pump_capacity',
       'pump_head',
       'pump_horse_power',
       'time_to_fill',
@@ -1276,9 +1276,11 @@ export class TehsilManagerService {
         this.coerceOptionalBool(data.bulk_meter_installed) === true,
       ohrTankCapacity: this.toFloatOrNone(data.ohr_tank_capacity),
       ohrFillRequired: this.toFloatOrNone(data.ohr_fill_required),
-      pumpCapacity: this.toFloatOrNone(data.pump_capacity),
       pumpHead: this.toFloatOrNone(data.pump_head),
       pumpHorsePower: this.toFloatOrNone(data.pump_horse_power),
+      pumpCapacity: pumpCapacityKwFromHp(
+        this.toFloatOrNone(data.pump_horse_power),
+      ),
       timeToFill: this.toFloatOrNone(data.time_to_fill),
       createdBy: jwt.sub,
     });
@@ -1665,11 +1667,6 @@ export class TehsilManagerService {
           data.ohr_fill_required,
         );
       }
-      if ('pump_capacity' in data) {
-        system.pumpCapacity = this.operatorHelpers.coerceOptionalFloat(
-          data.pump_capacity,
-        );
-      }
       if ('pump_head' in data) {
         system.pumpHead = this.operatorHelpers.coerceOptionalFloat(
           data.pump_head,
@@ -1679,6 +1676,7 @@ export class TehsilManagerService {
         system.pumpHorsePower = this.operatorHelpers.coerceOptionalFloat(
           data.pump_horse_power,
         );
+        system.pumpCapacity = pumpCapacityKwFromHp(system.pumpHorsePower);
       }
       if ('time_to_fill' in data) {
         system.timeToFill = this.operatorHelpers.coerceOptionalFloat(
@@ -1697,7 +1695,6 @@ export class TehsilManagerService {
       installation_date: this.isoDate(meterPayload.installation_date),
       ohr_tank_capacity: system.ohrTankCapacity,
       ohr_fill_required: system.ohrFillRequired,
-      pump_capacity: system.pumpCapacity,
       pump_head: system.pumpHead,
       pump_horse_power: system.pumpHorsePower,
       time_to_fill: system.timeToFill,
@@ -1789,7 +1786,7 @@ export class TehsilManagerService {
         bulk_meter_installed: system.bulkMeterInstalled,
         ohr_tank_capacity: system.ohrTankCapacity,
         ohr_fill_required: system.ohrFillRequired,
-        pump_capacity: system.pumpCapacity,
+        pump_capacity: pumpCapacityKwFromHp(system.pumpHorsePower),
         pump_head: system.pumpHead,
         pump_horse_power: system.pumpHorsePower,
         time_to_fill: system.timeToFill,

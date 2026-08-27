@@ -67,6 +67,7 @@ import type {
   WaterSystemRow,
 } from "../../../../types/api";
 import { formatPakistanDate, nowIsoTimestamp } from "../../../../utils/pakistanTime";
+import { pumpCapacityKwInputValue } from "../../../../utils/waterPump";
 
 type ToastType = "success" | "error";
 type MeterUpdateMode = "update_current" | "switch_new";
@@ -198,7 +199,7 @@ export default function WaterSystemEditPage() {
         bulk_meter_installed: Boolean(detail.bulk_meter_installed),
         ohr_tank_capacity: String(detail.ohr_tank_capacity ?? ""),
         ohr_fill_required: String(detail.ohr_fill_required ?? ""),
-        pump_capacity: String(detail.pump_capacity ?? ""),
+        pump_capacity: pumpCapacityKwInputValue(detail.pump_horse_power),
         pump_head: String(detail.pump_head ?? ""),
         pump_horse_power: String(detail.pump_horse_power ?? ""),
         time_to_fill: String(detail.time_to_fill ?? ""),
@@ -266,7 +267,6 @@ export default function WaterSystemEditPage() {
     return (
       formData.ohr_tank_capacity.trim() &&
       formData.ohr_fill_required.trim() &&
-      formData.pump_capacity.trim() &&
       formData.pump_head.trim() &&
       formData.time_to_fill.trim()
     );
@@ -395,7 +395,14 @@ export default function WaterSystemEditPage() {
   const onChange =
     (field: keyof typeof formData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+      const value = e.target.value;
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+        ...(field === "pump_horse_power" && {
+          pump_capacity: pumpCapacityKwInputValue(Number(value)),
+        }),
+      }));
     };
 
   return (
@@ -990,15 +997,18 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Pump capacity
+                          Pump capacity (kW)
                           <RequiredMark />
                         </Label>
                         <Input
                           type="number"
                           inputMode="decimal"
                           value={formData.pump_capacity}
-                          onChange={onChange("pump_capacity")}
+                          readOnly
+                          className="bg-muted/40"
+                          placeholder="Calculated from HP"
                           disabled={saving || !isResolved}
+                          aria-readonly
                         />
                       </div>
                       <div className="space-y-2">
