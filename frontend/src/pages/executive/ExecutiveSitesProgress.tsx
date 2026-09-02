@@ -56,6 +56,13 @@ import {
   EXECUTIVE_YEAR_SELECT_OPTIONS,
   resolveExecutiveYearFromUrl,
 } from "./executivePeriodFilters";
+import {
+  TehsilCoveragePanel,
+  buildRankedTehsilCoverage,
+  formatAdminDate,
+  formatSolarPeriod,
+} from "./AdminDashboardBlocks";
+
 const MONTHS = [
   "Jan",
   "Feb",
