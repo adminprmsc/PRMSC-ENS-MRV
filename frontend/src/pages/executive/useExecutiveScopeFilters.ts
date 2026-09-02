@@ -12,6 +12,7 @@ import {
   buildExecutiveScopeApiFilters,
   executiveYearLabel,
   resolveExecutiveYearFromUrl,
+  type ExecutivePeriodFilterMode,
 } from "./executivePeriodFilters";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 
@@ -20,10 +21,14 @@ import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
  * the DB location catalog (single source of truth).
  */
 export function useExecutiveScopeFilters(options?: {
-  /** When false, omit year/month from UI and API (Solar analysis). */
+  /** @deprecated use periodFilterMode */
   showPeriodFilters?: boolean;
+  /** full = year + month, year-only = year, none = location only */
+  periodFilterMode?: ExecutivePeriodFilterMode;
 }) {
-  const showPeriodFilters = options?.showPeriodFilters ?? true;
+  const periodFilterMode: ExecutivePeriodFilterMode =
+    options?.periodFilterMode ??
+    (options?.showPeriodFilters === false ? "none" : "full");
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const {
@@ -165,9 +170,9 @@ export function useExecutiveScopeFilters(options?: {
         year: activeFilters.year,
         month: activeFilters.month,
         settlement: activeFilters.settlement,
-        includePeriod: showPeriodFilters,
+        periodFilterMode,
       }),
-    [activeFilters, showPeriodFilters],
+    [activeFilters, periodFilterMode],
   );
 
   const activeScopeLabel = useMemo(() => {
@@ -185,15 +190,18 @@ export function useExecutiveScopeFilters(options?: {
       activeFilters.settlement === ALL_SETTLEMENTS
         ? "All settlements"
         : activeFilters.settlement;
-    if (!showPeriodFilters) {
+    if (periodFilterMode === "none") {
       return `${tehsil} · ${village} · ${settlement}`;
+    }
+    if (periodFilterMode === "year-only") {
+      return `${tehsil} · ${village} · ${settlement} · ${executiveYearLabel(activeFilters.year)}`;
     }
     const month =
       activeFilters.month === "All Months"
         ? "All months"
         : EXECUTIVE_MONTH_LABEL(Number(activeFilters.month));
     return `${tehsil} · ${village} · ${settlement} · ${executiveYearLabel(activeFilters.year)} · ${month}`;
-  }, [activeFilters, allowedTehsils.length, restrictTehsils, showPeriodFilters]);
+  }, [activeFilters, allowedTehsils.length, restrictTehsils, periodFilterMode]);
 
   const applyFilters = useCallback(() => {
     setActiveFilters(filters);

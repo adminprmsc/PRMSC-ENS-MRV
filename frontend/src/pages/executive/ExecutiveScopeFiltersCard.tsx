@@ -23,6 +23,7 @@ import {
 import {
   EXECUTIVE_YEAR_SELECT_OPTIONS,
   executiveYearLabel,
+  type ExecutivePeriodFilterMode,
 } from "./executivePeriodFilters";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import { ALL_SETTLEMENTS, ALL_VILLAGES } from "./registeredLocationOptions";
@@ -35,8 +36,10 @@ type ExecutiveScopeFiltersCardProps = {
   settlementOptions: string[];
   villageEnabled: boolean;
   settlementEnabled: boolean;
-  /** When false, hide year/month (e.g. Solar analysis — location only). */
+  /** @deprecated use periodFilterMode */
   showPeriodFilters?: boolean;
+  /** full = year + month, year-only = year, none = location only */
+  periodFilterMode?: ExecutivePeriodFilterMode;
   locationMeta?: {
     siteCount: number;
     villageCount: number;
@@ -129,11 +132,24 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   villageEnabled,
   settlementEnabled,
   showPeriodFilters = true,
+  periodFilterMode,
   locationMeta,
   locationsLoading,
   onUpdate,
   onApply,
 }: ExecutiveScopeFiltersCardProps) {
+  const resolvedPeriodMode: ExecutivePeriodFilterMode =
+    periodFilterMode ?? (showPeriodFilters ? "full" : "none");
+  const showYearFilter =
+    resolvedPeriodMode === "full" || resolvedPeriodMode === "year-only";
+  const showMonthFilter = resolvedPeriodMode === "full";
+  const filterColumnClass =
+    resolvedPeriodMode === "full"
+      ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
+      : showYearFilter
+        ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
+        : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4";
+
   const assignedCount = tehsilOptions.filter(
     (t) => t !== ALL_ASSIGNED_TEHSILS,
   ).length;
@@ -152,13 +168,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
           </Badge>
         </div>
 
-        <FieldGroup
-          className={
-            showPeriodFilters
-              ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
-              : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-          }
-        >
+        <FieldGroup className={filterColumnClass}>
           <FilterSelect
             label="Tehsil"
             value={filters.tehsil}
@@ -192,33 +202,33 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
             onChange={(v) => onUpdate("settlement", v)}
           />
 
-          {showPeriodFilters ? (
-            <>
-              <FilterSelect
-                label="Year"
-                value={filters.year}
-                placeholder="Year"
-                options={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
-                optionLabel={executiveYearLabel}
-                onChange={(v) => onUpdate("year", v)}
-              />
+          {showYearFilter ? (
+            <FilterSelect
+              label="Year"
+              value={filters.year}
+              placeholder="Year"
+              options={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
+              optionLabel={executiveYearLabel}
+              onChange={(v) => onUpdate("year", v)}
+            />
+          ) : null}
 
-              <FilterSelect
-                label="Month"
-                value={filters.month}
-                placeholder="Month"
-                options={[
-                  "All Months",
-                  ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
-                ]}
-                optionLabel={(v) =>
-                  v === "All Months"
-                    ? "All months"
-                    : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
-                }
-                onChange={(v) => onUpdate("month", v)}
-              />
-            </>
+          {showMonthFilter ? (
+            <FilterSelect
+              label="Month"
+              value={filters.month}
+              placeholder="Month"
+              options={[
+                "All Months",
+                ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
+              ]}
+              optionLabel={(v) =>
+                v === "All Months"
+                  ? "All months"
+                  : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
+              }
+              onChange={(v) => onUpdate("month", v)}
+            />
           ) : null}
 
           <div className="flex items-end">

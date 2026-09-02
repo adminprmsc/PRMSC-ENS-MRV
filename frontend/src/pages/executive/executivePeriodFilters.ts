@@ -37,23 +37,34 @@ export function executiveYearExportSlug(year: string): string {
   return year === ALL_YEARS ? "all-years" : year;
 }
 
+export type ExecutivePeriodFilterMode = "full" | "year-only" | "none";
+
 export function buildExecutiveScopeApiFilters(input: {
   tehsil: string;
   village: string;
   year: string;
   month?: string;
   settlement?: string;
+  /** @deprecated use periodFilterMode */
   includePeriod?: boolean;
+  periodFilterMode?: ExecutivePeriodFilterMode;
 }): QueryFilters {
   const base: QueryFilters = {
     tehsil: input.tehsil,
     village: input.village,
   };
 
-  if (input.includePeriod !== false) {
+  const periodFilterMode =
+    input.periodFilterMode ??
+    (input.includePeriod === false ? "none" : "full");
+
+  if (periodFilterMode === "full" || periodFilterMode === "year-only") {
     if (input.year !== ALL_YEARS) {
       base.year = Number(input.year);
     }
+  }
+
+  if (periodFilterMode === "full") {
     if (input.month && input.month !== "All Months") {
       base.month = Number(input.month);
     }

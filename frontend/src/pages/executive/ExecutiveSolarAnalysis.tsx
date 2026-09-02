@@ -14,9 +14,10 @@ import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
 import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveSolarSystemsDetail } from "./useExecutiveAnalysisQueries";
+import { executiveYearExportSlug } from "./executivePeriodFilters";
 
 const ExecutiveSolarAnalysis = () => {
-  const scope = useExecutiveScopeFilters({ showPeriodFilters: false });
+  const scope = useExecutiveScopeFilters({ periodFilterMode: "year-only" });
   const baseColumns = useSolarAnalysisColumns();
   const location = useLocation();
 
@@ -41,6 +42,9 @@ const ExecutiveSolarAnalysis = () => {
             state={{
               from: location.pathname + location.search,
               metrics: row.original,
+              ...(scope.apiFilters.year != null
+                ? { year: scope.apiFilters.year }
+                : {}),
             }}
             {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
@@ -51,7 +55,7 @@ const ExecutiveSolarAnalysis = () => {
         ),
       },
     ],
-    [baseColumns, location.pathname, location.search],
+    [baseColumns, location.pathname, location.search, scope.apiFilters.year],
   );
 
   const getRowId = useCallback((row: SolarSystemDetailRow) => row.solar_system_id, []);
@@ -65,7 +69,7 @@ const ExecutiveSolarAnalysis = () => {
       <PageHeader
         icon={<Sun className="text-amber-600" />}
         title="Solar analysis"
-        description="Filter by tehsil, village, and settlement, then open a site to review records."
+        description="Area, period, and settlement filters — then open a site to review records."
       />
 
       <ExecutiveScopeFiltersCard
@@ -76,7 +80,7 @@ const ExecutiveSolarAnalysis = () => {
         settlementOptions={scope.settlementOptions}
         villageEnabled={scope.villageEnabled}
         settlementEnabled={scope.settlementEnabled}
-        showPeriodFilters={false}
+        periodFilterMode="year-only"
         locationMeta={scope.locationMeta}
         locationsLoading={scope.catalogLoading}
         onUpdate={scope.updateFilter}
@@ -94,7 +98,7 @@ const ExecutiveSolarAnalysis = () => {
           title="Sites"
           rows={rows}
           columns={columns}
-          exportFileName={`solar-systems-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
+          exportFileName={`solar-systems-${executiveYearExportSlug(scope.activeFilters.year)}-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
           getRowId={getRowId}
           initialPageSize={25}
         />
