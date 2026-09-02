@@ -25,6 +25,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -50,6 +51,11 @@ import { getLoggingCompliance } from "../../services/tehsilManagerOperatorServic
 import type { WaterSystemRow } from "../tehsil/logging/loggingComplianceTypes";
 import { formatAssignedOperators } from "../tehsil/logging/loggingComplianceTypes";
 import { getPakistanIsoDateString } from "../../utils/pakistanTime";
+import {
+  buildExecutiveScopeApiFilters,
+  executiveYearLabel,
+  EXECUTIVE_YEAR_SELECT_OPTIONS,
+} from "./executivePeriodFilters";
 
 type SummaryData = ProgramSummary;
 type RowData = {
@@ -80,7 +86,6 @@ type AnomalyItem = {
   anomalies: Array<{ date: string; code: string; severity: string; message: string }>;
 };
 
-const YEARS = [2025, 2026, 2027, 2028, 2029];
 const MONTHS = [
   "Jan",
   "Feb",
@@ -373,14 +378,12 @@ const ProgramDashboard = ({
       setLoading(true);
       setError("");
       try {
-        const apiFilters = {
+        const apiFilters = buildExecutiveScopeApiFilters({
           tehsil: activeFilters.tehsil,
           village: activeFilters.village,
-          year: Number(activeFilters.year),
-          ...(activeFilters.month !== "All Months"
-            ? { month: Number(activeFilters.month) }
-            : {}),
-        };
+          year: activeFilters.year,
+          month: activeFilters.month,
+        });
         const { summary: sum, water, pump, solar, grid } =
           await fetchScopedProgramDashboard(apiFilters, allowedTehsils, {
             summary: (f) =>
@@ -403,8 +406,8 @@ const ProgramDashboard = ({
         if (showAnomalies) {
           try {
             const anom = (await getWaterAnomalies({
-              tehsil: apiFilters.tehsil,
-              village: apiFilters.village,
+              tehsil: activeFilters.tehsil,
+              village: activeFilters.village,
               days: 4,
             })) as { items?: AnomalyItem[] };
             setAnomalyItems(Array.isArray(anom?.items) ? anom.items : []);
@@ -438,7 +441,7 @@ const ProgramDashboard = ({
       activeFilters.month === "All Months"
         ? "All months"
         : MONTHS[Number(activeFilters.month) - 1];
-    return `${tehsil} · ${village} · ${activeFilters.year} · ${month}`;
+    return `${tehsil} · ${village} · ${executiveYearLabel(activeFilters.year)} · ${month}`;
   }, [activeFilters, allowedTehsils.length, restrictTehsils]);
 
   const activeScopeTooltip = useMemo(() => {
@@ -581,7 +584,7 @@ const ProgramDashboard = ({
           villageOptions={villageOptions}
           allowedTehsils={allowedTehsils}
           restrictTehsils={restrictTehsils}
-          scopeFilterYears={YEARS}
+          scopeFilterYears={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
           scopeFilterMonths={MONTHS}
           managementView={managementView}
           todaySlot={

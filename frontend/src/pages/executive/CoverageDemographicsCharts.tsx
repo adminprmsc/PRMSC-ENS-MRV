@@ -37,6 +37,7 @@ import { hqRoutes } from "@/constants/routes";
 import { cn } from "@/lib/utils";
 import { InfoSectionHeader } from "./AdminDashboardBlocks";
 import type { TehsilCoverageInput } from "./AdminDashboardBlocks";
+import { ALL_YEARS } from "./executivePeriodFilters";
 
 const coverageConfig = {
   water: { label: "Water", color: "var(--chart-1)" },
@@ -64,7 +65,9 @@ function withScopeQuery(
   const merge = { ...scope, ...extra };
   for (const [key, value] of Object.entries(merge)) {
     if (!value) continue;
-    if (value === "All Months" || value === "All Villages") continue;
+    if (value === "All Months" || value === "All Villages" || value === ALL_YEARS) {
+      continue;
+    }
     params.set(key, value);
   }
   const qs = params.toString();

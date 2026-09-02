@@ -18,9 +18,12 @@ import {
 import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import {
   EXECUTIVE_MONTHS,
-  EXECUTIVE_YEARS,
   type ExecutiveScopeFilters,
 } from "./executiveAnalysisTypes";
+import {
+  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  executiveYearLabel,
+} from "./executivePeriodFilters";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import { ALL_SETTLEMENTS, ALL_VILLAGES } from "./registeredLocationOptions";
 
@@ -195,7 +198,8 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
                 label="Year"
                 value={filters.year}
                 placeholder="Year"
-                options={EXECUTIVE_YEARS.map(String)}
+                options={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
+                optionLabel={executiveYearLabel}
                 onChange={(v) => onUpdate("year", v)}
               />
 

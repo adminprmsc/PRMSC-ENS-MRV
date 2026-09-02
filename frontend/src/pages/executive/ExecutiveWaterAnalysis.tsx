@@ -14,6 +14,7 @@ import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
 import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveWaterSystemsDetail } from "./useExecutiveAnalysisQueries";
+import { executiveYearExportSlug } from "./executivePeriodFilters";
 
 const ExecutiveWaterAnalysis = () => {
   const scope = useExecutiveScopeFilters();
@@ -112,7 +113,7 @@ const ExecutiveWaterAnalysis = () => {
           title="Sites"
           rows={rows}
           columns={columns}
-          exportFileName={`water-systems-${scope.activeFilters.year}-${scope.activeFilters.tehsil}`}
+          exportFileName={`water-systems-${executiveYearExportSlug(scope.activeFilters.year)}-${scope.activeFilters.tehsil}`}
           getRowId={getRowId}
           initialPageSize={25}
         />

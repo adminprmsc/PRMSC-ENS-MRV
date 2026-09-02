@@ -39,7 +39,13 @@ import {
   type ProgramSummary,
 } from "./fetchScopedProgramDashboard";
 
-const YEARS = [2025, 2026, 2027, 2028, 2029];
+import {
+  buildExecutiveScopeApiFilters,
+  executiveYearLabel,
+  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  resolveExecutiveYearFromUrl,
+} from "./executivePeriodFilters";
+
 const MONTHS = [
   "Jan",
   "Feb",
@@ -98,7 +104,7 @@ const ExecutiveAttentionPage = () => {
     tehsil: resolvedTehsil,
     village: searchParams.get("village")?.trim() || ALL_VILLAGES,
     month: searchParams.get("month")?.trim() || "All Months",
-    year: searchParams.get("year")?.trim() || "2026",
+    year: resolveExecutiveYearFromUrl(searchParams.get("year")),
   }));
   const [summary, setSummary] = useState<ProgramSummary>({
     ohr_count: 0,
@@ -131,14 +137,12 @@ const ExecutiveAttentionPage = () => {
       setLoading(true);
       setError("");
       try {
-        const apiFilters = {
+        const apiFilters = buildExecutiveScopeApiFilters({
           tehsil: filters.tehsil,
           village: filters.village,
-          year: Number(filters.year),
-          ...(filters.month !== "All Months"
-            ? { month: Number(filters.month) }
-            : {}),
-        };
+          year: filters.year,
+          month: filters.month,
+        });
         const { summary: sum } = await fetchScopedProgramDashboard(
           apiFilters,
           allowedTehsils,
@@ -164,10 +168,11 @@ const ExecutiveAttentionPage = () => {
   }, [filters, allowedTehsils, getDashboardProgramSummary]);
 
   const periodHint = useMemo(() => {
+    const yearLabel = executiveYearLabel(filters.year);
     if (filters.month !== "All Months") {
-      return `${MONTHS[Number(filters.month) - 1] ?? "Month"} ${filters.year}`;
+      return `${MONTHS[Number(filters.month) - 1] ?? "Month"} ${yearLabel}`;
     }
-    return filters.year;
+    return yearLabel;
   }, [filters.month, filters.year]);
 
   const issues = useMemo(
@@ -265,9 +270,9 @@ const ExecutiveAttentionPage = () => {
                   <SelectValue placeholder="Year" />
                 </SelectTrigger>
                 <SelectContent>
-                  {YEARS.map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
+                  {EXECUTIVE_YEAR_SELECT_OPTIONS.map((y) => (
+                    <SelectItem key={y} value={y}>
+                      {executiveYearLabel(y)}
                     </SelectItem>
                   ))}
                 </SelectContent>
