@@ -68,6 +68,10 @@ import type {
 } from "../../../../types/api";
 import { formatPakistanDate, nowIsoTimestamp } from "../../../../utils/pakistanTime";
 import { pumpCapacityKwInputValue } from "../../../../utils/waterPump";
+import {
+  PUMP_TOTAL_DYNAMIC_HEAD_FORM_LABEL,
+  PUMP_TOTAL_DYNAMIC_HEAD_INFO,
+} from "../../../../constants/waterSystemSpecs";
 
 type ToastType = "success" | "error";
 type MeterUpdateMode = "update_current" | "switch_new";
@@ -1013,9 +1017,12 @@ export default function WaterSystemEditPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Pump head (m)
+                          {PUMP_TOTAL_DYNAMIC_HEAD_FORM_LABEL}
                           <RequiredMark />
                         </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {PUMP_TOTAL_DYNAMIC_HEAD_INFO}
+                        </p>
                         <Input
                           type="number"
                           inputMode="decimal"

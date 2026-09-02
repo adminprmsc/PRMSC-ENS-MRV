@@ -55,6 +55,10 @@ import { cn } from "../../../lib/utils";
 import {
   pumpCapacityKwInputValue,
 } from "../../../utils/waterPump";
+import {
+  PUMP_TOTAL_DYNAMIC_HEAD_FORM_LABEL,
+  PUMP_TOTAL_DYNAMIC_HEAD_INFO,
+} from "../../../constants/waterSystemSpecs";
 
 function FormField({
   label,
@@ -295,7 +299,7 @@ const WaterSystemForm = () => {
     ohr_tank_capacity: "Tank capacity (m3)",
     ohr_fill_required: "Design time to fill tank (minutes)",
     pump_capacity: "Pump capacity (kW, from HP)",
-    pump_head: "Pump head (m)",
+    pump_head: PUMP_TOTAL_DYNAMIC_HEAD_FORM_LABEL,
     pump_horse_power: "Pump horse power (HP)",
     time_to_fill: "Actual time to fill the tank",
     meter_model: "Meter Model",
@@ -716,7 +720,11 @@ const WaterSystemForm = () => {
                           aria-readonly
                         />
                       </FormField>
-                      <FormField label="Pump head (m)" required>
+                      <FormField
+                        label={PUMP_TOTAL_DYNAMIC_HEAD_FORM_LABEL}
+                        description={PUMP_TOTAL_DYNAMIC_HEAD_INFO}
+                        required
+                      >
                         <Input
                           type="number"
                           inputMode="decimal"

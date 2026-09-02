@@ -27,6 +27,10 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hqRoutes } from "@/constants/routes";
+import {
+  PUMP_TOTAL_DYNAMIC_HEAD_INFO,
+  PUMP_TOTAL_DYNAMIC_HEAD_LABEL,
+} from "@/constants/waterSystemSpecs";
 import { useClientPagination } from "@/hooks/useClientPagination";
 import { getApiErrorMessage } from "@/lib/api-error";
 import {
@@ -57,12 +61,23 @@ function fmtDate(iso: string | null | undefined): string {
 
 /* ─── Sub-components ─── */
 
-function SpecItem({ label, value }: { label: string; value: string }) {
+function SpecItem({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="space-y-0.5">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
         {label}
       </p>
+      {hint ? (
+        <p className="text-[9px] leading-snug text-muted-foreground/60">{hint}</p>
+      ) : null}
       <p className="text-sm font-medium text-foreground">
         {value === "—" ? <span className="text-muted-foreground/50">—</span> : value}
       </p>
@@ -188,7 +203,11 @@ function WaterSiteCard({
               <SpecItem label="Serial number" value={val(s.pump_serial_number)} />
               <SpecItem label="Horsepower" value={val(s.pump_horse_power, "HP")} />
               <SpecItem label="Capacity" value={formatPumpCapacityKw(s.pump_horse_power)} />
-              <SpecItem label="Head" value={val(s.pump_head, "m")} />
+              <SpecItem
+                label={PUMP_TOTAL_DYNAMIC_HEAD_LABEL}
+                hint={PUMP_TOTAL_DYNAMIC_HEAD_INFO}
+                value={val(s.pump_head, "m")}
+              />
               <SpecItem label="Flow rate" value={val(s.pump_flow_rate, "m³/h")} />
               <SpecItem label="Water intake depth" value={val(s.depth_of_water_intake, "m")} />
               <SpecItem label="Height to OHR" value={val(s.height_to_ohr, "m")} />
