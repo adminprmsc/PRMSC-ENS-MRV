@@ -12,15 +12,16 @@
 #
 # Usage (from your Mac, repo root):
 #   ./deploy/backup-db.sh
-#   PRMSC_SSH_HOST=101.50.86.169 ./deploy/backup-db.sh
-#   ./deploy/backup-db.sh --host 101.50.86.169 --pull-only
+#   PRMSC_SSH_HOST=101.50.87.168 PRMSC_SSH_USER=prmsc101 PRMSC_SSH_PASSWORD_AUTH=1 ./deploy/backup-db.sh --pull-only
+#   ./deploy/backup-db.sh --host 101.50.87.168 --user prmsc101 --password-auth --pull-only
 #
 # Optional env / flags:
-#   PRMSC_SSH_HOST      VM hostname or IP       (default: 101.50.86.169)
-#   PRMSC_SSH_USER      SSH user                (default: adminprms98)
-#   PRMSC_SSH_KEY       Path to private key     (optional; password auth OK)
-#   PRMSC_REMOTE_DIR    App directory on VM     (default: $HOME/PRMSC-ENS-MRV)
-#   PRMSC_BACKUP_DIR    Local folder for dumps  (default: <repo>/backups)
+#   PRMSC_SSH_HOST           VM hostname or IP       (default: 101.50.86.169)
+#   PRMSC_SSH_USER           SSH user                (default: adminprms98)
+#   PRMSC_SSH_PASSWORD_AUTH  Set to 1 for password-only SSH/scp (no pubkey)
+#   PRMSC_SSH_KEY            Path to private key     (optional; password auth OK)
+#   PRMSC_REMOTE_DIR         App directory on VM     (default: $HOME/PRMSC-ENS-MRV)
+#   PRMSC_BACKUP_DIR         Local folder for dumps  (default: <repo>/backups)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -33,6 +34,10 @@ REMOTE_DIR="${PRMSC_REMOTE_DIR:-\$HOME/PRMSC-ENS-MRV}"
 BACKUP_DIR="${PRMSC_BACKUP_DIR:-$ROOT_DIR/backups}"
 PULL_ONLY=0
 DELETE_REMOTE=0
+PASSWORD_AUTH=0
+if [[ "${PRMSC_SSH_PASSWORD_AUTH:-0}" == "1" ]]; then
+  PASSWORD_AUTH=1
+fi
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -50,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     -d|--remote-dir)   REMOTE_DIR="$2"; shift 2 ;;
     -o|--output)       BACKUP_DIR="$2"; shift 2 ;;
     --pull-only)       PULL_ONLY=1; shift ;;
+    --password-auth)   PASSWORD_AUTH=1; shift ;;
     --delete-remote)   DELETE_REMOTE=1; shift ;;
     -h|--help)         usage ;;
     *) die "Unknown option: $1 (try --help)" ;;
@@ -103,6 +109,11 @@ SSH_OPTS=(
 
 if [[ -n "$SSH_KEY" ]]; then
   SSH_OPTS+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
+elif [[ "$PASSWORD_AUTH" -eq 1 ]]; then
+  SSH_OPTS+=(
+    -o PreferredAuthentications=password
+    -o PubkeyAuthentication=no
+  )
 fi
 
 log "Connecting to ${REMOTE} (enter password/passphrase once if prompted)..."

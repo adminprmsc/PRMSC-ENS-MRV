@@ -4,9 +4,11 @@ Quick commands for day-to-day production work.
 
 | Item               | Value                |
 | ------------------ | -------------------- |
-| **VM IP**          | `101.50.86.169`      |
-| **SSH user**       | `adminprms98`        |
-| **App URL**        | http://101.50.86.169 |
+| **VM IP (ENS)**    | `101.50.87.168`      |
+| **SSH user (ENS)** | `prmsc101`           |
+| **VM IP (legacy)** | `101.50.86.169`      |
+| **SSH user (legacy)** | `adminprms98`     |
+| **App URL**        | http://mrv.essprmsc.com |
 | **Repo on VM**     | `~/PRMSC-ENS-MRV`    |
 | **Branch on prod** | `main`               |
 
@@ -16,7 +18,13 @@ For full ops (logs, SQL, troubleshooting), see [../VM-OPS.md](../VM-OPS.md).
 
 ## 1. Connect to the VM
 
-From your **Mac**:
+From your **Mac** (ENS production — password auth):
+
+```bash
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no prmsc101@101.50.87.168
+```
+
+Legacy VM:
 
 ```bash
 ssh adminprms98@101.50.86.169
@@ -38,18 +46,20 @@ Same pattern as WFM: **backup on prod first**, then pull to Mac.
 
 | Prompt looks like | You are on | What to run |
 | --- | --- | --- |
-| `adminprms98@prmsc-ens-mrv:~$` | **VM (SSH)** | `./deploy/scripts/backup-postgres.sh` |
-| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | `./deploy/backup-db.sh --pull-only` |
+| `prmsc101@prmsc-ens-mrv-prod:~$` | **VM (SSH)** | `./deploy/scripts/backup-postgres.sh` |
+| `➜  PRMSC-MRV` or `aubairakif@...` | **Mac** | see Step B below |
 
 ### Step A — VM (create & keep the dump)
 
 ```bash
-ssh adminprms98@101.50.86.169
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no prmsc101@101.50.87.168
 cd ~/PRMSC-ENS-MRV
 ./deploy/scripts/backup-postgres.sh
 ```
 
 Writes `~/PRMSC-ENS-MRV/backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` and leaves it on the VM.
+
+Note the filename printed after `CREATED:` (or list with `ls -lh ~/PRMSC-ENS-MRV/backups/`).
 
 (`make db-backup` works too if `make` is installed; the VM often does not have it.)
 
@@ -59,19 +69,44 @@ exit
 
 ### Step B — Mac (copy it down)
 
-From your **Mac** repo root:
+**Option 1 — script** (recommended; pulls the latest dump automatically):
 
 ```bash
+cd "/Users/aubairakif/Codebases/ESS PRMSC-HO/MRV-NAYATEL/PRMSC-MRV"
+mkdir -p backups
+
+PRMSC_SSH_HOST=101.50.87.168 \
+PRMSC_SSH_USER=prmsc101 \
+PRMSC_SSH_PASSWORD_AUTH=1 \
 ./deploy/backup-db.sh --pull-only
+```
+
+Same flags as one line:
+
+```bash
+./deploy/backup-db.sh --host 101.50.87.168 --user prmsc101 --password-auth --pull-only
 ```
 
 Saves into local `./backups/`. The VM copy stays unless you pass `--delete-remote`.
 
+**Option 2 — manual `scp`** (replace `YYYYMMDD_HHMMSS` with the file from Step A):
+
+```bash
+cd "/Users/aubairakif/Codebases/ESS PRMSC-HO/MRV-NAYATEL/PRMSC-MRV"
+mkdir -p backups
+
+scp -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+  prmsc101@101.50.87.168:~/PRMSC-ENS-MRV/backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump \
+  ./backups/
+```
+
 ### One-shot from Mac (create on VM, then scp)
 
 ```bash
+PRMSC_SSH_HOST=101.50.87.168 \
+PRMSC_SSH_USER=prmsc101 \
+PRMSC_SSH_PASSWORD_AUTH=1 \
 ./deploy/backup-db.sh
-# or:  PRMSC_SSH_HOST=101.50.86.169 ./deploy/backup-db.sh
 ```
 
 That runs `./deploy/scripts/backup-postgres.sh` on the VM, then copies the new file into local `./backups/`.
