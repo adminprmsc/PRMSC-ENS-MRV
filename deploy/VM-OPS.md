@@ -272,17 +272,13 @@ cd ~/PRMSC-ENS-MRV
 
 Output goes to `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump`.
 
-List backups:
+Copy to your Mac (run on **Mac**, repo root):
 
 ```bash
-ls -lh backups/
+make backup-to-mac
 ```
 
-Copy a backup to your laptop (run on **laptop**, not VM):
-
-```bash
-scp adminprms98@101.50.86.169:~/PRMSC-ENS-MRV/backups/prmsc_mrv_*.dump ./backups/
-```
+Details: [docs/DAILY-OPS.md](./docs/DAILY-OPS.md).
 
 ---
 

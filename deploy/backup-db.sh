@@ -11,8 +11,8 @@
 #        scp that file into ./backups/ on your laptop
 #
 # Usage (from your Mac, repo root):
-#   make backup-to-mac
-#   ./deploy/backup-db.sh
+#   make backup-to-mac          ← recommended
+#   ./deploy/backup-db.sh --pull-only
 #   PRMSC_SSH_HOST=101.50.87.168 PRMSC_SSH_USER=prmsc101 PRMSC_SSH_PASSWORD_AUTH=1 ./deploy/backup-db.sh --pull-only
 #   ./deploy/backup-db.sh --host 101.50.87.168 --user prmsc101 --password-auth --pull-only
 #

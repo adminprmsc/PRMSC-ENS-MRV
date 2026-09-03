@@ -93,11 +93,10 @@ SUPABASE_DATABASE_URL='postgresql://...' PUBLIC_ORIGIN=http://101.50.86.169 ./de
 
 The script dumps from Supabase, saves `prmsc_backup.dump` locally as a backup, and restores into Docker Postgres. A few `pg_restore` extension warnings are normal.
 
-### Optional: dump on laptop only
+To restore an existing dump (e.g. from `./backups/`):
 
 ```bash
-./deploy/scripts/dump-from-supabase.sh
-# then on VM: place prmsc_backup.dump in repo root and ./deploy/setup.sh
+./deploy/scripts/restore-from-supabase.sh ./backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump
 ```
 
 ## Local laptop dev
@@ -140,11 +139,20 @@ docker compose --env-file .env.docker up -d --build
 
 ## Backups
 
+**On the VM:**
+
 ```bash
 ./deploy/scripts/backup-postgres.sh
+# or: make db-backup
 ```
 
-Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
+**On your Mac** (create on VM + download to `./backups/`):
+
+```bash
+make backup-to-mac
+```
+
+See **[docs/DAILY-OPS.md](./docs/DAILY-OPS.md)** for SSH details and manual `scp`.
 
 ## TLS (HTTPS)
 
@@ -166,17 +174,28 @@ Writes `backups/prmsc_mrv_YYYYMMDD_HHMMSS.dump` — copy off the VM regularly.
 
 ## Files
 
-| File                                      | Purpose                                   |
-| ----------------------------------------- | ----------------------------------------- |
-| `.env.docker.example`                     | Single env template                       |
-| `docker-compose.yml`                      | Full stack (VM)                           |
-| `docker-compose.dev.yml`                  | Local dev ports + skip nginx/frontend     |
-| `Makefile`                                | `make deploy`, `make db-backup`, `make up`, … |
-| `deploy/backup-db.sh`                     | Mac: create/pull prod dump into `./backups/`  |
-| `deploy/setup.sh`                         | VM bootstrap                              |
-| `deploy/VM-OPS.md`                        | **Day-to-day VM ops** (SSH, deploy, logs) |
-| `deploy/scripts/migrate-from-supabase.sh` | Dump from Supabase + restore locally (VM) |
-| `deploy/scripts/dump-from-supabase.sh`    | Dump only (optional laptop backup)        |
-| `deploy/scripts/restore-from-supabase.sh` | Restore existing `.dump` file             |
-| `deploy/scripts/backup-postgres.sh`       | Postgres backup (also used by `make db-backup`) |
-| `deploy/scripts/pull-backup-to-mac.sh`    | Thin wrapper → `deploy/backup-db.sh`      |
+```
+deploy/
+├── README.md                 ← you are here
+├── backup-db.sh              Mac: VM backup create + scp to ./backups/
+├── setup.sh                  VM first-time bootstrap
+├── VM-OPS.md                 Logs, deploy, SQL, troubleshooting
+├── DOMAIN.md                 Subdomain + TLS notes
+├── lib/compose.sh            Shared compose helpers
+├── nginx/default.conf        Edge proxy config
+├── certs/                    TLS certs (not in git)
+├── scripts/
+│   ├── backup-postgres.sh    VM Postgres dump
+│   ├── migrate-from-supabase.sh   One-time Supabase → Docker Postgres
+│   └── restore-from-supabase.sh   Restore a .dump file
+└── docs/
+    ├── DAILY-OPS.md          Backup + daily deploy cheat sheet
+    └── VM-RECOVERY.md        New VM / disaster recovery
+```
+
+| Command | Where | Purpose |
+| --- | --- | --- |
+| `make backup-to-mac` | Mac | Backup prod DB → `./backups/` |
+| `make db-backup` | VM | Dump Postgres on server |
+| `make deploy` | VM | Pull + rebuild stack |
+| `./deploy/setup.sh` | VM | First-time install |

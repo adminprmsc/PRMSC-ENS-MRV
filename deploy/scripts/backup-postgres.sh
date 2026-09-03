@@ -1,13 +1,12 @@
-# //command
-# ./deploy/backup-db.sh --pull-only
-
-
 #!/usr/bin/env bash
-# Backup Postgres from the running stack.
+# Backup Postgres from the running Docker stack (run on the VM).
 #
 # Usage:
 #   ./deploy/scripts/backup-postgres.sh
 #   ./deploy/scripts/backup-postgres.sh /path/to/output.dump
+#   make db-backup
+#
+# Copy off the VM: on Mac run `make backup-to-mac` or `./deploy/backup-db.sh --pull-only`
 
 set -euo pipefail
 
@@ -46,8 +45,5 @@ echo "Backing up $POSTGRES_DB to $OUT ..."
   --no-owner --no-acl -Fc >"$OUT"
 
 ls -lh "$OUT"
-# Relative path from repo root so deploy/backup-db.sh / make wrappers can scp it.
 REL_OUT="${OUT#"$ROOT_DIR"/}"
 echo "CREATED:${REL_OUT}"
-echo "Copy off the VM regularly (from Mac: ./deploy/backup-db.sh --pull-only)."
-

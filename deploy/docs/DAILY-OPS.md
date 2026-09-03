@@ -285,28 +285,16 @@ docker compose --env-file .env.docker up -d --build frontend
 
 ## 4. One-liner cheat sheet
 
-**SSH in**
+**SSH in (ENS prod)**
 
 ```bash
-ssh adminprms98@101.50.86.169
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no prmsc101@101.50.87.168
 ```
 
-**Backup on VM, then pull to Mac**
+**Backup to Mac (one command)**
 
 ```bash
-# Terminal A — VM
-ssh adminprms98@101.50.86.169
-cd ~/PRMSC-ENS-MRV && ./deploy/scripts/backup-postgres.sh
-exit
-
-# Terminal B — Mac
-./deploy/backup-db.sh --pull-only
-```
-
-**One-shot from Mac** (create on VM + scp)
-
-```bash
-./deploy/backup-db.sh
+make backup-to-mac
 ```
 
 **Daily deploy on VM (normal DNS)**
