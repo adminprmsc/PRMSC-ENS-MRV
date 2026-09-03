@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -19,10 +19,23 @@ import { toast } from "sonner";
 
 import { PageHeader, PageShell } from "@/components/layout";
 import PaginatedListFooter from "@/components/PaginatedListFooter";
+import { SearchableOptionField } from "@/components/common/SearchableOptionField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,7 +45,14 @@ import {
   PUMP_TOTAL_DYNAMIC_HEAD_LABEL,
 } from "@/constants/waterSystemSpecs";
 import { useClientPagination } from "@/hooks/useClientPagination";
+import {
+  ALL_SETTLEMENTS,
+  ALL_VILLAGES,
+  useLocationCatalog,
+} from "@/hooks/useLocationCatalog";
+import { useAuth } from "@/contexts/AuthContext";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import {
   getSolarSystems,
   getWaterSystems,
@@ -209,7 +229,6 @@ function WaterSiteCard({
                 value={val(s.pump_head, "m")}
               />
               <SpecItem label="Flow rate" value={val(s.pump_flow_rate, "m³/h")} />
-              <SpecItem label="Water intake depth" value={val(s.depth_of_water_intake, "m")} />
               <SpecItem label="Height to OHR" value={val(s.height_to_ohr, "m")} />
             </div>
           </div>
@@ -397,6 +416,58 @@ function SolarSiteCard({
 
 const PAGE_SIZE = 5;
 
+type LocationScopeFilters = {
+  tehsil: string;
+  village: string;
+  settlement: string;
+};
+
+function tehsilFilterLabel(value: string, assignedCount: number) {
+  if (value === ALL_ASSIGNED_TEHSILS) {
+    return assignedCount > 0
+      ? `All assigned tehsils (${assignedCount})`
+      : "All tehsils";
+  }
+  return value;
+}
+
+function matchesLocationScope(
+  row: { tehsil?: string; village?: string; settlement?: string | null },
+  filters: LocationScopeFilters,
+  allowedTehsils: string[],
+): boolean {
+  const tehsil = String(row.tehsil ?? "").trim();
+  const village = String(row.village ?? "").trim();
+  const settlement = String(row.settlement ?? "").trim();
+
+  if (filters.tehsil === ALL_ASSIGNED_TEHSILS) {
+    if (allowedTehsils.length > 0 && !allowedTehsils.includes(tehsil)) {
+      return false;
+    }
+  } else if (tehsil !== filters.tehsil) {
+    return false;
+  }
+
+  if (filters.village !== ALL_VILLAGES && village !== filters.village) {
+    return false;
+  }
+
+  if (filters.settlement !== ALL_SETTLEMENTS && settlement !== filters.settlement) {
+    return false;
+  }
+
+  return true;
+}
+
+function matchesSearchQuery(
+  values: Array<string | null | undefined>,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return values.join(" ").toLowerCase().includes(q);
+}
+
 function WaterList({
   rows,
   loading,
@@ -508,6 +579,102 @@ function SolarList({
 /* ─── Main page ─── */
 export default function HqSitesTechInfoPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const {
+    tehsils: catalogTehsils,
+    resolveUserTehsils,
+    scopeTehsilOptions,
+    scopeVillageOptions,
+    scopeSettlementOptions,
+  } = useLocationCatalog();
+
+  const allowedTehsils = useMemo(() => {
+    const fromUser = resolveUserTehsils(user?.tehsils);
+    return fromUser.length ? fromUser : catalogTehsils;
+  }, [user?.tehsils, resolveUserTehsils, catalogTehsils]);
+
+  const restrictTehsils = (user?.tehsils ?? []).length > 0;
+  const initialTehsil =
+    restrictTehsils && allowedTehsils.length > 1
+      ? ALL_ASSIGNED_TEHSILS
+      : restrictTehsils
+        ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
+        : ALL_ASSIGNED_TEHSILS;
+
+  const [locationFilters, setLocationFilters] = useState<LocationScopeFilters>(
+    () => ({
+      tehsil: initialTehsil,
+      village: ALL_VILLAGES,
+      settlement: ALL_SETTLEMENTS,
+    }),
+  );
+
+  const tehsilOptions = useMemo(
+    () =>
+      scopeTehsilOptions({
+        allowedTehsils,
+        includeAll: true,
+        allLabel: ALL_ASSIGNED_TEHSILS,
+      }),
+    [scopeTehsilOptions, allowedTehsils],
+  );
+
+  const villageOptions = useMemo(
+    () =>
+      scopeVillageOptions(locationFilters.tehsil, {
+        allowedTehsils,
+      }),
+    [scopeVillageOptions, locationFilters.tehsil, allowedTehsils],
+  );
+
+  const settlementOptions = useMemo(
+    () =>
+      scopeSettlementOptions(
+        locationFilters.tehsil,
+        locationFilters.village,
+        { allowedTehsils },
+      ),
+    [
+      scopeSettlementOptions,
+      locationFilters.tehsil,
+      locationFilters.village,
+      allowedTehsils,
+    ],
+  );
+
+  const updateLocationFilter = useCallback(
+    (patch: Partial<LocationScopeFilters>) => {
+      setLocationFilters((prev) => {
+        const next = { ...prev, ...patch };
+        if (patch.tehsil !== undefined) {
+          next.village = ALL_VILLAGES;
+          next.settlement = ALL_SETTLEMENTS;
+        } else if (patch.village !== undefined) {
+          next.settlement = ALL_SETTLEMENTS;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const activeScopeLabel = useMemo(() => {
+    const tehsil =
+      locationFilters.tehsil === ALL_ASSIGNED_TEHSILS
+        ? restrictTehsils
+          ? `All assigned tehsils (${allowedTehsils.length})`
+          : "All tehsils"
+        : locationFilters.tehsil;
+    const village =
+      locationFilters.village === ALL_VILLAGES
+        ? "All villages"
+        : locationFilters.village;
+    const settlement =
+      locationFilters.settlement === ALL_SETTLEMENTS
+        ? "All settlements"
+        : locationFilters.settlement;
+    return `${tehsil} · ${village} · ${settlement}`;
+  }, [locationFilters, allowedTehsils.length, restrictTehsils]);
 
   const [waterRows, setWaterRows] = useState<WaterSystemRow[]>([]);
   const [solarRows, setSolarRows] = useState<SolarSystemRow[]>([]);
@@ -568,47 +735,49 @@ export default function HqSitesTechInfoPage() {
   }, []);
 
   const filteredWater = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return waterRows;
-    return waterRows.filter((s) =>
-      [
-        s.unique_identifier,
-        s.village,
-        s.tehsil,
-        s.settlement,
-        s.pump_model,
-        s.pump_serial_number,
-        s.meter_model,
-        s.meter_serial_number,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [waterRows, search]);
+    return waterRows.filter((s) => {
+      if (!matchesLocationScope(s, locationFilters, allowedTehsils)) {
+        return false;
+      }
+      return matchesSearchQuery(
+        [
+          s.unique_identifier,
+          s.village,
+          s.tehsil,
+          s.settlement,
+          s.pump_model,
+          s.pump_serial_number,
+          s.meter_model,
+          s.meter_serial_number,
+        ],
+        search,
+      );
+    });
+  }, [waterRows, locationFilters, allowedTehsils, search]);
 
   const filteredSolar = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return solarRows;
-    return solarRows.filter((s) =>
-      [
-        s.unique_identifier,
-        s.village,
-        s.tehsil,
-        s.settlement,
-        s.site_type,
-        s.inverter_serial_number,
-        s.meter_model,
-        s.meter_serial_number,
-        s.disco_info,
-        s.bill_reference_number,
-        s.installation_location,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [solarRows, search]);
+    return solarRows.filter((s) => {
+      if (!matchesLocationScope(s, locationFilters, allowedTehsils)) {
+        return false;
+      }
+      return matchesSearchQuery(
+        [
+          s.unique_identifier,
+          s.village,
+          s.tehsil,
+          s.settlement,
+          s.site_type,
+          s.inverter_serial_number,
+          s.meter_model,
+          s.meter_serial_number,
+          s.disco_info,
+          s.bill_reference_number,
+          s.installation_location,
+        ],
+        search,
+      );
+    });
+  }, [solarRows, locationFilters, allowedTehsils, search]);
 
   return (
     <PageShell>
@@ -630,6 +799,64 @@ export default function HqSitesTechInfoPage() {
           </Button>
         }
       />
+
+      <Card className="gap-0 overflow-visible py-0 shadow-sm ring-border/40">
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">Filters</p>
+            <Badge
+              variant="secondary"
+              className="max-w-[min(100%,320px)] truncate font-normal"
+            >
+              <MapPin className="mr-1 size-3 shrink-0" />
+              <span className="truncate">{activeScopeLabel}</span>
+            </Badge>
+          </div>
+
+          <FieldGroup className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <Field className="min-w-0 gap-1">
+              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Tehsil
+              </FieldLabel>
+              <Select
+                value={locationFilters.tehsil}
+                onValueChange={(v) =>
+                  updateLocationFilter({ tehsil: v ?? locationFilters.tehsil })
+                }
+              >
+                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
+                  <SelectValue placeholder="Tehsil" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {tehsilOptions.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {tehsilFilterLabel(t, allowedTehsils.length)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <SearchableOptionField
+              label="Village"
+              value={locationFilters.village}
+              options={villageOptions}
+              allValue={ALL_VILLAGES}
+              placeholder="Village"
+              onChange={(village) => updateLocationFilter({ village })}
+            />
+
+            <SearchableOptionField
+              label="Settlement"
+              value={locationFilters.settlement}
+              options={settlementOptions}
+              allValue={ALL_SETTLEMENTS}
+              placeholder="Settlement"
+              onChange={(settlement) => updateLocationFilter({ settlement })}
+            />
+          </FieldGroup>
+        </CardContent>
+      </Card>
 
       {/* Search */}
       <div className="relative">
