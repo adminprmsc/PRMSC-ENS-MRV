@@ -103,10 +103,22 @@ scp -o PreferredAuthentications=password -o PubkeyAuthentication=no \
 ### One-shot from Mac (create on VM, then scp)
 
 ```bash
+make backup-to-mac
+```
+
+Same as:
+
+```bash
 PRMSC_SSH_HOST=101.50.87.168 \
 PRMSC_SSH_USER=prmsc101 \
 PRMSC_SSH_PASSWORD_AUTH=1 \
 ./deploy/backup-db.sh
+```
+
+Pull only (if backup already exists on VM):
+
+```bash
+make backup-pull-mac
 ```
 
 That runs `./deploy/scripts/backup-postgres.sh` on the VM, then copies the new file into local `./backups/`.
