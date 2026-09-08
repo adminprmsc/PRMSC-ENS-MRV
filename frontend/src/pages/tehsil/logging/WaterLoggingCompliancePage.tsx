@@ -23,11 +23,10 @@ import {
   subtractPakistanDays,
 } from "../../../utils/pakistanTime";
 
-/** Last N calendar days ending today (inclusive), in Pakistan time. */
-function rangeForLastNDays(n: number): { date_from: string; date_to: string } {
-  const date_to = getPakistanIsoDateString();
-  const date_from = subtractPakistanDays(date_to, n - 1);
-  return { date_from, date_to };
+function defaultDateRange(): { dateFrom: string; dateTo: string } {
+  const dateTo = getPakistanIsoDateString();
+  const dateFrom = subtractPakistanDays(dateTo, 13);
+  return { dateFrom, dateTo };
 }
 
 export default function WaterLoggingCompliancePage() {
@@ -38,7 +37,7 @@ export default function WaterLoggingCompliancePage() {
   const [waterSystems, setWaterSystems] = useState<WaterSystemListItem[]>([]);
   const [systemsLoading, setSystemsLoading] = useState(true);
   const [selectedWaterSystemId, setSelectedWaterSystemId] = useState("");
-  const [rangeDays, setRangeDays] = useState<7 | 14 | 30>(14);
+  const [{ dateFrom, dateTo }, setDateRange] = useState(defaultDateRange);
   const [rangeData, setRangeData] = useState<WaterDailyRangePayload | null>(
     null,
   );
@@ -68,13 +67,12 @@ export default function WaterLoggingCompliancePage() {
       setRangeData(null);
       return;
     }
-    const { date_from, date_to } = rangeForLastNDays(rangeDays);
     try {
       setLoading(true);
       const raw = await getWaterDailyLoggingRange({
         water_system_id: selectedWaterSystemId,
-        date_from,
-        date_to,
+        date_from: dateFrom,
+        date_to: dateTo,
       });
       setRangeData(raw);
     } catch (e: unknown) {
@@ -85,7 +83,7 @@ export default function WaterLoggingCompliancePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedWaterSystemId, rangeDays]);
+  }, [selectedWaterSystemId, dateFrom, dateTo]);
 
   useEffect(() => {
     void loadSystems();
@@ -155,8 +153,9 @@ export default function WaterLoggingCompliancePage() {
         systemsLoading={systemsLoading}
         selectedWaterSystemId={selectedWaterSystemId}
         onSelectWaterSystem={setSelectedWaterSystemId}
-        rangeDays={rangeDays}
-        onRangeDaysChange={setRangeDays}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onRangeChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
         loading={loading}
         rangeData={rangeData}
       />

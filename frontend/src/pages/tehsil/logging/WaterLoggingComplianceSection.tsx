@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -49,10 +49,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import { Skeleton } from "../../../components/ui/skeleton";
+import { Input } from "../../../components/ui/input";
+import { toast } from "sonner";
 import { tehsilRoutes } from "../../../constants/routes";
 import { cn } from "../../../lib/utils";
-import { formatPakistanIsoDateLabel } from "../../../utils/pakistanTime";
+import {
+  formatPakistanIsoDateLabel,
+  getPakistanIsoDateString,
+  subtractPakistanDays,
+} from "../../../utils/pakistanTime";
 import {
   type WaterDailyRangeDay,
   type WaterDailyRangePayload,
@@ -70,11 +75,40 @@ type WaterLoggingComplianceSectionProps = {
   systemsLoading: boolean;
   selectedWaterSystemId: string;
   onSelectWaterSystem: (id: string) => void;
-  rangeDays: 7 | 14 | 30;
-  onRangeDaysChange: (days: 7 | 14 | 30) => void;
+  dateFrom: string;
+  dateTo: string;
+  onRangeChange: (dateFrom: string, dateTo: string) => void;
   loading: boolean;
   rangeData: WaterDailyRangePayload | null;
 };
+
+const MAX_RANGE_DAYS = 31;
+
+function inclusiveDaySpan(dateFrom: string, dateTo: string): number {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const fromMs = new Date(`${dateFrom.slice(0, 10)}T00:00:00+05:00`).getTime();
+  const toMs = new Date(`${dateTo.slice(0, 10)}T00:00:00+05:00`).getTime();
+  return Math.floor((toMs - fromMs) / DAY_MS) + 1;
+}
+
+function presetRange(days: 7 | 14 | 30): { dateFrom: string; dateTo: string } {
+  const dateTo = getPakistanIsoDateString();
+  const dateFrom = subtractPakistanDays(dateTo, days - 1);
+  return { dateFrom, dateTo };
+}
+
+function matchingPreset(
+  dateFrom: string,
+  dateTo: string,
+): 7 | 14 | 30 | null {
+  for (const days of [7, 14, 30] as const) {
+    const preset = presetRange(days);
+    if (preset.dateFrom === dateFrom && preset.dateTo === dateTo) {
+      return days;
+    }
+  }
+  return null;
+}
 
 function formatDayLabel(isoDate: string): string {
   return formatPakistanIsoDateLabel(isoDate);
@@ -102,13 +136,25 @@ export default function WaterLoggingComplianceSection({
   systemsLoading,
   selectedWaterSystemId,
   onSelectWaterSystem,
-  rangeDays,
-  onRangeDaysChange,
+  dateFrom,
+  dateTo,
+  onRangeChange,
   loading,
   rangeData,
 }: WaterLoggingComplianceSectionProps) {
   const navigate = useNavigate();
   const [tableSearch, setTableSearch] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState(dateFrom);
+  const [draftDateTo, setDraftDateTo] = useState(dateTo);
+  const activePreset = useMemo(
+    () => matchingPreset(dateFrom, dateTo),
+    [dateFrom, dateTo],
+  );
+
+  useEffect(() => {
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+  }, [dateFrom, dateTo]);
 
   const allDays = rangeData?.days ?? [];
   const rangeStats = useMemo(() => countStatuses(allDays), [allDays]);
@@ -134,6 +180,32 @@ export default function WaterLoggingComplianceSection({
     !systemsLoading && waterSystems.length > 0 && !selectedWaterSystemId;
   const showNoSystems = !systemsLoading && waterSystems.length === 0;
   const showData = Boolean(rangeData && selectedWaterSystemId);
+
+  const applyCustomRange = () => {
+    const from = draftDateFrom.trim();
+    const to = draftDateTo.trim();
+    if (!from || !to) {
+      toast.error("Choose both start and end dates.");
+      return;
+    }
+    if (to < from) {
+      toast.error("End date must be on or after start date.");
+      return;
+    }
+    const span = inclusiveDaySpan(from, to);
+    if (span > MAX_RANGE_DAYS) {
+      toast.error(`Date range cannot exceed ${MAX_RANGE_DAYS} days.`);
+      return;
+    }
+    onRangeChange(from, to);
+  };
+
+  const applyPreset = (days: 7 | 14 | 30) => {
+    const { dateFrom: from, dateTo: to } = presetRange(days);
+    setDraftDateFrom(from);
+    setDraftDateTo(to);
+    onRangeChange(from, to);
+  };
 
   return (
     <div
@@ -183,29 +255,70 @@ export default function WaterLoggingComplianceSection({
                 </SelectContent>
               </Select>
               <FieldDescription id={`${baseId}-step1-hint`}>
-                Window ends today and counts backward.
+                Pick a date range below (max {MAX_RANGE_DAYS} days).
               </FieldDescription>
             </Field>
 
             <Field className="lg:col-span-7">
               <FieldLabel>Period</FieldLabel>
-              <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
-                {RANGE_PRESETS.map(({ days, label }) => (
+              <div className="space-y-3">
+                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
+                  {RANGE_PRESETS.map(({ days, label }) => (
+                    <Button
+                      key={days}
+                      type="button"
+                      size="sm"
+                      variant={activePreset === days ? "default" : "ghost"}
+                      className="min-w-[3.25rem] rounded-md"
+                      onClick={() => applyPreset(days)}
+                      disabled={loading || !selectedWaterSystemId}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor={`${baseId}-date-from`}>
+                      From
+                    </FieldLabel>
+                    <Input
+                      id={`${baseId}-date-from`}
+                      type="date"
+                      className="h-10"
+                      value={draftDateFrom}
+                      max={draftDateTo || undefined}
+                      disabled={loading || !selectedWaterSystemId}
+                      onChange={(e) => setDraftDateFrom(e.target.value)}
+                    />
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor={`${baseId}-date-to`}>To</FieldLabel>
+                    <Input
+                      id={`${baseId}-date-to`}
+                      type="date"
+                      className="h-10"
+                      value={draftDateTo}
+                      min={draftDateFrom || undefined}
+                      max={getPakistanIsoDateString()}
+                      disabled={loading || !selectedWaterSystemId}
+                      onChange={(e) => setDraftDateTo(e.target.value)}
+                    />
+                  </Field>
                   <Button
-                    key={days}
                     type="button"
                     size="sm"
-                    variant={rangeDays === days ? "default" : "ghost"}
-                    className="min-w-[3.25rem] rounded-md"
-                    onClick={() => onRangeDaysChange(days)}
+                    className="h-10 shrink-0 px-5"
                     disabled={loading || !selectedWaterSystemId}
+                    onClick={applyCustomRange}
                   >
-                    {label}
+                    Apply
                   </Button>
-                ))}
+                </div>
               </div>
               <FieldDescription>
-                All days in the window are shown in the table below.
+                Quick presets or choose custom dates, then Apply. All days in
+                the range appear in the table below.
               </FieldDescription>
             </Field>
           </FieldGroup>
