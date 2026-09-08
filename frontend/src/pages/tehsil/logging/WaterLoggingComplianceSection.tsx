@@ -67,6 +67,7 @@ import {
   waterStatusLabel,
   waterStatusVariant,
 } from "./loggingComplianceTypes";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type WaterLoggingComplianceSectionProps = {
   baseId: string;
@@ -97,10 +98,7 @@ function presetRange(days: 7 | 14 | 30): { dateFrom: string; dateTo: string } {
   return { dateFrom, dateTo };
 }
 
-function matchingPreset(
-  dateFrom: string,
-  dateTo: string,
-): 7 | 14 | 30 | null {
+function matchingPreset(dateFrom: string, dateTo: string): 7 | 14 | 30 | null {
   for (const days of [7, 14, 30] as const) {
     const preset = presetRange(days);
     if (preset.dateFrom === dateFrom && preset.dateTo === dateTo) {
@@ -235,9 +233,7 @@ export default function WaterLoggingComplianceSection({
                   aria-describedby={`${baseId}-step1-hint`}
                 >
                   <SelectValue
-                    placeholder={
-                      systemsLoading ? "Loading…" : "Select system"
-                    }
+                    placeholder={systemsLoading ? "Loading…" : "Select system"}
                   />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
@@ -382,8 +378,8 @@ export default function WaterLoggingComplianceSection({
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
-              {rangeData.date_from} — {rangeData.date_to} · {allDays.length}{" "}
-              day{allDays.length === 1 ? "" : "s"}
+              {rangeData.date_from} — {rangeData.date_to} · {allDays.length} day
+              {allDays.length === 1 ? "" : "s"}
             </span>
           </div>
 
@@ -439,7 +435,9 @@ export default function WaterLoggingComplianceSection({
               <Table>
                 <DataTableHeader>
                   <DataTableHead className="min-w-[200px]">Date</DataTableHead>
-                  <DataTableHead className="min-w-[140px]">Status</DataTableHead>
+                  <DataTableHead className="min-w-[140px]">
+                    Status
+                  </DataTableHead>
                   <DataTableHead className="min-w-[200px]">
                     Operators
                   </DataTableHead>
