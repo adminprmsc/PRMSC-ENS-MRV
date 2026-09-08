@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -63,6 +63,14 @@ import {
   waterStatusLabel,
   waterStatusVariant,
 } from "./loggingComplianceTypes";
+import {
+  WATER_COMPLIANCE_DATE_PRESETS,
+  buildPresetDateRange,
+  detectActivePreset,
+  inferFilterMode,
+  type WaterComplianceFilterMode,
+  validateDateRange,
+} from "./waterLoggingComplianceDateFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type WaterLoggingComplianceSectionProps = {
@@ -79,27 +87,14 @@ type WaterLoggingComplianceSectionProps = {
   rangeData: WaterDailyRangePayload | null;
 };
 
-const MAX_RANGE_DAYS = 31;
-
-function inclusiveDaySpan(dateFrom: string, dateTo: string): number {
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const fromMs = new Date(`${dateFrom.slice(0, 10)}T00:00:00+05:00`).getTime();
-  const toMs = new Date(`${dateTo.slice(0, 10)}T00:00:00+05:00`).getTime();
-  return Math.floor((toMs - fromMs) / DAY_MS) + 1;
-}
-
 function applyDateRange(
   from: string,
   to: string,
   onRangeChange: (dateFrom: string, dateTo: string) => void,
 ) {
-  if (!from || !to) return;
-  if (to < from) {
-    toast.error("End date must be on or after start date.");
-    return;
-  }
-  if (inclusiveDaySpan(from, to) > MAX_RANGE_DAYS) {
-    toast.error(`Choose up to ${MAX_RANGE_DAYS} days.`);
+  const result = validateDateRange(from, to);
+  if (!result.ok) {
+    toast.error(result.message);
     return;
   }
   onRangeChange(from, to);
@@ -134,6 +129,29 @@ export default function WaterLoggingComplianceSection({
   const navigate = useNavigate();
   const [tableSearch, setTableSearch] = useState("");
   const today = getPakistanIsoDateString();
+  const filtersDisabled = loading || !selectedWaterSystemId;
+
+  const [filterMode, setFilterMode] = useState<WaterComplianceFilterMode>(() =>
+    inferFilterMode(dateFrom, dateTo),
+  );
+  const [draftFrom, setDraftFrom] = useState(dateFrom);
+  const [draftTo, setDraftTo] = useState(dateTo);
+  const [draftSingle, setDraftSingle] = useState(
+    dateFrom === dateTo ? dateFrom : today,
+  );
+
+  const activePreset = useMemo(
+    () => detectActivePreset(dateFrom, dateTo),
+    [dateFrom, dateTo],
+  );
+
+  useEffect(() => {
+    setDraftFrom(dateFrom);
+    setDraftTo(dateTo);
+    if (dateFrom === dateTo) {
+      setDraftSingle(dateFrom);
+    }
+  }, [dateFrom, dateTo]);
 
   const allDays = rangeData?.days ?? [];
   const rangeStats = useMemo(() => countStatuses(allDays), [allDays]);
@@ -160,6 +178,20 @@ export default function WaterLoggingComplianceSection({
   const showNoSystems = !systemsLoading && waterSystems.length === 0;
   const showData = Boolean(rangeData && selectedWaterSystemId);
 
+  const applyPreset = (days: number) => {
+    const { dateFrom: from, dateTo: to } = buildPresetDateRange(days);
+    onRangeChange(from, to);
+  };
+
+  const applySingleDate = (iso: string) => {
+    if (!iso) return;
+    applyDateRange(iso, iso, onRangeChange);
+  };
+
+  const applyCustomRange = () => {
+    applyDateRange(draftFrom, draftTo, onRangeChange);
+  };
+
   return (
     <div
       id={panelId}
@@ -168,9 +200,9 @@ export default function WaterLoggingComplianceSection({
       className="space-y-5"
     >
       <Card>
-        <CardContent className="pt-5">
-          <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
-            <Field className="sm:col-span-2 lg:col-span-2">
+        <CardContent className="space-y-4 pt-5">
+          <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:items-end">
+            <Field className="sm:col-span-2 lg:col-span-3">
               <FieldLabel htmlFor="water-system-pick">Water system</FieldLabel>
               <Select
                 value={selectedWaterSystemId || undefined}
@@ -199,38 +231,110 @@ export default function WaterLoggingComplianceSection({
                 </SelectContent>
               </Select>
             </Field>
-
-            <Field>
-              <FieldLabel htmlFor={`${baseId}-date-from`}>From</FieldLabel>
-              <Input
-                id={`${baseId}-date-from`}
-                type="date"
-                className="h-10"
-                value={dateFrom}
-                max={dateTo || today}
-                disabled={loading || !selectedWaterSystemId}
-                onChange={(e) =>
-                  applyDateRange(e.target.value, dateTo, onRangeChange)
-                }
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor={`${baseId}-date-to`}>To</FieldLabel>
-              <Input
-                id={`${baseId}-date-to`}
-                type="date"
-                className="h-10"
-                value={dateTo}
-                min={dateFrom || undefined}
-                max={today}
-                disabled={loading || !selectedWaterSystemId}
-                onChange={(e) =>
-                  applyDateRange(dateFrom, e.target.value, onRangeChange)
-                }
-              />
-            </Field>
           </FieldGroup>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Quick range
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {WATER_COMPLIANCE_DATE_PRESETS.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  size="sm"
+                  variant={activePreset === preset.id ? "default" : "outline"}
+                  disabled={filtersDisabled}
+                  onClick={() => applyPreset(preset.days)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3 border-t border-border/70 pt-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={filterMode === "single" ? "default" : "outline"}
+                disabled={filtersDisabled}
+                onClick={() => setFilterMode("single")}
+              >
+                Single date
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={filterMode === "range" ? "default" : "outline"}
+                disabled={filtersDisabled}
+                onClick={() => setFilterMode("range")}
+              >
+                Custom range
+              </Button>
+            </div>
+
+            {filterMode === "single" ? (
+              <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:items-end">
+                <Field>
+                  <FieldLabel htmlFor={`${baseId}-single-date`}>Date</FieldLabel>
+                  <Input
+                    id={`${baseId}-single-date`}
+                    type="date"
+                    className="h-10"
+                    value={draftSingle}
+                    max={today}
+                    disabled={filtersDisabled}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setDraftSingle(next);
+                      applySingleDate(next);
+                    }}
+                  />
+                </Field>
+              </FieldGroup>
+            ) : (
+              <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+                <Field>
+                  <FieldLabel htmlFor={`${baseId}-date-from`}>From</FieldLabel>
+                  <Input
+                    id={`${baseId}-date-from`}
+                    type="date"
+                    className="h-10"
+                    value={draftFrom}
+                    max={draftTo || today}
+                    disabled={filtersDisabled}
+                    onChange={(e) => setDraftFrom(e.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${baseId}-date-to`}>To</FieldLabel>
+                  <Input
+                    id={`${baseId}-date-to`}
+                    type="date"
+                    className="h-10"
+                    value={draftTo}
+                    min={draftFrom || undefined}
+                    max={today}
+                    disabled={filtersDisabled}
+                    onChange={(e) => setDraftTo(e.target.value)}
+                  />
+                </Field>
+                <Field className="sm:col-span-2 lg:col-span-1">
+                  <FieldLabel className="sr-only">Apply range</FieldLabel>
+                  <Button
+                    type="button"
+                    className="h-10 w-full"
+                    disabled={filtersDisabled}
+                    onClick={applyCustomRange}
+                  >
+                    Apply range
+                  </Button>
+                </Field>
+              </FieldGroup>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -291,7 +395,10 @@ export default function WaterLoggingComplianceSection({
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">
-              {rangeData.date_from} — {rangeData.date_to} · {allDays.length} day
+              {rangeData.date_from === rangeData.date_to
+                ? rangeData.date_from
+                : `${rangeData.date_from} — ${rangeData.date_to}`}{" "}
+              · {allDays.length} day
               {allDays.length === 1 ? "" : "s"}
             </span>
           </div>

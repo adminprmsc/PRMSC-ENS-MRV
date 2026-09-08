@@ -963,10 +963,10 @@ export class TehsilManagerService {
     }
     const span =
       Math.floor((d1.getTime() - d0.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    if (span > 31) {
+    if (span > 62) {
       return {
         statusCode: 400,
-        body: { message: 'Range cannot exceed 31 days' },
+        body: { message: 'Range cannot exceed 62 days' },
       };
     }
 
