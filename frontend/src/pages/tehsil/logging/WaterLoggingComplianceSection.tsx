@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -26,8 +26,6 @@ import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "../../../components/ui/card";
 import {
   Empty,
@@ -38,7 +36,6 @@ import {
 } from "../../../components/ui/empty";
 import {
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
 } from "../../../components/ui/field";
@@ -56,7 +53,6 @@ import { cn } from "../../../lib/utils";
 import {
   formatPakistanIsoDateLabel,
   getPakistanIsoDateString,
-  subtractPakistanDays,
 } from "../../../utils/pakistanTime";
 import {
   type WaterDailyRangeDay,
@@ -92,20 +88,21 @@ function inclusiveDaySpan(dateFrom: string, dateTo: string): number {
   return Math.floor((toMs - fromMs) / DAY_MS) + 1;
 }
 
-function presetRange(days: 7 | 14 | 30): { dateFrom: string; dateTo: string } {
-  const dateTo = getPakistanIsoDateString();
-  const dateFrom = subtractPakistanDays(dateTo, days - 1);
-  return { dateFrom, dateTo };
-}
-
-function matchingPreset(dateFrom: string, dateTo: string): 7 | 14 | 30 | null {
-  for (const days of [7, 14, 30] as const) {
-    const preset = presetRange(days);
-    if (preset.dateFrom === dateFrom && preset.dateTo === dateTo) {
-      return days;
-    }
+function applyDateRange(
+  from: string,
+  to: string,
+  onRangeChange: (dateFrom: string, dateTo: string) => void,
+) {
+  if (!from || !to) return;
+  if (to < from) {
+    toast.error("End date must be on or after start date.");
+    return;
   }
-  return null;
+  if (inclusiveDaySpan(from, to) > MAX_RANGE_DAYS) {
+    toast.error(`Choose up to ${MAX_RANGE_DAYS} days.`);
+    return;
+  }
+  onRangeChange(from, to);
 }
 
 function formatDayLabel(isoDate: string): string {
@@ -120,12 +117,6 @@ function countStatuses(days: WaterDailyRangeDay[]) {
   }
   return counts;
 }
-
-const RANGE_PRESETS: { days: 7 | 14 | 30; label: string }[] = [
-  { days: 7, label: "7d" },
-  { days: 14, label: "14d" },
-  { days: 30, label: "30d" },
-];
 
 export default function WaterLoggingComplianceSection({
   baseId,
@@ -142,17 +133,7 @@ export default function WaterLoggingComplianceSection({
 }: WaterLoggingComplianceSectionProps) {
   const navigate = useNavigate();
   const [tableSearch, setTableSearch] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState(dateFrom);
-  const [draftDateTo, setDraftDateTo] = useState(dateTo);
-  const activePreset = useMemo(
-    () => matchingPreset(dateFrom, dateTo),
-    [dateFrom, dateTo],
-  );
-
-  useEffect(() => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
-  }, [dateFrom, dateTo]);
+  const today = getPakistanIsoDateString();
 
   const allDays = rangeData?.days ?? [];
   const rangeStats = useMemo(() => countStatuses(allDays), [allDays]);
@@ -179,32 +160,6 @@ export default function WaterLoggingComplianceSection({
   const showNoSystems = !systemsLoading && waterSystems.length === 0;
   const showData = Boolean(rangeData && selectedWaterSystemId);
 
-  const applyCustomRange = () => {
-    const from = draftDateFrom.trim();
-    const to = draftDateTo.trim();
-    if (!from || !to) {
-      toast.error("Choose both start and end dates.");
-      return;
-    }
-    if (to < from) {
-      toast.error("End date must be on or after start date.");
-      return;
-    }
-    const span = inclusiveDaySpan(from, to);
-    if (span > MAX_RANGE_DAYS) {
-      toast.error(`Date range cannot exceed ${MAX_RANGE_DAYS} days.`);
-      return;
-    }
-    onRangeChange(from, to);
-  };
-
-  const applyPreset = (days: 7 | 14 | 30) => {
-    const { dateFrom: from, dateTo: to } = presetRange(days);
-    setDraftDateFrom(from);
-    setDraftDateTo(to);
-    onRangeChange(from, to);
-  };
-
   return (
     <div
       id={panelId}
@@ -213,12 +168,9 @@ export default function WaterLoggingComplianceSection({
       className="space-y-5"
     >
       <Card>
-        <CardHeader className="border-b border-border/60 pb-4">
-          <CardTitle className="text-base font-semibold">Filters</CardTitle>
-        </CardHeader>
         <CardContent className="pt-5">
-          <FieldGroup className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-            <Field className="lg:col-span-5">
+          <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+            <Field className="sm:col-span-2 lg:col-span-2">
               <FieldLabel htmlFor="water-system-pick">Water system</FieldLabel>
               <Select
                 value={selectedWaterSystemId || undefined}
@@ -227,11 +179,7 @@ export default function WaterLoggingComplianceSection({
                 }}
                 disabled={systemsLoading || waterSystems.length === 0}
               >
-                <SelectTrigger
-                  id="water-system-pick"
-                  className="h-10 w-full"
-                  aria-describedby={`${baseId}-step1-hint`}
-                >
+                <SelectTrigger id="water-system-pick" className="h-10 w-full">
                   <SelectValue
                     placeholder={systemsLoading ? "Loading…" : "Select system"}
                   />
@@ -250,72 +198,37 @@ export default function WaterLoggingComplianceSection({
                   ))}
                 </SelectContent>
               </Select>
-              <FieldDescription id={`${baseId}-step1-hint`}>
-                Pick a date range below (max {MAX_RANGE_DAYS} days).
-              </FieldDescription>
             </Field>
 
-            <Field className="lg:col-span-7">
-              <FieldLabel>Period</FieldLabel>
-              <div className="space-y-3">
-                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
-                  {RANGE_PRESETS.map(({ days, label }) => (
-                    <Button
-                      key={days}
-                      type="button"
-                      size="sm"
-                      variant={activePreset === days ? "default" : "ghost"}
-                      className="min-w-[3.25rem] rounded-md"
-                      onClick={() => applyPreset(days)}
-                      disabled={loading || !selectedWaterSystemId}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                  <Field className="gap-1.5">
-                    <FieldLabel htmlFor={`${baseId}-date-from`}>
-                      From
-                    </FieldLabel>
-                    <Input
-                      id={`${baseId}-date-from`}
-                      type="date"
-                      className="h-10"
-                      value={draftDateFrom}
-                      max={draftDateTo || undefined}
-                      disabled={loading || !selectedWaterSystemId}
-                      onChange={(e) => setDraftDateFrom(e.target.value)}
-                    />
-                  </Field>
-                  <Field className="gap-1.5">
-                    <FieldLabel htmlFor={`${baseId}-date-to`}>To</FieldLabel>
-                    <Input
-                      id={`${baseId}-date-to`}
-                      type="date"
-                      className="h-10"
-                      value={draftDateTo}
-                      min={draftDateFrom || undefined}
-                      max={getPakistanIsoDateString()}
-                      disabled={loading || !selectedWaterSystemId}
-                      onChange={(e) => setDraftDateTo(e.target.value)}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-10 shrink-0 px-5"
-                    disabled={loading || !selectedWaterSystemId}
-                    onClick={applyCustomRange}
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </div>
-              <FieldDescription>
-                Quick presets or choose custom dates, then Apply. All days in
-                the range appear in the table below.
-              </FieldDescription>
+            <Field>
+              <FieldLabel htmlFor={`${baseId}-date-from`}>From</FieldLabel>
+              <Input
+                id={`${baseId}-date-from`}
+                type="date"
+                className="h-10"
+                value={dateFrom}
+                max={dateTo || today}
+                disabled={loading || !selectedWaterSystemId}
+                onChange={(e) =>
+                  applyDateRange(e.target.value, dateTo, onRangeChange)
+                }
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor={`${baseId}-date-to`}>To</FieldLabel>
+              <Input
+                id={`${baseId}-date-to`}
+                type="date"
+                className="h-10"
+                value={dateTo}
+                min={dateFrom || undefined}
+                max={today}
+                disabled={loading || !selectedWaterSystemId}
+                onChange={(e) =>
+                  applyDateRange(dateFrom, e.target.value, onRangeChange)
+                }
+              />
             </Field>
           </FieldGroup>
         </CardContent>
