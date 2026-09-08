@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -961,14 +961,6 @@ export class TehsilManagerService {
         body: { message: 'date_to must be on or after date_from' },
       };
     }
-    const span =
-      Math.floor((d1.getTime() - d0.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    if (span > 62) {
-      return {
-        statusCode: 400,
-        body: { message: 'Range cannot exceed 62 days' },
-      };
-    }
 
     const ws = await this.waterSystemRepo.findOne({
       where: { id: waterSystemId },
@@ -994,15 +986,27 @@ export class TehsilManagerService {
       .filter((r) => r.user)
       .map((r) => this.operatorPayload(r.user));
 
+    const records = await this.waterDailyRepo.find({
+      where: {
+        waterSystemId: ws.id,
+        logDate: Between(d0, d1),
+      },
+      select: { id: true, logDate: true, status: true },
+    });
+    const recByDate = new Map<string, WaterEnergyLoggingDaily>();
+    for (const rec of records) {
+      const key = this.isoDate(rec.logDate);
+      if (key) recByDate.set(key, rec);
+    }
+
     const daysOut: Record<string, unknown>[] = [];
     const cur = new Date(d0);
     while (cur <= d1) {
-      const rec = await this.waterDailyRepo.findOne({
-        where: { waterSystemId: ws.id, logDate: new Date(cur) },
-      });
+      const iso = this.isoDate(cur)!;
+      const rec = recByDate.get(iso) ?? null;
       const [st, logPayload] = this.waterDailyStatusBucket(rec);
       daysOut.push({
-        date: this.isoDate(cur),
+        date: iso,
         daily_status: st,
         daily_log: logPayload,
       });
@@ -2260,7 +2264,9 @@ export class TehsilManagerService {
     const tehsilScope = resolveTehsilScope(filterTehsil, tehsilsCsv);
     if (tehsilScope?.length) {
       const allowed = new Set(tehsilScope);
-      systems = systems.filter((s) => s.tehsil != null && allowed.has(s.tehsil));
+      systems = systems.filter(
+        (s) => s.tehsil != null && allowed.has(s.tehsil),
+      );
     } else if (filterTehsil && filterTehsil !== 'All Tehsils') {
       systems = systems.filter((s) => s.tehsil === filterTehsil);
     }

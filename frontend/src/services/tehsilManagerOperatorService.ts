@@ -271,7 +271,7 @@ export const getLoggingCompliance = async (params: QueryFilters = {}) => {
   return response.data;
 };
 
-/** One water system: daily log status for each day in [date_from, date_to] (max 62 days). */
+/** One water system: daily log status for each day in [date_from, date_to]. */
 export const getWaterDailyLoggingRange = async (params: {
   water_system_id: string;
   date_from: string;
