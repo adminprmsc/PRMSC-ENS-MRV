@@ -852,6 +852,13 @@ export class DashboardService {
       if (lCount === 0) {
         continue;
       }
+      // Estimated water = η × Q × t, with η = design fill time / actual fill time.
+      const designFill = Number(system.ohrFillRequired);
+      const actualFill = Number(system.timeToFill);
+      const flow = Number(system.pumpFlowRate);
+      const efficiency =
+        designFill > 0 && actualFill > 0 ? designFill / actualFill : null;
+      const flowRate = flow > 0 ? flow : null;
       rows.push({
         water_system_id: system.id,
         unique_identifier: system.uniqueIdentifier,
@@ -868,6 +875,9 @@ export class DashboardService {
         avg_m3_per_hour: hours > 0 ? water / hours : null,
         avg_m3_per_day_logged: dLogged > 0 ? water / dLogged : null,
         avg_hours_per_day_logged: dLogged > 0 ? hours / dLogged : null,
+        pumping_efficiency: efficiency,
+        estimated_water_m3:
+          efficiency != null && flowRate != null ? efficiency * flowRate * hours : null,
       });
     }
 

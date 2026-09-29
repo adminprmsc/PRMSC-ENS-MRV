@@ -25,6 +25,10 @@ export type WaterSystemDetailRow = {
   avg_m3_per_hour?: number | null;
   avg_m3_per_day_logged?: number | null;
   avg_hours_per_day_logged?: number | null;
+  /** Design fill time / actual fill time; null when either is missing. */
+  pumping_efficiency?: number | null;
+  /** η × pump flow rate × pump hours in scope; an estimate, not a meter reading. */
+  estimated_water_m3?: number | null;
 };
 
 export type SolarSystemDetailRow = {

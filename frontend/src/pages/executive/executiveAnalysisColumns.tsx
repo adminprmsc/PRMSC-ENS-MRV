@@ -108,6 +108,25 @@ export function useWaterAnalysisColumns(): Array<
           waterMeterCell(row.original, getValue(), fmtInt),
       },
       {
+        accessorKey: "estimated_water_m3",
+        header: "Estimated water (m³)",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ row, getValue }) => {
+          const eff = row.original.pumping_efficiency;
+          return (
+            <span
+              title={
+                eff == null
+                  ? "Needs design fill time, actual fill time and flow rate"
+                  : `η ${fmtNum(eff * 100, 1)}% × flow rate × runtime`
+              }
+            >
+              {waterNumCell(getValue(), fmtInt)}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "latest_meter_reading_end_m3",
         header: "Latest meter (m³)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
@@ -398,6 +417,16 @@ export function waterSystemDetailFields(row: WaterSystemDetailRow) {
     {
       label: "Meter net in period",
       value: waterMeterField(row, row.period_meter_net_m3, fmtInt, "m³"),
+    },
+    {
+      label: "Pumping efficiency (η)",
+      value: isBlank(row.pumping_efficiency)
+        ? "N/A"
+        : `${fmtNum(Number(row.pumping_efficiency) * 100, 1)}%`,
+    },
+    {
+      label: "Estimated water (η × Q × t)",
+      value: num(row.estimated_water_m3, fmtInt, "m³"),
     },
     {
       label: "Total pump runtime",

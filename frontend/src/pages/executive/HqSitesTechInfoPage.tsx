@@ -79,6 +79,34 @@ function fmtDate(iso: string | null | undefined): string {
   });
 }
 
+function positiveNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Pumping efficiency η = design fill time / actual fill time.
+ * Water delivered = η × Q (flow rate) × t (pump run time), so η × Q is the
+ * effective volume per hour of running.
+ */
+function pumpingEfficiency(s: WaterSystemRow) {
+  const design = positiveNum(s.ohr_fill_required);
+  const actual = positiveNum(s.time_to_fill);
+  const flow = positiveNum(s.pump_flow_rate);
+  if (design == null || actual == null) return { efficiency: null, effectiveFlow: null };
+  const efficiency = design / actual;
+  return {
+    efficiency,
+    effectiveFlow: flow == null ? null : efficiency * flow,
+  };
+}
+
+function fmtFixed(n: number | null, digits: number, unit: string): string {
+  if (n == null) return "—";
+  return `${n.toLocaleString("en-PK", { maximumFractionDigits: digits })} ${unit}`;
+}
+
 /* ─── Sub-components ─── */
 
 function SpecItem({
@@ -157,6 +185,7 @@ function WaterSiteCard({
   s: WaterSystemRow;
   onView: () => void;
 }) {
+  const { efficiency, effectiveFlow } = pumpingEfficiency(s);
   return (
     <Card className="overflow-hidden border-border/50 transition-all hover:border-border hover:shadow-sm">
       <CardContent className="p-5">
@@ -243,6 +272,16 @@ function WaterSiteCard({
               <SpecItem label="Tank capacity" value={val(s.ohr_tank_capacity, "m³")} />
               <SpecItem label="Design fill time" value={val(s.ohr_fill_required, "min")} />
               <SpecItem label="Actual fill time" value={val(s.time_to_fill, "min")} />
+              <SpecItem
+                label="Efficiency (η)"
+                hint="Design fill time ÷ Actual fill time"
+                value={fmtFixed(efficiency == null ? null : efficiency * 100, 1, "%")}
+              />
+              <SpecItem
+                label="Effective flow (η × Q)"
+                hint="× total pump run time (h) = water delivered (m³)"
+                value={fmtFixed(effectiveFlow, 3, "m³/h")}
+              />
             </div>
           </div>
 
