@@ -74,6 +74,7 @@ export class WaterSubmissionDetailService {
           ]
         : [];
       recordData = {
+        record_id: String(record.id),
         year: logDateParts[0] ?? null,
         month: logDateParts[1] ?? null,
         day: logDateParts[2] ?? null,
@@ -144,6 +145,7 @@ export class WaterSubmissionDetailService {
     return {
       submission: {
         id: submission.id,
+        record_id: submission.recordId,
         submission_type: submission.submissionType,
         status: submission.status,
         operator_name: operator?.name ?? 'Unknown',

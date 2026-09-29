@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Droplets,
   ExternalLink,
+  House,
   MapPin,
   Maximize2,
   Sun,
@@ -535,6 +536,7 @@ export default function SystemsMapCard({
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [pointsTruncated, setPointsTruncated] = useState(0);
   const [registryTotals, setRegistryTotals] = useState({ water: 0, solar: 0 });
+  const [villageCount, setVillageCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -572,6 +574,15 @@ export default function SystemsMapCard({
           : [];
 
       setRegistryTotals({ water: water.length, solar: solar.length });
+
+      // Same village name can exist in different tehsils, so key on both.
+      const villages = new Set<string>();
+      for (const row of [...water, ...solar]) {
+        const village = String(row.village ?? "").trim().toUpperCase();
+        if (!village) continue;
+        villages.add(`${String(row.tehsil ?? "").trim().toUpperCase()}|${village}`);
+      }
+      setVillageCount(villages.size);
 
       const mapped: GeoPoint[] = [];
 
@@ -625,6 +636,7 @@ export default function SystemsMapCard({
       setPoints([]);
       setPointsTruncated(0);
       setRegistryTotals({ water: 0, solar: 0 });
+      setVillageCount(0);
     } finally {
       setLoading(false);
     }
@@ -725,6 +737,15 @@ export default function SystemsMapCard({
             >
               <Sun className="size-3 text-amber-600" />
               {mapBusy ? "…" : badgeCounts.solar} solar
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`gap-1 px-2 py-0 text-xs ${mapBusy ? "opacity-60" : ""}`}
+              title="Distinct villages with a registered water or solar site"
+            >
+              <House className="size-3 text-emerald-600" />
+              {mapBusy ? "…" : villageCount}{" "}
+              {villageCount === 1 ? "village" : "villages"}
             </Badge>
             {!isHero ? (
               <Button

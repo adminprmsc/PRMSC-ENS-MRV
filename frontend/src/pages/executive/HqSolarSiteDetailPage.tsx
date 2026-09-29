@@ -856,7 +856,6 @@ function MonthTreeBranch({
                 )}
               >
                 {branch.records.map((row, idx) => {
-                  const { exportKwh, importKwh, netKwh } = recordTotals(row);
                   return (
                     <article
                       key={row.id}
@@ -921,39 +920,7 @@ function MonthTreeBranch({
                         </Link>
                       </div>
 
-                      <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-                        <div>
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Totals (kWh)
-                          </p>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="rounded-md border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-amber-800/80 dark:text-amber-200/80">
-                                Export
-                              </p>
-                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-amber-800 dark:text-amber-200">
-                                {fmtNum(exportKwh)}
-                              </p>
-                            </div>
-                            <div className="rounded-md border border-red-200/80 bg-red-50/70 px-2.5 py-2 dark:border-red-900/50 dark:bg-red-950/30">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-red-800/80 dark:text-red-200/80">
-                                Import
-                              </p>
-                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-red-800 dark:text-red-200">
-                                {fmtNum(importKwh)}
-                              </p>
-                            </div>
-                            <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Net
-                              </p>
-                              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
-                                {fmtNum(netKwh)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
+                      <div className="p-3">
                         <div>
                           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                             Time-of-use split

@@ -308,6 +308,13 @@ export async function getWaterDraftById(
   return res.data as WaterDraftDetail;
 }
 
+export async function submitWaterDraftById(recordId: string) {
+  const res = await apiClient.post(
+    `operator/water-data/draft/${encodeURIComponent(recordId)}/submit`,
+  );
+  return res.data as Record<string, unknown>;
+}
+
 export async function updateWaterDraftById(
   recordId: string,
   input: WaterLogInput,
@@ -369,9 +376,13 @@ export async function saveWaterSupplyDraft(
 export async function uploadEvidenceFile(
   recordType: 'water',
   asset: EvidenceAsset,
+  recordId?: string,
 ): Promise<Record<string, unknown>> {
   const formData = new FormData();
   formData.append('record_type', recordType);
+  if (recordId?.trim()) {
+    formData.append('record_id', recordId.trim());
+  }
   formData.append('file', {
     uri: asset.uri,
     name: asset.fileName || `${recordType}-evidence.jpg`,

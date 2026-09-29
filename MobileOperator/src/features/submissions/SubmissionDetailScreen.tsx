@@ -16,7 +16,8 @@ import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 import {
   getSubmissionDetail,
-  saveWaterSupplyData,
+  submitWaterDraftById,
+  updateWaterDraftById,
   uploadEvidenceFile,
 } from '../../api/operator';
 import { getApiErrorMessage } from '../../lib/api-error';
@@ -36,7 +37,6 @@ import { Text } from '../../components/ui/text';
 import type { RootStackParamList } from '../../navigation/types';
 import { AlertCircle } from 'lucide-react-native';
 import type { EvidenceAsset, WaterLogInput } from '../../types/operator';
-import { createIdempotencyKey } from '../../offline/queue';
 import { LoadingOverlay } from '../../components/ui/loading-overlay';
 import {
   AmPmTimePickerField,
@@ -237,6 +237,52 @@ const editStyles = StyleSheet.create({
   },
 });
 
+function sanitizeDecimalInput(value: string): string {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  const [whole, ...rest] = cleaned.split('.');
+  if (!rest.length) return whole;
+  return `${whole}.${rest.join('').replace(/\./g, '')}`;
+}
+
+function isValidNumberInput(value: string): boolean {
+  const t = value.trim();
+  if (!t) return false;
+  const parsed = Number(t);
+  return Number.isFinite(parsed);
+}
+
+function numericFieldFromRecord(value: unknown): string {
+  if (value == null || value === '') return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  return String(n);
+}
+
+function meterReadingEndFromRecord(record: Record<string, unknown>): string {
+  const fromEnd = numericFieldFromRecord(record.meter_reading_end);
+  if (fromEnd) return fromEnd;
+  return numericFieldFromRecord(record.total_water_pumped);
+}
+
+function recordIdFromPayload(
+  record: Record<string, unknown>,
+  submission: Record<string, unknown>,
+): string {
+  const fromRecord = record.record_id;
+  if (typeof fromRecord === 'string' && fromRecord.trim()) {
+    return fromRecord.trim();
+  }
+  const fromSubmission = submission.record_id;
+  if (typeof fromSubmission === 'string' && fromSubmission.trim()) {
+    return fromSubmission.trim();
+  }
+  return '';
+}
+
+function bulkMeterInstalled(system: Record<string, unknown>): boolean {
+  return system.bulk_meter_installed !== false;
+}
+
 export function SubmissionDetailScreen({ route }: Props) {
   const { submissionId } = route.params;
   const [loading, setLoading] = useState(true);
@@ -299,41 +345,40 @@ export function SubmissionDetailScreen({ route }: Props) {
     return typeof raw === 'string' && raw.trim() ? raw.trim() : '';
   }, [record.bulk_meter_image_url]);
 
-  useEffect(() => {
-    if (!canEditResubmit) return;
-    const endReading =
-      record.meter_reading_end != null
-        ? record.meter_reading_end
-        : record.total_water_pumped;
-    setMeterReadingEnd(
-      endReading != null && String(endReading) !== '' ? String(endReading) : '',
-    );
-    const startReading = record.meter_reading_start;
-    setMeterReadingStart(
-      startReading != null && String(startReading) !== ''
-        ? String(startReading)
-        : '',
-    );
+  const resubmitRecordId = useMemo(
+    () => recordIdFromPayload(record, sub),
+    [record.record_id, sub.record_id],
+  );
+
+  const noBulkMeterInstalled = bulkMeterInstalled(system);
+
+  const editFormSeed = useMemo(() => {
+    if (!canEditResubmit) return null;
     const pst = record.pump_start_time;
     const pet = record.pump_end_time;
-    setPumpStart(typeof pst === 'string' && pst.trim() ? pst.trim() : '');
-    setPumpEnd(typeof pet === 'string' && pet.trim() ? pet.trim() : '');
+    return {
+      meterReadingEnd: meterReadingEndFromRecord(record),
+      meterReadingStart: numericFieldFromRecord(record.meter_reading_start),
+      pumpStart: typeof pst === 'string' && pst.trim() ? pst.trim() : '',
+      pumpEnd: typeof pet === 'string' && pet.trim() ? pet.trim() : '',
+    };
+  }, [
+    canEditResubmit,
+    record.meter_reading_end,
+    record.meter_reading_start,
+    record.total_water_pumped,
+    record.pump_start_time,
+    record.pump_end_time,
+  ]);
+
+  useEffect(() => {
+    if (!editFormSeed) return;
+    setMeterReadingEnd(editFormSeed.meterReadingEnd);
+    setMeterReadingStart(editFormSeed.meterReadingStart);
+    setPumpStart(editFormSeed.pumpStart);
+    setPumpEnd(editFormSeed.pumpEnd);
     setAsset(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submissionId, canEditResubmit]);
-
-  function sanitizeDecimalInput(value: string): string {
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    const [whole, ...rest] = cleaned.split('.');
-    if (!rest.length) return whole;
-    return `${whole}.${rest.join('').replace(/\./g, '')}`;
-  }
-
-  function isValidNumberInput(value: string): boolean {
-    if (!value.trim()) return false;
-    const parsed = Number(value);
-    return Number.isFinite(parsed);
-  }
+  }, [editFormSeed, submissionId]);
 
   const openCamera = async () => {
     const res = await launchCamera({ mediaType: 'photo', quality: 0.8 });
@@ -364,6 +409,13 @@ export function SubmissionDetailScreen({ route }: Props) {
     const month = Number(record.month);
     const day = Number((record as Record<string, unknown>).day);
 
+    if (!resubmitRecordId) {
+      RNAlert.alert(
+        'Cannot resubmit',
+        'Missing record id for this submission.',
+      );
+      return;
+    }
     if (
       !tehsil ||
       !village ||
@@ -377,26 +429,41 @@ export function SubmissionDetailScreen({ route }: Props) {
       );
       return;
     }
-    if (!isValidNumberInput(meterReadingEnd)) {
+
+    const resolvedMeterEnd =
+      meterReadingEnd.trim() || meterReadingEndFromRecord(record);
+    const resolvedMeterStart =
+      meterReadingStart.trim() ||
+      numericFieldFromRecord(record.meter_reading_start);
+
+    if (noBulkMeterInstalled) {
+      // Pump times only — no bulk meter reading required.
+    } else if (!isValidNumberInput(resolvedMeterEnd)) {
       RNAlert.alert('Validation', 'Meter reading at pump stop must be numeric.');
       return;
     }
-    const endVal = Number(meterReadingEnd);
+    const endVal = noBulkMeterInstalled
+      ? null
+      : Number(resolvedMeterEnd);
     const prevSubmitted = record.previous_meter_reading_end;
     const prevNum =
       prevSubmitted != null && String(prevSubmitted).trim() !== ''
         ? Number(prevSubmitted)
         : null;
-    const startNum = meterReadingStart.trim()
-      ? Number(meterReadingStart)
-      : null;
+    const startNum = resolvedMeterStart ? Number(resolvedMeterStart) : null;
     const base =
       prevNum != null && Number.isFinite(prevNum)
         ? prevNum
         : startNum != null && Number.isFinite(startNum)
           ? startNum
           : null;
-    if (base != null && Number.isFinite(base) && endVal <= base) {
+    if (
+      !noBulkMeterInstalled &&
+      endVal != null &&
+      base != null &&
+      Number.isFinite(base) &&
+      endVal <= base
+    ) {
       const fmt = (n: number) =>
         new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
       const label =
@@ -413,7 +480,11 @@ export function SubmissionDetailScreen({ route }: Props) {
       RNAlert.alert('Validation', 'Select pump start and end time.');
       return;
     }
-    if (!asset?.uri && !existingImageUrl) {
+    if (
+      !noBulkMeterInstalled &&
+      !asset?.uri &&
+      !existingImageUrl
+    ) {
       RNAlert.alert(
         'Validation',
         'Please attach a meter image (or keep existing).',
@@ -423,17 +494,8 @@ export function SubmissionDetailScreen({ route }: Props) {
 
     setSaving(true);
     try {
-      let imageUrl = existingImageUrl || undefined;
       if (asset) {
-        const up = await uploadEvidenceFile('water', asset);
-        const u = up.image_url;
-        const p = up.path;
-        imageUrl =
-          typeof u === 'string' && u.trim()
-            ? u.trim()
-            : typeof p === 'string' && p.trim()
-            ? p.trim()
-            : imageUrl;
+        await uploadEvidenceFile('water', asset, resubmitRecordId);
       }
 
       const input: WaterLogInput = {
@@ -443,18 +505,16 @@ export function SubmissionDetailScreen({ route }: Props) {
         tehsil,
         village,
         settlement: settlement || undefined,
-        meterReadingEnd: Number(meterReadingEnd),
-        meterReadingStart: meterReadingStart.trim()
-          ? Number(meterReadingStart)
-          : null,
+        meterReadingEnd:
+          endVal != null && Number.isFinite(endVal) ? endVal : null,
+        meterReadingStart:
+          startNum != null && Number.isFinite(startNum) ? startNum : null,
         pumpStartTime: normalizeTo24hWithSeconds(pumpStart),
         pumpEndTime: normalizeTo24hWithSeconds(pumpEnd),
       };
 
-      await saveWaterSupplyData(input, {
-        idempotencyKey: createIdempotencyKey('water'),
-        imageUrl,
-      });
+      await updateWaterDraftById(resubmitRecordId, input);
+      await submitWaterDraftById(resubmitRecordId);
 
       RNAlert.alert('Submitted', 'Your changes were submitted successfully.');
       setAsset(null);
@@ -541,18 +601,22 @@ export function SubmissionDetailScreen({ route }: Props) {
           </CardHeader>
           <Separator />
           <CardContent className="gap-4 pt-4">
-            <View className="gap-2">
-              <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Meter reading at pump stop (m³)
-              </Text>
-              <TextInput
-                value={meterReadingEnd}
-                onChangeText={v => setMeterReadingEnd(sanitizeDecimalInput(v))}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 54381"
-                style={editStyles.input}
-              />
-            </View>
+            {!noBulkMeterInstalled ? (
+              <View className="gap-2">
+                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Meter reading at pump stop (m³)
+                </Text>
+                <TextInput
+                  value={meterReadingEnd}
+                  onChangeText={v => setMeterReadingEnd(sanitizeDecimalInput(v))}
+                  keyboardType="decimal-pad"
+                  placeholder={
+                    meterReadingEndFromRecord(record) || 'e.g. 54381'
+                  }
+                  style={editStyles.input}
+                />
+              </View>
+            ) : null}
 
             <View className="gap-2">
               <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -578,37 +642,39 @@ export function SubmissionDetailScreen({ route }: Props) {
               />
             </View>
 
-            <View className="gap-2">
-              <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Meter image
-              </Text>
-              <Text className="text-sm text-muted-foreground">
-                Upload a new photo to update, or keep the existing one.
-              </Text>
-              <View className="flex-row gap-2">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onPress={openCamera}
-                >
-                  <Text>Camera</Text>
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onPress={openGallery}
-                >
-                  <Text>Gallery</Text>
-                </Button>
+            {!noBulkMeterInstalled ? (
+              <View className="gap-2">
+                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Meter image
+                </Text>
+                <Text className="text-sm text-muted-foreground">
+                  Upload a new photo to update, or keep the existing one.
+                </Text>
+                <View className="flex-row gap-2">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onPress={openCamera}
+                  >
+                    <Text>Camera</Text>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onPress={openGallery}
+                  >
+                    <Text>Gallery</Text>
+                  </Button>
+                </View>
+                <Text className="text-xs text-muted-foreground">
+                  {asset?.fileName || asset?.uri
+                    ? `New: ${asset?.fileName ?? 'image'}`
+                    : existingImageUrl
+                    ? 'Using existing meter image on server.'
+                    : 'No image selected'}
+                </Text>
               </View>
-              <Text className="text-xs text-muted-foreground">
-                {asset?.fileName || asset?.uri
-                  ? `New: ${asset?.fileName ?? 'image'}`
-                  : existingImageUrl
-                  ? 'Using existing meter image on server.'
-                  : 'No image selected'}
-              </Text>
-            </View>
+            ) : null}
 
             <Button
               className="w-full"

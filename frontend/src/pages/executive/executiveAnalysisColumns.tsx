@@ -10,9 +10,12 @@ import type {
 } from "./executiveAnalysisTypes";
 
 function fmtNum(v: unknown, maxFrac = 2): string {
+  if (v == null || v === "") return "—";
   const n = Number(v);
   return Number.isFinite(n)
-    ? new Intl.NumberFormat(undefined, { maximumFractionDigits: maxFrac }).format(n)
+    ? new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: maxFrac,
+      }).format(n)
     : "—";
 }
 
@@ -20,7 +23,42 @@ function fmtInt(v: unknown): string {
   return fmtNum(v, 0);
 }
 
-export function useWaterAnalysisColumns(): Array<ColumnDef<WaterSystemDetailRow>> {
+function isBlank(v: unknown): boolean {
+  return v == null || (typeof v === "string" && v.trim() === "");
+}
+
+const NA = <span className="text-muted-foreground text-xs">N/A</span>;
+
+/** Meter-derived volumes are meaningless without a bulk meter or when the API has no value. */
+function waterMeterCell(
+  row: WaterSystemDetailRow,
+  v: unknown,
+  fmt: (v: unknown) => string
+) {
+  return !row.bulk_meter_installed || isBlank(v) ? (
+    NA
+  ) : (
+    <span className="tabular-nums">{fmt(v)}</span>
+  );
+}
+
+function waterNumCell(v: unknown, fmt: (v: unknown) => string) {
+  return isBlank(v) ? NA : <span className="tabular-nums">{fmt(v)}</span>;
+}
+
+function waterMeterField(
+  row: WaterSystemDetailRow,
+  v: unknown,
+  fmt: (v: unknown) => string,
+  unit = ""
+) {
+  if (!row.bulk_meter_installed || isBlank(v)) return "N/A";
+  return unit ? `${fmt(v)} ${unit}` : fmt(v);
+}
+
+export function useWaterAnalysisColumns(): Array<
+  ColumnDef<WaterSystemDetailRow>
+> {
   return useMemo(
     () => [
       {
@@ -29,10 +67,7 @@ export function useWaterAnalysisColumns(): Array<ColumnDef<WaterSystemDetailRow>
         // Area/period come from top filters; table search covers ID + place names.
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <CopyableId
-            value={String(getValue() ?? "")}
-            label="System ID"
-          />
+          <CopyableId value={String(getValue() ?? "")} label="System ID" />
         ),
       },
       {
@@ -49,7 +84,7 @@ export function useWaterAnalysisColumns(): Array<ColumnDef<WaterSystemDetailRow>
         accessorKey: "settlement",
         header: "Settlement",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => String(getValue() ?? "—"),
+        cell: ({ getValue }) => (isBlank(getValue()) ? NA : String(getValue())),
       },
       {
         accessorKey: "bulk_meter_installed",
@@ -69,80 +104,69 @@ export function useWaterAnalysisColumns(): Array<ColumnDef<WaterSystemDetailRow>
         accessorKey: "total_water_pumped_m3",
         header: "Total pumped (m³)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtInt(getValue())}</span>
-        ),
+        cell: ({ row, getValue }) =>
+          waterMeterCell(row.original, getValue(), fmtInt),
       },
       {
         accessorKey: "latest_meter_reading_end_m3",
         header: "Latest meter (m³)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtInt(getValue())}</span>
-        ),
+        cell: ({ row, getValue }) =>
+          waterMeterCell(row.original, getValue(), fmtInt),
       },
       {
         accessorKey: "period_meter_net_m3",
         header: "Meter net (m³)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtInt(getValue())}</span>
-        ),
+        cell: ({ row, getValue }) =>
+          waterMeterCell(row.original, getValue(), fmtInt),
       },
       {
         accessorKey: "total_pump_hours_h",
         header: "Runtime (h)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtNum(getValue())}</span>
-        ),
+        cell: ({ getValue }) => waterNumCell(getValue(), fmtNum),
       },
       {
         accessorKey: "days_logged",
         header: "Days logged",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtInt(getValue())}</span>
-        ),
+        cell: ({ getValue }) => waterNumCell(getValue(), fmtInt),
       },
       {
         accessorKey: "logs_count",
         header: "Log entries",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtInt(getValue())}</span>
-        ),
+        cell: ({ getValue }) => waterNumCell(getValue(), fmtInt),
       },
       {
         accessorKey: "avg_m3_per_hour",
         header: "m³ / hour",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtNum(getValue())}</span>
-        ),
+        cell: ({ row, getValue }) =>
+          waterMeterCell(row.original, getValue(), fmtNum),
       },
       {
         accessorKey: "avg_m3_per_day_logged",
         header: "m³ / day",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtNum(getValue())}</span>
-        ),
+        cell: ({ row, getValue }) =>
+          waterMeterCell(row.original, getValue(), fmtNum),
       },
       {
         accessorKey: "avg_hours_per_day_logged",
         header: "h / day",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (
-          <span className="tabular-nums">{fmtNum(getValue())}</span>
-        ),
+        cell: ({ getValue }) => waterNumCell(getValue(), fmtNum),
       },
     ],
-    [],
+    []
   );
 }
 
-export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>> {
+export function useSolarAnalysisColumns(): Array<
+  ColumnDef<SolarSystemDetailRow>
+> {
   return useMemo(
     () => [
       {
@@ -150,10 +174,7 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         header: "System ID",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <CopyableId
-            value={String(getValue() ?? "")}
-            label="System ID"
-          />
+          <CopyableId value={String(getValue() ?? "")} label="System ID" />
         ),
       },
       {
@@ -164,7 +185,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
           filterVariant: "select",
           filterOptions: [...SOLAR_SITE_TYPES, "Not set"],
         } satisfies DataGridColumnMeta,
-        cell: ({ row }) => <SolarSiteTypeBadge value={row.original.site_type} />,
+        cell: ({ row }) => (
+          <SolarSiteTypeBadge value={row.original.site_type} />
+        ),
       },
       {
         accessorKey: "tehsil",
@@ -199,7 +222,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         header: "Export (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <span className="tabular-nums text-amber-700">{fmtInt(getValue())}</span>
+          <span className="tabular-nums text-amber-700">
+            {fmtInt(getValue())}
+          </span>
         ),
       },
       {
@@ -208,7 +233,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums text-amber-600">{fmtInt(row.original.total_export_off_peak_kwh)}</span>
+            <span className="tabular-nums text-amber-600">
+              {fmtInt(row.original.total_export_off_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -219,7 +246,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums text-amber-800 font-medium">{fmtInt(row.original.total_export_peak_kwh)}</span>
+            <span className="tabular-nums text-amber-800 font-medium">
+              {fmtInt(row.original.total_export_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -229,7 +258,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         header: "Import (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
-          <span className="tabular-nums text-red-700">{fmtInt(getValue())}</span>
+          <span className="tabular-nums text-red-700">
+            {fmtInt(getValue())}
+          </span>
         ),
       },
       {
@@ -238,7 +269,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums text-red-600">{fmtInt(row.original.total_import_off_peak_kwh)}</span>
+            <span className="tabular-nums text-red-600">
+              {fmtInt(row.original.total_import_off_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -249,7 +282,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums text-red-800 font-medium">{fmtInt(row.original.total_import_peak_kwh)}</span>
+            <span className="tabular-nums text-red-800 font-medium">
+              {fmtInt(row.original.total_import_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -268,7 +303,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums">{fmtInt(row.original.total_net_off_peak_kwh)}</span>
+            <span className="tabular-nums">
+              {fmtInt(row.original.total_net_off_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -279,7 +316,9 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
-            <span className="tabular-nums font-medium">{fmtInt(row.original.total_net_peak_kwh)}</span>
+            <span className="tabular-nums font-medium">
+              {fmtInt(row.original.total_net_peak_kwh)}
+            </span>
           ) : (
             <span className="text-muted-foreground text-xs">N/A</span>
           ),
@@ -325,36 +364,59 @@ export function useSolarAnalysisColumns(): Array<ColumnDef<SolarSystemDetailRow>
         ),
       },
     ],
-    [],
+    []
   );
 }
 
 export function waterSystemDetailFields(row: WaterSystemDetailRow) {
+  const text = (v: unknown) => (isBlank(v) ? "N/A" : String(v));
+  const num = (v: unknown, fmt: (v: unknown) => string, unit = "") =>
+    isBlank(v) ? "N/A" : unit ? `${fmt(v)} ${unit}` : fmt(v);
   return [
     { label: "Water system ID", value: row.water_system_id },
-    { label: "Unique identifier", value: row.unique_identifier ?? "—" },
-    { label: "Tehsil", value: row.tehsil },
-    { label: "Village", value: row.village },
-    { label: "Settlement", value: row.settlement ?? "—" },
-    { label: "Bulk meter installed", value: row.bulk_meter_installed ? "Yes" : "No" },
+    { label: "Unique identifier", value: text(row.unique_identifier) },
+    { label: "Tehsil", value: text(row.tehsil) },
+    { label: "Village", value: text(row.village) },
+    { label: "Settlement", value: text(row.settlement) },
+    {
+      label: "Bulk meter installed",
+      value: row.bulk_meter_installed ? "Yes" : "No",
+    },
     {
       label: "Total pumped (interval sum)",
-      value: `${fmtInt(row.total_water_pumped_m3)} m³`,
+      value: waterMeterField(row, row.total_water_pumped_m3, fmtInt, "m³"),
     },
     {
       label: "Latest meter reading",
-      value: `${fmtInt(row.latest_meter_reading_end_m3)} m³`,
+      value: waterMeterField(
+        row,
+        row.latest_meter_reading_end_m3,
+        fmtInt,
+        "m³"
+      ),
     },
     {
       label: "Meter net in period",
-      value: `${fmtInt(row.period_meter_net_m3)} m³`,
+      value: waterMeterField(row, row.period_meter_net_m3, fmtInt, "m³"),
     },
-    { label: "Total pump runtime", value: `${fmtNum(row.total_pump_hours_h)} h` },
-    { label: "Days with logs", value: fmtInt(row.days_logged) },
-    { label: "Log entries", value: fmtInt(row.logs_count) },
-    { label: "Average m³ per hour", value: fmtNum(row.avg_m3_per_hour) },
-    { label: "Average m³ per logged day", value: fmtNum(row.avg_m3_per_day_logged) },
-    { label: "Average hours per logged day", value: fmtNum(row.avg_hours_per_day_logged) },
+    {
+      label: "Total pump runtime",
+      value: num(row.total_pump_hours_h, fmtNum, "h"),
+    },
+    { label: "Days with logs", value: num(row.days_logged, fmtInt) },
+    { label: "Log entries", value: num(row.logs_count, fmtInt) },
+    {
+      label: "Average m³ per hour",
+      value: waterMeterField(row, row.avg_m3_per_hour, fmtNum),
+    },
+    {
+      label: "Average m³ per logged day",
+      value: waterMeterField(row, row.avg_m3_per_day_logged, fmtNum),
+    },
+    {
+      label: "Average hours per logged day",
+      value: num(row.avg_hours_per_day_logged, fmtNum),
+    },
   ];
 }
 
@@ -371,28 +433,52 @@ export function solarSystemDetailFields(row: SolarSystemDetailRow) {
     { label: "Total export", value: `${fmtInt(row.total_export_kwh)} kWh` },
     ...(row.any_tou_required
       ? [
-          { label: "Export off-peak", value: `${fmtInt(row.total_export_off_peak_kwh)} kWh` },
-          { label: "Export peak", value: `${fmtInt(row.total_export_peak_kwh)} kWh` },
+          {
+            label: "Export off-peak",
+            value: `${fmtInt(row.total_export_off_peak_kwh)} kWh`,
+          },
+          {
+            label: "Export peak",
+            value: `${fmtInt(row.total_export_peak_kwh)} kWh`,
+          },
         ]
       : []),
     { label: "Total import", value: `${fmtInt(row.total_import_kwh)} kWh` },
     ...(row.any_tou_required
       ? [
-          { label: "Import off-peak", value: `${fmtInt(row.total_import_off_peak_kwh)} kWh` },
-          { label: "Import peak", value: `${fmtInt(row.total_import_peak_kwh)} kWh` },
+          {
+            label: "Import off-peak",
+            value: `${fmtInt(row.total_import_off_peak_kwh)} kWh`,
+          },
+          {
+            label: "Import peak",
+            value: `${fmtInt(row.total_import_peak_kwh)} kWh`,
+          },
         ]
       : []),
     { label: "Total net", value: `${fmtInt(row.total_net_kwh)} kWh` },
     ...(row.any_tou_required
       ? [
-          { label: "Net off-peak", value: `${fmtInt(row.total_net_off_peak_kwh)} kWh` },
+          {
+            label: "Net off-peak",
+            value: `${fmtInt(row.total_net_off_peak_kwh)} kWh`,
+          },
           { label: "Net peak", value: `${fmtInt(row.total_net_peak_kwh)} kWh` },
         ]
       : []),
     { label: "Months logged", value: fmtInt(row.months_logged) },
     { label: "Monthly records", value: fmtInt(row.records_count) },
-    { label: "Avg export / month", value: `${fmtNum(row.avg_export_kwh_per_month)} kWh` },
-    { label: "Avg import / month", value: `${fmtNum(row.avg_import_kwh_per_month)} kWh` },
-    { label: "Avg net / month", value: `${fmtNum(row.avg_net_kwh_per_month)} kWh` },
+    {
+      label: "Avg export / month",
+      value: `${fmtNum(row.avg_export_kwh_per_month)} kWh`,
+    },
+    {
+      label: "Avg import / month",
+      value: `${fmtNum(row.avg_import_kwh_per_month)} kWh`,
+    },
+    {
+      label: "Avg net / month",
+      value: `${fmtNum(row.avg_net_kwh_per_month)} kWh`,
+    },
   ];
 }
