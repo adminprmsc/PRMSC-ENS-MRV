@@ -59,8 +59,12 @@ import {
 } from "@/services/tehsilManagerOperatorService";
 import type { SolarSystemRow, WaterSystemRow } from "@/types/api";
 import { formatPumpCapacityKw } from "@/utils/waterPump";
+import type { QueryFilters } from "@/services/types";
+import { useExecutiveWaterSystemsDetail } from "./useExecutiveAnalysisQueries";
 
 /* ─── helpers ─── */
+
+const NO_PERIOD_FILTERS: QueryFilters = {};
 
 function val(v: unknown, unit = ""): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -180,9 +184,12 @@ function LoadingSkeleton() {
 /* ─── Water site card ─── */
 function WaterSiteCard({
   s,
+  runtimeHours,
   onView,
 }: {
   s: WaterSystemRow;
+  /** All-time pump hours; undefined while loading. */
+  runtimeHours: number | undefined;
   onView: () => void;
 }) {
   const { efficiency, effectiveFlow } = pumpingEfficiency(s);
@@ -272,15 +279,30 @@ function WaterSiteCard({
               <SpecItem label="Tank capacity" value={val(s.ohr_tank_capacity, "m³")} />
               <SpecItem label="Design fill time" value={val(s.ohr_fill_required, "min")} />
               <SpecItem label="Actual fill time" value={val(s.time_to_fill, "min")} />
+              {/* Labels are uppercased by SpecItem, which turns η into "H" — keep η in hints. */}
               <SpecItem
-                label="Efficiency (η)"
-                hint="Design fill time ÷ Actual fill time"
+                label="Efficiency"
+                hint="η = Design fill time ÷ Actual fill time"
                 value={fmtFixed(efficiency == null ? null : efficiency * 100, 1, "%")}
               />
               <SpecItem
-                label="Effective flow (η × Q)"
-                hint="× total pump run time (h) = water delivered (m³)"
+                label="Effective flow"
+                hint="η × Q (flow rate)"
                 value={fmtFixed(effectiveFlow, 3, "m³/h")}
+              />
+              <SpecItem
+                label="Total run time"
+                hint="t = pump hours from all operator logs"
+                value={runtimeHours === undefined ? "…" : fmtFixed(runtimeHours, 2, "h")}
+              />
+              <SpecItem
+                label="Estimated water"
+                hint="η × Q × t"
+                value={
+                  runtimeHours === undefined
+                    ? "…"
+                    : fmtFixed(effectiveFlow == null ? null : effectiveFlow * runtimeHours, 0, "m³")
+                }
               />
             </div>
           </div>
@@ -510,10 +532,13 @@ function matchesSearchQuery(
 function WaterList({
   rows,
   loading,
+  runtimeById,
   onView,
 }: {
   rows: WaterSystemRow[];
   loading: boolean;
+  /** Pump hours by system id; undefined while loading. */
+  runtimeById: Map<string, number> | undefined;
   onView: (id: string) => void;
 }) {
   const { pageItems, pageIndex, pageSize, pageCount, total, setPageSize, goToPage, resetPage } =
@@ -545,7 +570,13 @@ function WaterList({
   return (
     <div className="space-y-3">
       {pageItems.map((s) => (
-        <WaterSiteCard key={s.id} s={s} onView={() => onView(s.id)} />
+        <WaterSiteCard
+          key={s.id}
+          s={s}
+          // Systems with no logs are omitted from the detail rows, so they ran 0 h.
+          runtimeHours={runtimeById ? (runtimeById.get(String(s.id)) ?? 0) : undefined}
+          onView={() => onView(s.id)}
+        />
       ))}
       <Card className="border-border/40">
         <PaginatedListFooter
@@ -714,6 +745,24 @@ export default function HqSitesTechInfoPage() {
         : locationFilters.settlement;
     return `${tehsil} · ${village} · ${settlement}`;
   }, [locationFilters, allowedTehsils.length, restrictTehsils]);
+
+  // No year/month → all-time pump hours per system (t in η × Q × t).
+  const { data: waterDetailRows } = useExecutiveWaterSystemsDetail(
+    NO_PERIOD_FILTERS,
+    allowedTehsils,
+  );
+  const runtimeById = useMemo(
+    () =>
+      waterDetailRows
+        ? new Map(
+            waterDetailRows.map((r) => [
+              String(r.water_system_id),
+              Number(r.total_pump_hours_h) || 0,
+            ]),
+          )
+        : undefined,
+    [waterDetailRows],
+  );
 
   const [waterRows, setWaterRows] = useState<WaterSystemRow[]>([]);
   const [solarRows, setSolarRows] = useState<SolarSystemRow[]>([]);
@@ -935,6 +984,7 @@ export default function HqSitesTechInfoPage() {
           <WaterList
             rows={filteredWater}
             loading={loadingWater}
+            runtimeById={runtimeById}
             onView={(id) => navigate(hqRoutes.waterSystem(id))}
           />
         </TabsContent>
