@@ -13,8 +13,14 @@ export type WaterSystemDetailRow = {
   village: string;
   settlement?: string | null;
   bulk_meter_installed: boolean;
+  /** `bulk_meter` = interval sum from logs; `estimated` = η × Q × runtime. */
+  volume_basis?: "bulk_meter" | "estimated" | null;
+  /** Total volume in scope: meter sum or estimated (see volume_basis). */
+  calculated_total_m3?: number | null;
+  calculated_avg_daily_m3?: number | null;
+  calculated_avg_hourly_m3?: number | null;
   /** Sum of per-log interval volumes (meter deltas), not cumulative readings. */
-  total_water_pumped_m3: number;
+  total_water_pumped_m3: number | null;
   /** Cumulative bulk-meter reading at the most recent log in scope. */
   latest_meter_reading_end_m3?: number | null;
   /** Latest cumulative reading minus first baseline in scope. */
