@@ -18,7 +18,6 @@ import { executiveYearExportSlug } from "./executivePeriodFilters";
 
 const ExecutiveWaterAnalysis = () => {
   const scope = useExecutiveScopeFilters();
-  const baseColumns = useWaterAnalysisColumns();
   const location = useLocation();
 
   const {
@@ -26,6 +25,8 @@ const ExecutiveWaterAnalysis = () => {
     isLoading,
     error,
   } = useExecutiveWaterSystemsDetail(scope.apiFilters, scope.allowedTehsils);
+
+  const baseColumns = useWaterAnalysisColumns(rows);
 
   const columns = useMemo<Array<ColumnDef<WaterSystemDetailRow>>>(
     () => [
@@ -85,7 +86,7 @@ const ExecutiveWaterAnalysis = () => {
       <PageHeader
         icon={<Droplets className="text-blue-600" />}
         title="Water analysis"
-        description="Area & period filters, then search the list."
+        description="Without bulk meter: calculated m³ (η × flow × runtime). With bulk meter: pumped m³ from logged meter intervals."
       />
 
       <ExecutiveScopeFiltersCard
@@ -103,7 +104,7 @@ const ExecutiveWaterAnalysis = () => {
       />
 
       {isLoading ? (
-        <DataGridSkeleton rows={10} columns={9} />
+        <DataGridSkeleton rows={10} columns={12} />
       ) : errorMessage ? (
         <Alert variant="destructive">
           <AlertDescription>{errorMessage}</AlertDescription>

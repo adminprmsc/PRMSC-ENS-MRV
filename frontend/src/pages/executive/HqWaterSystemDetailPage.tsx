@@ -33,6 +33,14 @@ import {
 } from "@/utils/pakistanTime";
 import { formatPumpCapacityKw } from "@/utils/waterPump";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
+import {
+  estimatedAvgDailyM3,
+  estimatedAvgHourlyM3,
+  estimatedTotalM3,
+  meterAvgDailyM3,
+  meterAvgHourlyM3,
+  meterTotalM3,
+} from "./waterAnalysisVolume";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
 import { submissionLogDateKey } from "./hqSubmissionTypes";
 import {
@@ -426,8 +434,42 @@ export default function HqWaterSystemDetailPage() {
           {metrics ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                label="Total pumped"
-                value={`${Number(metrics.total_water_pumped_m3 ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
+                label={
+                  metrics.bulk_meter_installed
+                    ? "Total pumped (meter)"
+                    : "Total (calc η×Q×t)"
+                }
+                value={`${Number(
+                  (metrics.bulk_meter_installed
+                    ? meterTotalM3(metrics)
+                    : estimatedTotalM3(metrics)) ?? 0,
+                ).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
+                accent="blue"
+              />
+              <StatCard
+                label={
+                  metrics.bulk_meter_installed
+                    ? "Avg daily (meter)"
+                    : "Avg daily (calc)"
+                }
+                value={`${Number(
+                  (metrics.bulk_meter_installed
+                    ? meterAvgDailyM3(metrics)
+                    : estimatedAvgDailyM3(metrics)) ?? 0,
+                ).toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`}
+                accent="blue"
+              />
+              <StatCard
+                label={
+                  metrics.bulk_meter_installed
+                    ? "Avg hourly (meter)"
+                    : "Avg hourly (calc)"
+                }
+                value={`${Number(
+                  (metrics.bulk_meter_installed
+                    ? meterAvgHourlyM3(metrics)
+                    : estimatedAvgHourlyM3(metrics)) ?? 0,
+                ).toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`}
                 accent="blue"
               />
               <StatCard
@@ -438,13 +480,15 @@ export default function HqWaterSystemDetailPage() {
               <StatCard
                 label="Days logged"
                 value={metrics.days_logged}
-                accent="blue"
-              />
-              <StatCard
-                label="Latest meter"
-                value={`${Number(metrics.latest_meter_reading_end_m3 ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
                 accent="slate"
               />
+              {metrics.bulk_meter_installed ? (
+                <StatCard
+                  label="Latest meter reading"
+                  value={`${Number(metrics.latest_meter_reading_end_m3 ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
+                  accent="slate"
+                />
+              ) : null}
             </div>
           ) : null}
 

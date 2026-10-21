@@ -859,25 +859,47 @@ export class DashboardService {
       const efficiency =
         designFill > 0 && actualFill > 0 ? designFill / actualFill : null;
       const flowRate = flow > 0 ? flow : null;
+      const bulkMeter = Boolean(system.bulkMeterInstalled);
+      const estimated =
+        efficiency != null && flowRate != null
+          ? efficiency * flowRate * hours
+          : null;
+      const calculatedTotalM3 = bulkMeter ? water : estimated;
+      const calculatedAvgDailyM3 =
+        calculatedTotalM3 != null && dLogged > 0
+          ? calculatedTotalM3 / dLogged
+          : null;
+      const calculatedAvgHourlyM3 =
+        calculatedTotalM3 != null && hours > 0
+          ? calculatedTotalM3 / hours
+          : null;
       rows.push({
         water_system_id: system.id,
         unique_identifier: system.uniqueIdentifier,
         tehsil: system.tehsil,
         village: system.village,
         settlement: system.settlement,
-        bulk_meter_installed: Boolean(system.bulkMeterInstalled),
-        total_water_pumped_m3: water,
-        latest_meter_reading_end_m3: meter.latest_meter_reading_end,
-        period_meter_net_m3: meter.period_meter_net_m3,
+        bulk_meter_installed: bulkMeter,
+        /** Sum of meter interval volumes in scope (bulk meter sites only). */
+        total_water_pumped_m3: bulkMeter ? water : null,
+        latest_meter_reading_end_m3: bulkMeter
+          ? meter.latest_meter_reading_end
+          : null,
+        period_meter_net_m3: bulkMeter ? meter.period_meter_net_m3 : null,
         total_pump_hours_h: hours,
         days_logged: dLogged,
         logs_count: lCount,
-        avg_m3_per_hour: hours > 0 ? water / hours : null,
-        avg_m3_per_day_logged: dLogged > 0 ? water / dLogged : null,
+        avg_m3_per_hour:
+          bulkMeter && hours > 0 ? water / hours : null,
+        avg_m3_per_day_logged:
+          bulkMeter && dLogged > 0 ? water / dLogged : null,
         avg_hours_per_day_logged: dLogged > 0 ? hours / dLogged : null,
         pumping_efficiency: efficiency,
-        estimated_water_m3:
-          efficiency != null && flowRate != null ? efficiency * flowRate * hours : null,
+        estimated_water_m3: bulkMeter ? null : estimated,
+        calculated_total_m3: calculatedTotalM3,
+        calculated_avg_daily_m3: calculatedAvgDailyM3,
+        calculated_avg_hourly_m3: calculatedAvgHourlyM3,
+        volume_basis: bulkMeter ? 'bulk_meter' : 'estimated',
       });
     }
 
