@@ -64,6 +64,17 @@
 #
 ##############################################################################
 
+# RN libraries (netinfo, reanimated, …) run `node` during Gradle configuration.
+# The Gradle daemon often lacks Homebrew/nvm on PATH when invoked from IDEs.
+export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH:-}"
+if [ -z "${NODE_BINARY:-}" ]; then
+  if [ -x "/opt/homebrew/bin/node" ]; then
+    export NODE_BINARY="/opt/homebrew/bin/node"
+  elif [ -x "/usr/local/bin/node" ]; then
+    export NODE_BINARY="/usr/local/bin/node"
+  fi
+fi
+
 # Attempt to set APP_HOME
 
 # Resolve links: $0 may be a link

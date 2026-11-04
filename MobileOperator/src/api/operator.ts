@@ -259,6 +259,8 @@ export type WaterDraftDetail = {
 
 export type WaterMeterContext = {
   bulk_meter_installed?: boolean;
+  /** When false, log date is before bulk-meter readings — pump times only (OHR-style backfill). */
+  requires_bulk_meter_log?: boolean;
   /** Highest submitted meter_reading_end on this system (cumulative pump-stop reading). */
   previous_meter_reading_end?: number | null;
   has_submitted_meter_end?: boolean;

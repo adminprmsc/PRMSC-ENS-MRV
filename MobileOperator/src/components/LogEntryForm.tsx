@@ -196,6 +196,8 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
   const [draftImageLoadFailed, setDraftImageLoadFailed] = useState(false)
   const [signatureChecked, setSignatureChecked] = useState(false)
   const [noBulkMeterInstalled, setNoBulkMeterInstalled] = useState(false)
+  /** Per log date: bulk-meter site but pre-meter-era backfill (pump times only). */
+  const [requiresBulkMeterLog, setRequiresBulkMeterLog] = useState(false)
   const [facilityPrefetching, setFacilityPrefetching] = useState(
     () => systemId != null && systemId !== '',
   )
@@ -214,6 +216,9 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
   /** Assigned facility already defines location; static village settlements must not block submit. */
   const requiresSettlementSelection =
     !locationLocked && settlementOptions.length > 0
+
+  const meterCaptureRequired =
+    !noBulkMeterInstalled && requiresBulkMeterLog
 
   const duplicateIntervalRecordId = useMemo(() => {
     const startKey = normalizeTimeKey(pumpStartTime)
@@ -242,7 +247,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       village,
       settlement: settlement || undefined,
       systemId: systemId ?? undefined,
-      noBulkMeterInstalled,
+      noBulkMeterInstalled: noBulkMeterInstalled || !requiresBulkMeterLog,
       meterReadingStart: meterReadingStart ? Number(meterReadingStart) : null,
       meterReadingEnd: meterReadingEnd ? Number(meterReadingEnd) : null,
       pumpStartTime: hasTimes ? normalizeTo24hWithSeconds(pumpStartTime) : null,
@@ -254,6 +259,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     pumpEndTime,
     pumpStartTime,
     noBulkMeterInstalled,
+    requiresBulkMeterLog,
     meterReadingStart,
     meterReadingEnd,
     settlement,
@@ -289,6 +295,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     const draft = await getWaterDraftById(id)
     const hasBulkMeter = draft.bulk_meter_installed !== false
     setNoBulkMeterInstalled(!hasBulkMeter)
+    setRequiresBulkMeterLog(hasBulkMeter)
     setDraftImageLoadFailed(false)
     setExistingDraftImageUrl(
       !hasBulkMeter
@@ -381,6 +388,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
         setSettlement(typeof s === 'string' ? s : s == null ? '' : String(s))
         const hasBulkMeter = found.bulk_meter_installed !== false
         setNoBulkMeterInstalled(!hasBulkMeter)
+        setRequiresBulkMeterLog(hasBulkMeter)
         if (!hasBulkMeter) {
           setAsset(null)
           setExistingDraftImageUrl(null)
@@ -399,7 +407,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
   }, [draftId, systemId, navigation])
 
   const computedIntervalM3 = useMemo(() => {
-    if (noBulkMeterInstalled) return null
+    if (!meterCaptureRequired) return null
     const endVal = Number(meterReadingEnd)
     if (!Number.isFinite(endVal)) return null
     const base = isFirstBulkMeterLog
@@ -412,13 +420,13 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     isFirstBulkMeterLog,
     meterReadingEnd,
     meterReadingStart,
-    noBulkMeterInstalled,
+    meterCaptureRequired,
     previousMeterReadingEnd,
   ])
 
   const meterReadingOrderError = useMemo(
     () =>
-      noBulkMeterInstalled
+      !meterCaptureRequired
         ? null
         : bulkMeterOrderErrorMessage({
             isFirstBulkMeterLog,
@@ -430,13 +438,13 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       isFirstBulkMeterLog,
       meterReadingEnd,
       meterReadingStart,
-      noBulkMeterInstalled,
+      meterCaptureRequired,
       previousMeterReadingEnd,
     ],
   )
 
   const pumpStopPlaceholder = useMemo(() => {
-    if (noBulkMeterInstalled) return 'Enter cumulative meter reading'
+    if (!meterCaptureRequired) return 'Enter cumulative meter reading'
     if (isFirstBulkMeterLog) {
       if (!isValidNumberInput(meterReadingStart)) {
         return 'Enter reading after pump stops'
@@ -450,7 +458,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
   }, [
     isFirstBulkMeterLog,
     meterReadingStart,
-    noBulkMeterInstalled,
+    meterCaptureRequired,
     previousMeterReadingEnd,
   ])
 
@@ -461,6 +469,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       setIsFirstBulkMeterLog(false)
       setPriorLogCount(0)
       setPreviousMeterReadingEnd(null)
+      setRequiresBulkMeterLog(false)
       return
     }
     if (locationLocked && facilityPrefetching) return
@@ -503,15 +512,20 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       }
 
       try {
+        const pumpEndForCtx = pumpEndTime.trim()
+          ? normalizeTo24hWithSeconds(pumpEndTime)
+          : undefined
         const ctx = await getWaterMeterContext({
           tehsil: tehsil || undefined,
           village: village || undefined,
           settlement: settlement || undefined,
           systemId: systemId ?? undefined,
           logDate: logDateIso,
+          pumpEndTime: pumpEndForCtx,
           excludeRecordId: activeDraftId ?? undefined,
         })
         if (cancelled) return
+        setRequiresBulkMeterLog(ctx.requires_bulk_meter_log ?? true)
         const prev =
           ctx.previous_meter_reading_end != null
             ? Number(ctx.previous_meter_reading_end)
@@ -567,6 +581,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     locationLocked,
     logDateIso,
     noBulkMeterInstalled,
+    pumpEndTime,
     settlement,
     systemId,
     tehsil,
@@ -645,7 +660,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       Alert.alert('Validation', 'Please select settlement.')
       return false
     }
-    if (!noBulkMeterInstalled) {
+    if (meterCaptureRequired) {
       if (!asset?.uri && !existingDraftImageUrl) {
         Alert.alert('Validation', 'Evidence image is mandatory. Please attach an image.')
         return false
@@ -717,11 +732,11 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       Alert.alert('Draft', 'Please choose settlement before saving draft.')
       return
     }
-    if (!noBulkMeterInstalled && !asset?.uri && !existingDraftImageUrl) {
+    if (meterCaptureRequired && !asset?.uri && !existingDraftImageUrl) {
       Alert.alert('Draft', 'Please attach an evidence image before saving a draft.')
       return
     }
-    if (!noBulkMeterInstalled && isValidNumberInput(meterReadingEnd)) {
+    if (meterCaptureRequired && isValidNumberInput(meterReadingEnd)) {
       const meterOrderErr = bulkMeterOrderErrorMessage({
         isFirstBulkMeterLog,
         meterReadingEnd,
@@ -747,8 +762,8 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
           id: `water_draft-${Date.now()}`,
           type: 'water_draft',
           payload,
-          evidence: noBulkMeterInstalled ? null : asset,
-          existingImageUrl: noBulkMeterInstalled ? undefined : (existingDraftImageUrl ?? undefined),
+          evidence: meterCaptureRequired ? asset : null,
+          existingImageUrl: meterCaptureRequired ? (existingDraftImageUrl ?? undefined) : undefined,
           createdAt: nowIsoTimestamp(),
           idempotencyKey: createIdempotencyKey('water_draft'),
         })
@@ -761,7 +776,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
         return
       }
       let imageUrl: string | undefined
-      if (!noBulkMeterInstalled && asset) {
+      if (meterCaptureRequired && asset) {
         const up = await uploadEvidenceFile(type, asset)
         const u = up.image_url
         const p = up.path
@@ -774,9 +789,9 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
       }
       const res = await saveWaterSupplyDraft(payload, {
         idempotencyKey: createIdempotencyKey('water_draft'),
-        imageUrl: noBulkMeterInstalled
-          ? undefined
-          : (imageUrl ?? (existingDraftImageUrl ?? undefined)),
+        imageUrl: meterCaptureRequired
+          ? (imageUrl ?? (existingDraftImageUrl ?? undefined))
+          : undefined,
       })
       const firstId = res.record_ids?.[0]
       if (firstId) setActiveDraftId(String(firstId))
@@ -794,15 +809,15 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     id: `${type}-${Date.now()}`,
     type: 'water',
     payload: payload as WaterLogInput,
-    evidence: noBulkMeterInstalled ? null : asset,
-    existingImageUrl: noBulkMeterInstalled ? undefined : (existingDraftImageUrl ?? undefined),
+    evidence: meterCaptureRequired ? asset : null,
+    existingImageUrl: meterCaptureRequired ? (existingDraftImageUrl ?? undefined) : undefined,
     createdAt: nowIsoTimestamp(),
     idempotencyKey: createIdempotencyKey('water'),
   })
 
   const submitOnline = async (idempotencyKey: string) => {
     let imageUrl: string | undefined
-    if (!noBulkMeterInstalled && asset) {
+    if (meterCaptureRequired && asset) {
       const up = await uploadEvidenceFile(type, asset)
       const u = up.image_url
       const p = up.path
@@ -815,7 +830,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
     }
     await saveWaterSupplyData(payload as WaterLogInput, {
       idempotencyKey,
-      imageUrl: noBulkMeterInstalled ? undefined : imageUrl,
+      imageUrl: meterCaptureRequired ? imageUrl : undefined,
     })
   }
 
@@ -1001,7 +1016,9 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
               <Text style={styles.requirementsBody}>
                 {noBulkMeterInstalled
                   ? 'Log date (defaults to today), tehsil & village (and settlement if listed), and pump start & end time. Meter readings and photo are not required when no bulk meter is installed.'
-                  : 'Log date (defaults to today), tehsil & village (and settlement if listed), bulk meter readings at pump stop (and initial reading on first log), pump start & end time, and meter photo.'}{' '}
+                  : meterCaptureRequired
+                    ? 'Log date (defaults to today), tehsil & village (and settlement if listed), bulk meter readings at pump stop (and initial reading on first log), pump start & end time, and meter photo.'
+                    : 'Log date, tehsil & village, and pump start & end time. This date is before bulk-meter readings on file — submit hourly pump times only (no meter photo required).'}{' '}
                 Sent as{' '}
                 <Text style={styles.requirementsMono}>monthlyData[]</Text> with{' '}
                 <Text style={styles.requirementsMono}>day</Text> for{' '}
@@ -1067,7 +1084,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
               </>
             )}
 
-            {!noBulkMeterInstalled ? (
+            {meterCaptureRequired ? (
               <>
                 <Text style={[styles.helper, styles.waterMeterHint]}>
                   Enter the cumulative bulk-meter reading (m³) when the pump stops. This value
@@ -1169,10 +1186,17 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
                   </View>
                 ) : null}
               </>
-            ) : (
+            ) : noBulkMeterInstalled ? (
               <View style={styles.facilityBadge}>
                 <Text style={styles.facilityBadgeText}>
                   No bulk meter installed for this facility. Submit only pump start/end time.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.facilityBadge}>
+                <Text style={styles.facilityBadgeText}>
+                  Bulk meter is installed, but this log date is before meter readings began. Submit
+                  pump start and end time only for this backfill entry.
                 </Text>
               </View>
             )}
@@ -1213,7 +1237,7 @@ export function LogEntryForm({ type, draftId, systemId }: Props) {
               </View>
             ) : null}
 
-            {!noBulkMeterInstalled ? (
+            {meterCaptureRequired ? (
               <View style={styles.field}>
                 <RequiredLabel>Bulk meter evidence (photo)</RequiredLabel>
                 <Text style={styles.helper}>Upload a photo of the bulk meter.</Text>

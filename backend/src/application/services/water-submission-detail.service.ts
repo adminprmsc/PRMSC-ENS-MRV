@@ -73,12 +73,25 @@ export class WaterSubmissionDetailService {
             record.logDate.getDate(),
           ]
         : [];
+      const bulkMeterInstalled = system?.bulkMeterInstalled !== false;
+      const requiresBulkMeterLog =
+        system && record.logDate
+          ? await this.waterMeterVolume.logRequiresBulkMeterCapture({
+              bulkMeterInstalled,
+              waterSystemId: String(system.id),
+              logDate: record.logDate,
+              pumpEndTime: record.pumpEndTime,
+              excludeRecordId: String(record.id),
+            })
+          : bulkMeterInstalled;
+
       recordData = {
         record_id: String(record.id),
         year: logDateParts[0] ?? null,
         month: logDateParts[1] ?? null,
         day: logDateParts[2] ?? null,
         log_date: record.logDate?.toISOString().slice(0, 10) ?? null,
+        requires_bulk_meter_log: requiresBulkMeterLog,
         last_edited_at: record.updatedAt?.toISOString() ?? null,
         pump_start_time: record.pumpStartTime
           ? record.pumpStartTime.slice(0, 8)

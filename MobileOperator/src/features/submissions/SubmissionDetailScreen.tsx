@@ -350,7 +350,12 @@ export function SubmissionDetailScreen({ route }: Props) {
     [record.record_id, sub.record_id],
   );
 
-  const noBulkMeterInstalled = bulkMeterInstalled(system);
+  const meterCaptureRequired = useMemo(() => {
+    if (!bulkMeterInstalled(system)) return false;
+    if (record.requires_bulk_meter_log === false) return false;
+    if (record.requires_bulk_meter_log === true) return true;
+    return bulkMeterInstalled(system);
+  }, [record.requires_bulk_meter_log, system]);
 
   const editFormSeed = useMemo(() => {
     if (!canEditResubmit) return null;
@@ -436,15 +441,15 @@ export function SubmissionDetailScreen({ route }: Props) {
       meterReadingStart.trim() ||
       numericFieldFromRecord(record.meter_reading_start);
 
-    if (noBulkMeterInstalled) {
+    if (!meterCaptureRequired) {
       // Pump times only — no bulk meter reading required.
     } else if (!isValidNumberInput(resolvedMeterEnd)) {
       RNAlert.alert('Validation', 'Meter reading at pump stop must be numeric.');
       return;
     }
-    const endVal = noBulkMeterInstalled
-      ? null
-      : Number(resolvedMeterEnd);
+    const endVal = meterCaptureRequired
+      ? Number(resolvedMeterEnd)
+      : null;
     const prevSubmitted = record.previous_meter_reading_end;
     const prevNum =
       prevSubmitted != null && String(prevSubmitted).trim() !== ''
@@ -458,7 +463,7 @@ export function SubmissionDetailScreen({ route }: Props) {
           ? startNum
           : null;
     if (
-      !noBulkMeterInstalled &&
+      meterCaptureRequired &&
       endVal != null &&
       base != null &&
       Number.isFinite(base) &&
@@ -481,7 +486,7 @@ export function SubmissionDetailScreen({ route }: Props) {
       return;
     }
     if (
-      !noBulkMeterInstalled &&
+      meterCaptureRequired &&
       !asset?.uri &&
       !existingImageUrl
     ) {
@@ -601,7 +606,7 @@ export function SubmissionDetailScreen({ route }: Props) {
           </CardHeader>
           <Separator />
           <CardContent className="gap-4 pt-4">
-            {!noBulkMeterInstalled ? (
+            {meterCaptureRequired ? (
               <View className="gap-2">
                 <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Meter reading at pump stop (m³)
@@ -642,7 +647,7 @@ export function SubmissionDetailScreen({ route }: Props) {
               />
             </View>
 
-            {!noBulkMeterInstalled ? (
+            {meterCaptureRequired ? (
               <View className="gap-2">
                 <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Meter image

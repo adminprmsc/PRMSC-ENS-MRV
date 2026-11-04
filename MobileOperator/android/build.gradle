@@ -1,3 +1,9 @@
+// Avoid Gradle subprocess `node` lookups (netinfo, autolinking) when `node` is not on PATH
+// (common with Homebrew + IDE/Gradle daemon). See react-native-netinfo android/build.gradle.
+ext {
+    REACT_NATIVE_NODE_MODULES_DIR = file("${rootDir}/../node_modules/react-native")
+}
+
 buildscript {
     ext {
         buildToolsVersion = "36.0.0"

@@ -720,11 +720,15 @@ export class TubewellOperatorService {
     if (!bulkMeter) {
       return {
         bulk_meter_installed: false,
+        requires_bulk_meter_log: false,
         previous_meter_reading_end: null,
         is_first_bulk_meter_log: false,
         prior_log_count: 0,
       };
     }
+
+    let parsedLogDate: Date | null = null;
+    let parsedPumpEnd: string | null = null;
 
     if (logDateRaw) {
       const parsed = this.parseIsoDate(logDateRaw);
@@ -733,6 +737,7 @@ export class TubewellOperatorService {
           message: 'Invalid log_date; use YYYY-MM-DD',
         });
       }
+      parsedLogDate = parsed;
     }
 
     if (pumpEndRaw) {
@@ -740,6 +745,7 @@ export class TubewellOperatorService {
       if (parsedEnd === null) {
         throw new BadRequestException({ message: 'Invalid pump_end_time' });
       }
+      parsedPumpEnd = parsedEnd;
     }
 
     const prevEnd =
@@ -753,8 +759,20 @@ export class TubewellOperatorService {
       excludeRecordId,
     );
 
+    const requiresBulkMeterLog =
+      parsedLogDate != null
+        ? await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
+            bulkMeterInstalled: true,
+            waterSystemId: String(system.id),
+            logDate: parsedLogDate,
+            pumpEndTime: parsedPumpEnd,
+            excludeRecordId,
+          })
+        : priorCount > 0;
+
     return {
       bulk_meter_installed: true,
+      requires_bulk_meter_log: requiresBulkMeterLog,
       previous_meter_reading_end: prevEnd,
       has_submitted_meter_end: prevEnd !== null,
       is_first_bulk_meter_log: priorCount === 0,
@@ -908,8 +926,6 @@ export class TubewellOperatorService {
 
     this.pumpTimesService.applyPumpTimeFieldsFromPayload(record, data);
 
-    const noBulkMeter = system!.bulkMeterInstalled === false;
-
     let meterEnd: number | null | undefined;
     let meterStart: number | null | undefined;
     let legacyTotal: number | null | undefined;
@@ -940,26 +956,6 @@ export class TubewellOperatorService {
       throw new BadRequestException({
         error: `Invalid total_water_pumped: ${ve}`,
       });
-    }
-
-    if (
-      'meter_reading_end' in data ||
-      'meter_reading_start' in data ||
-      'total_water_pumped' in data
-    ) {
-      try {
-        await this.waterMeterVolumeService.applyBulkMeterFields({
-          record,
-          waterSystemId: String(system!.id),
-          noBulkMeterInstalled: noBulkMeter,
-          meterReadingEnd: meterEnd,
-          meterReadingStart: meterStart,
-          legacyTotalWaterPumped: legacyTotal,
-          excludeRecordId: String(record.id),
-        });
-      } catch (ve) {
-        this.throwBulkMeterError(ve);
-      }
     }
 
     if ('year' in data || 'month' in data || 'day' in data) {
@@ -1021,6 +1017,34 @@ export class TubewellOperatorService {
       }
     }
 
+    if (
+      'meter_reading_end' in data ||
+      'meter_reading_start' in data ||
+      'total_water_pumped' in data
+    ) {
+      const noBulkMeter = await this.resolveNoBulkMeterForLog(
+        system!,
+        record,
+        String(record.id),
+        meterEnd,
+        meterStart,
+        legacyTotal,
+      );
+      try {
+        await this.waterMeterVolumeService.applyBulkMeterFields({
+          record,
+          waterSystemId: String(system!.id),
+          noBulkMeterInstalled: noBulkMeter,
+          meterReadingEnd: meterEnd,
+          meterReadingStart: meterStart,
+          legacyTotalWaterPumped: legacyTotal,
+          excludeRecordId: String(record.id),
+        });
+      } catch (ve) {
+        this.throwBulkMeterError(ve);
+      }
+    }
+
     await this.waterLogRepo.save(record);
     return { message: 'Draft updated successfully', id: String(record.id) };
   }
@@ -1060,26 +1084,44 @@ export class TubewellOperatorService {
       record.waterSystemId,
     );
 
-    const noBulkMeter = system!.bulkMeterInstalled === false;
-    if (!noBulkMeter) {
+    if (system!.bulkMeterInstalled !== false) {
       if (record.logDate == null || record.pumpEndTime == null) {
         throw new BadRequestException({
           error: 'log_date and pump_end_time are required before submit',
         });
       }
-      try {
-        await this.waterMeterVolumeService.applyBulkMeterFields({
-          record,
+      const requiresMeter =
+        await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
+          bulkMeterInstalled: true,
           waterSystemId: String(system!.id),
-          noBulkMeterInstalled: false,
-          meterReadingEnd: record.meterReadingEnd,
-          meterReadingStart: record.meterReadingStart,
-          legacyTotalWaterPumped: record.totalWaterPumped,
+          logDate: record.logDate,
+          pumpEndTime: record.pumpEndTime,
           excludeRecordId: String(record.id),
         });
-      } catch (ve) {
-        this.throwBulkMeterError(ve);
+      const hasMeterReading = record.meterReadingEnd != null;
+      if (requiresMeter || hasMeterReading) {
+        try {
+          await this.waterMeterVolumeService.applyBulkMeterFields({
+            record,
+            waterSystemId: String(system!.id),
+            noBulkMeterInstalled: false,
+            meterReadingEnd: record.meterReadingEnd,
+            meterReadingStart: record.meterReadingStart,
+            legacyTotalWaterPumped: record.totalWaterPumped,
+            excludeRecordId: String(record.id),
+          });
+        } catch (ve) {
+          this.throwBulkMeterError(ve);
+        }
+      } else {
+        record.meterReadingStart = null;
+        record.meterReadingEnd = null;
+        record.totalWaterPumped = null;
       }
+    } else {
+      record.meterReadingStart = null;
+      record.meterReadingEnd = null;
+      record.totalWaterPumped = null;
     }
 
     record.status = SUBMISSION_STATUS_SUBMITTED;
@@ -1467,8 +1509,6 @@ export class TubewellOperatorService {
             continue;
           }
 
-          const noBulkMeterInstalled = system.bulkMeterInstalled === false;
-
           for (const monthRecord of monthlyData) {
             if (
               typeof monthRecord !== 'object' ||
@@ -1577,6 +1617,19 @@ export class TubewellOperatorService {
               continue;
             }
 
+            const noBulkMeterInstalled = await this.resolveNoBulkMeterForLog(
+              system,
+              {
+                logDate: logD,
+                pumpEndTime: endTime,
+                pumpStartTime: startTime,
+              } as WaterEnergyLoggingDaily,
+              undefined,
+              meterEnd,
+              meterStart,
+              totalWater,
+            );
+
             if (noBulkMeterInstalled) {
               totalWater = null;
               meterEnd = null;
@@ -1599,11 +1652,12 @@ export class TubewellOperatorService {
               continue;
             }
 
+            const captureBulkMeter = !noBulkMeterInstalled;
             const newRecord = waterLogRepo.create({
               waterSystemId: system.id,
               logDate: logD,
               status,
-              bulkMeterImageUrl: noBulkMeterInstalled ? null : imageUrl,
+              bulkMeterImageUrl: captureBulkMeter ? imageUrl : null,
               signed: status === SUBMISSION_STATUS_SUBMITTED,
               signatureSvgSnapshot:
                 status === SUBMISSION_STATUS_SUBMITTED
@@ -1744,6 +1798,41 @@ export class TubewellOperatorService {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
+
+  private async resolveNoBulkMeterForLog(
+    system: WaterSystem,
+    record: Pick<
+      WaterEnergyLoggingDaily,
+      'logDate' | 'pumpEndTime' | 'pumpStartTime'
+    >,
+    excludeRecordId: string | undefined,
+    meterReadingEnd?: number | null,
+    meterReadingStart?: number | null,
+    legacyTotalWaterPumped?: number | null,
+  ): Promise<boolean> {
+    if (system.bulkMeterInstalled === false) {
+      return true;
+    }
+    const hasMeterInput =
+      meterReadingEnd != null ||
+      meterReadingStart != null ||
+      legacyTotalWaterPumped != null;
+    if (hasMeterInput) {
+      return false;
+    }
+    if (!record.logDate) {
+      return true;
+    }
+    const requires =
+      await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
+        bulkMeterInstalled: true,
+        waterSystemId: String(system.id),
+        logDate: record.logDate,
+        pumpEndTime: record.pumpEndTime,
+        excludeRecordId,
+      });
+    return !requires;
+  }
 
   private throwBulkMeterError(exc: unknown): never {
     if (exc instanceof MeterReadingOrderError) {

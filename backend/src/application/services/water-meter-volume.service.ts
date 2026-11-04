@@ -57,15 +57,78 @@ export class WaterMeterVolumeService {
   }
 
   sortWaterLogs(logs: WaterEnergyLoggingDaily[]): WaterEnergyLoggingDaily[] {
-    return [...logs].sort((a, b) => {
-      const ak = this.waterLogSortKey(a);
-      const bk = this.waterLogSortKey(b);
-      for (let i = 0; i < ak.length; i++) {
-        if (ak[i] < bk[i]) return -1;
-        if (ak[i] > bk[i]) return 1;
-      }
-      return 0;
-    });
+    return [...logs].sort((a, b) => this.compareWaterLogSort(a, b));
+  }
+
+  compareWaterLogSort(
+    a: WaterEnergyLoggingDaily,
+    b: WaterEnergyLoggingDaily,
+  ): number {
+    const ak = this.waterLogSortKey(a);
+    const bk = this.waterLogSortKey(b);
+    for (let i = 0; i < ak.length; i++) {
+      if (ak[i] < bk[i]) return -1;
+      if (ak[i] > bk[i]) return 1;
+    }
+    return 0;
+  }
+
+  /**
+   * Bulk-meter sites may backfill pre-meter-era days with pump times only (no readings).
+   * Meter capture is required once a submitted meter chain exists and this log is on/after
+   * the earliest log in that chain (by log date + pump end time).
+   */
+  async logRequiresBulkMeterCapture(options: {
+    bulkMeterInstalled: boolean;
+    waterSystemId: string;
+    logDate: Date;
+    pumpEndTime?: string | null;
+    excludeRecordId?: string | null;
+  }): Promise<boolean> {
+    if (!options.bulkMeterInstalled) {
+      return false;
+    }
+    const earliest = await this.getEarliestSubmittedMeterLog(
+      options.waterSystemId,
+      options.excludeRecordId,
+    );
+    if (!earliest) {
+      return false;
+    }
+    const candidate = new WaterEnergyLoggingDaily();
+    candidate.logDate = options.logDate;
+    candidate.pumpEndTime = options.pumpEndTime ?? '00:00:00';
+    candidate.pumpStartTime = '00:00:00';
+    candidate.createdAt = new Date(0);
+    candidate.id = '';
+    return this.compareWaterLogSort(candidate, earliest) >= 0;
+  }
+
+  async getEarliestSubmittedMeterLog(
+    waterSystemId: string,
+    excludeRecordId?: string | null,
+  ): Promise<WaterEnergyLoggingDaily | null> {
+    const qb = this.waterLogRepo
+      .createQueryBuilder('log')
+      .where('log.water_system_id = :waterSystemId', { waterSystemId })
+      .andWhere('(log.status IS NULL OR log.status IN (:...statuses))', {
+        statuses: [
+          SUBMISSION_STATUS_SUBMITTED,
+          SUBMISSION_STATUS_ACCEPTED,
+          SUBMISSION_STATUS_REVERTED_BACK,
+        ],
+      })
+      .andWhere('log.meter_reading_end IS NOT NULL');
+
+    if (excludeRecordId) {
+      qb.andWhere('log.id != :excludeId', { excludeId: excludeRecordId });
+    }
+
+    const rows = await qb.getMany();
+    if (!rows.length) {
+      return null;
+    }
+    return this.sortWaterLogs(rows)[0];
   }
 
   private readingEndValue(record: WaterEnergyLoggingDaily): number | null {
@@ -177,7 +240,8 @@ export class WaterMeterVolumeService {
           SUBMISSION_STATUS_ACCEPTED,
           SUBMISSION_STATUS_REVERTED_BACK,
         ],
-      });
+      })
+      .andWhere('log.meter_reading_end IS NOT NULL');
     if (excludeRecordId) {
       qb.andWhere('log.id != :excludeId', { excludeId: excludeRecordId });
     }

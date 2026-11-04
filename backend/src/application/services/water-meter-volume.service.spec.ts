@@ -133,4 +133,65 @@ describe('WaterMeterVolumeService', () => {
       expect(result.total_water_pumped).toBe(18);
     });
   });
+
+  describe('logRequiresBulkMeterCapture', () => {
+    it('returns false when system has no bulk meter flag', async () => {
+      await expect(
+        service.logRequiresBulkMeterCapture({
+          bulkMeterInstalled: false,
+          waterSystemId: 'ws-1',
+          logDate: new Date('2025-01-15'),
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('returns false when no submitted meter log exists yet', async () => {
+      jest
+        .spyOn(service, 'getEarliestSubmittedMeterLog')
+        .mockResolvedValue(null);
+      await expect(
+        service.logRequiresBulkMeterCapture({
+          bulkMeterInstalled: true,
+          waterSystemId: 'ws-1',
+          logDate: new Date('2025-01-15'),
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('returns false for log date before earliest meter log', async () => {
+      jest.spyOn(service, 'getEarliestSubmittedMeterLog').mockResolvedValue(
+        log({
+          logDate: new Date('2025-03-01'),
+          pumpEndTime: '10:00:00',
+          meterReadingEnd: 1000,
+        }),
+      );
+      await expect(
+        service.logRequiresBulkMeterCapture({
+          bulkMeterInstalled: true,
+          waterSystemId: 'ws-1',
+          logDate: new Date('2025-02-01'),
+          pumpEndTime: '12:00:00',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('returns true for log on or after earliest meter log', async () => {
+      jest.spyOn(service, 'getEarliestSubmittedMeterLog').mockResolvedValue(
+        log({
+          logDate: new Date('2025-03-01'),
+          pumpEndTime: '10:00:00',
+          meterReadingEnd: 1000,
+        }),
+      );
+      await expect(
+        service.logRequiresBulkMeterCapture({
+          bulkMeterInstalled: true,
+          waterSystemId: 'ws-1',
+          logDate: new Date('2025-03-01'),
+          pumpEndTime: '11:00:00',
+        }),
+      ).resolves.toBe(true);
+    });
+  });
 });
