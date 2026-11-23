@@ -19,6 +19,7 @@ import { kv, PageHeader, PageShell, StatCard } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
@@ -48,6 +49,16 @@ import {
   useHqSubmissions,
 } from "./useHqSubmissions";
 import PaginatedListFooter from "./PaginatedListFooter";
+import {
+  ALL_MONTHS,
+  ALL_YEARS,
+  executivePeriodLabel,
+  hasDateRange,
+  resolvePeriodFromUrl,
+  writePeriodToSearchParams,
+  type ExecutivePeriod,
+} from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 
 function MetaItem({
   label,
@@ -200,17 +211,38 @@ function fullDayLabel(iso: string): string {
 type LocationState = {
   from?: string;
   metrics?: WaterSystemDetailRow;
-  year?: number;
-  month?: number;
 };
+
+function periodToSubmissionScope(p: ExecutivePeriod): HqSubmissionScope {
+  if (hasDateRange(p)) return { dateFrom: p.dateFrom, dateTo: p.dateTo };
+  return {
+    ...(p.year !== ALL_YEARS ? { year: Number(p.year) } : {}),
+    ...(p.month !== ALL_MONTHS ? { month: Number(p.month) } : {}),
+  };
+}
 
 export default function HqWaterSystemDetailPage() {
   const { id } = useParams<{ id: string }>();
   const systemId = String(id ?? "").trim();
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
+  /** Period comes from the URL (links open in a new tab); default = all time. */
+  const [filterPeriod, setFilterPeriod] = useState<ExecutivePeriod>(() =>
+    resolvePeriodFromUrl(searchParams, ALL_YEARS),
+  );
+  const [activePeriod, setActivePeriod] =
+    useState<ExecutivePeriod>(filterPeriod);
+  const periodLabel = executivePeriodLabel(activePeriod);
+  const applyPeriod = () => {
+    setActivePeriod(filterPeriod);
+    setDayFilter("");
+    setSearchParams(
+      (prev) => writePeriodToSearchParams(new URLSearchParams(prev), filterPeriod),
+      { replace: true },
+    );
+  };
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -228,18 +260,11 @@ export default function HqWaterSystemDetailPage() {
   const flowRateM3h = numOrNull(system?.pump_flow_rate);
 
   const periodLogs = useMemo(() => {
-    const filterOpts: { waterSystemId: string; scope?: HqSubmissionScope } = {
+    return filterApprovedSubmissions(submissions, {
       waterSystemId: systemId,
-    };
-    if (state.year != null || state.month != null) {
-      filterOpts.scope = {
-        ...(state.year != null ? { year: state.year } : {}),
-        ...(state.month != null ? { month: state.month } : {}),
-      };
-    }
-    const rows = filterApprovedSubmissions(submissions, filterOpts);
-    return rows;
-  }, [submissions, systemId, state.year, state.month]);
+      scope: periodToSubmissionScope(activePeriod),
+    });
+  }, [submissions, systemId, activePeriod]);
 
   const dayStats = useMemo(() => {
     const map = new Map<
@@ -342,7 +367,7 @@ export default function HqWaterSystemDetailPage() {
   useEffect(() => {
     daysPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayBranches.length, state.year, state.month, dayFilter]);
+  }, [dayBranches.length, activePeriod, dayFilter]);
 
   const loadSystem = async () => {
     if (!systemId) {
@@ -628,6 +653,32 @@ export default function HqWaterSystemDetailPage() {
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">Period</p>
+                <Badge variant="secondary" className="font-normal">
+                  {periodLabel}
+                </Badge>
+              </div>
+              <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <ExecutivePeriodFields
+                  value={filterPeriod}
+                  onChange={(patch) =>
+                    setFilterPeriod((prev) => ({ ...prev, ...patch }))
+                  }
+                />
+                <div className="col-span-2 flex items-end sm:col-span-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 w-full"
+                    onClick={applyPeriod}
+                    disabled={logsLoading}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </FieldGroup>
+
               {!logsLoading && !logsError && periodLogs.length > 0 ? (
                 <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3">
                   <div className="min-w-0 flex-1 sm:max-w-md">
@@ -681,7 +732,7 @@ export default function HqWaterSystemDetailPage() {
                 <p className="text-sm text-destructive">{logsError}</p>
               ) : periodLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No accepted operator logs for this system in the selected period.
+                  No accepted operator logs for this system in {periodLabel}.
                 </p>
               ) : dayBranches.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">

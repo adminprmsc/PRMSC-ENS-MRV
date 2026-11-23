@@ -16,15 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchableOptionField } from "@/components/common/SearchableOptionField";
-import {
-  EXECUTIVE_MONTHS,
-  type ExecutiveScopeFilters,
-} from "./executiveAnalysisTypes";
-import {
-  EXECUTIVE_YEAR_SELECT_OPTIONS,
-  executiveYearLabel,
-  type ExecutivePeriodFilterMode,
-} from "./executivePeriodFilters";
+import { type ExecutiveScopeFilters } from "./executiveAnalysisTypes";
+import { type ExecutivePeriodFilterMode } from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
 import { ALL_SETTLEMENTS, ALL_VILLAGES } from "./registeredLocationOptions";
 
@@ -50,6 +44,8 @@ type ExecutiveScopeFiltersCardProps = {
     key: K,
     value: ExecutiveScopeFilters[K],
   ) => void;
+  /** Patch several fields at once (period picker); falls back to onUpdate. */
+  onUpdateMany?: (patch: Partial<ExecutiveScopeFilters>) => void;
   onApply: () => void;
 };
 
@@ -136,6 +132,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   locationMeta,
   locationsLoading,
   onUpdate,
+  onUpdateMany,
   onApply,
 }: ExecutiveScopeFiltersCardProps) {
   const resolvedPeriodMode: ExecutivePeriodFilterMode =
@@ -143,12 +140,19 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   const showYearFilter =
     resolvedPeriodMode === "full" || resolvedPeriodMode === "year-only";
   const showMonthFilter = resolvedPeriodMode === "full";
-  const filterColumnClass =
-    resolvedPeriodMode === "full"
-      ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
-      : showYearFilter
-        ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
-        : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4";
+  const filterColumnClass = showYearFilter
+    ? "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7"
+    : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4";
+
+  const updatePeriod = (patch: Partial<ExecutiveScopeFilters>) => {
+    if (onUpdateMany) {
+      onUpdateMany(patch);
+      return;
+    }
+    for (const [key, value] of Object.entries(patch)) {
+      onUpdate(key as keyof ExecutiveScopeFilters, value as string);
+    }
+  };
 
   const assignedCount = tehsilOptions.filter(
     (t) => t !== ALL_ASSIGNED_TEHSILS,
@@ -203,31 +207,10 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
           />
 
           {showYearFilter ? (
-            <FilterSelect
-              label="Year"
-              value={filters.year}
-              placeholder="Year"
-              options={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
-              optionLabel={executiveYearLabel}
-              onChange={(v) => onUpdate("year", v)}
-            />
-          ) : null}
-
-          {showMonthFilter ? (
-            <FilterSelect
-              label="Month"
-              value={filters.month}
-              placeholder="Month"
-              options={[
-                "All Months",
-                ...EXECUTIVE_MONTHS.map((_, i) => String(i + 1)),
-              ]}
-              optionLabel={(v) =>
-                v === "All Months"
-                  ? "All months"
-                  : (EXECUTIVE_MONTHS[Number(v) - 1] ?? v)
-              }
-              onChange={(v) => onUpdate("month", v)}
+            <ExecutivePeriodFields
+              value={filters}
+              onChange={updatePeriod}
+              showMonth={showMonthFilter}
             />
           ) : null}
 

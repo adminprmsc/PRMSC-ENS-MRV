@@ -263,7 +263,7 @@ export function useWaterAnalysisColumns(
       },
       {
         accessorKey: "avg_hours_per_day_logged",
-        header: "h / day",
+        header: "Avg runtime / day (h)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => waterNumCell(getValue(), fmtNum),
       },
@@ -337,7 +337,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_export_off_peak_kwh",
-        header: "Export off-peak",
+        header: "Export off-peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -350,7 +350,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_export_peak_kwh",
-        header: "Export peak",
+        header: "Export peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -373,7 +373,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_import_off_peak_kwh",
-        header: "Import off-peak",
+        header: "Import off-peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -386,7 +386,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_import_peak_kwh",
-        header: "Import peak",
+        header: "Import peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -407,7 +407,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_net_off_peak_kwh",
-        header: "Net off-peak",
+        header: "Net off-peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -420,7 +420,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "total_net_peak_kwh",
-        header: "Net peak",
+        header: "Net peak (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ row }) =>
           row.original.any_tou_required ? (
@@ -449,7 +449,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "avg_export_kwh_per_month",
-        header: "Export / mo",
+        header: "Export / mo (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
           <span className="tabular-nums">{fmtNum(getValue())}</span>
@@ -457,7 +457,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "avg_import_kwh_per_month",
-        header: "Import / mo",
+        header: "Import / mo (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
           <span className="tabular-nums">{fmtNum(getValue())}</span>
@@ -465,7 +465,7 @@ export function useSolarAnalysisColumns(): Array<
       },
       {
         accessorKey: "avg_net_kwh_per_month",
-        header: "Net / mo",
+        header: "Net / mo (kWh)",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => (
           <span className="tabular-nums">{fmtNum(getValue())}</span>

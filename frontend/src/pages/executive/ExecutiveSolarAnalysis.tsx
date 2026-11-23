@@ -14,17 +14,36 @@ import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
 import { useExecutiveScopeFilters } from "./useExecutiveScopeFilters";
 import { HQ_NEW_TAB_LINK_PROPS, withHqReturnPath } from "@/lib/hqDetailLink";
 import { useExecutiveSolarSystemsDetail } from "./useExecutiveAnalysisQueries";
-import { executiveYearExportSlug } from "./executivePeriodFilters";
+import {
+  ALL_MONTHS,
+  executivePeriodExportSlug,
+  executivePeriodLabel,
+  withPeriodQuery,
+} from "./executivePeriodFilters";
+import AggregatedTotalsCard, {
+  type AggregatedTotal,
+} from "./AggregatedTotalsCard";
+
+function kwh(v: number | null | undefined): number {
+  const n = Number(v);
+  return v != null && Number.isFinite(n) ? n : 0;
+}
 
 const ExecutiveSolarAnalysis = () => {
   const scope = useExecutiveScopeFilters({ periodFilterMode: "year-only" });
   const baseColumns = useSolarAnalysisColumns();
   const location = useLocation();
-
-  const { data: rows = [], isLoading, error } = useExecutiveSolarSystemsDetail(
-    scope.apiFilters,
-    scope.allowedTehsils,
+  /** Solar analysis is year-only (or a custom range) — never a single month. */
+  const period = useMemo(
+    () => ({ ...scope.activeFilters, month: ALL_MONTHS }),
+    [scope.activeFilters],
   );
+
+  const {
+    data: rows = [],
+    isLoading,
+    error,
+  } = useExecutiveSolarSystemsDetail(scope.apiFilters, scope.allowedTehsils);
 
   const columns = useMemo<Array<ColumnDef<SolarSystemDetailRow>>>(
     () => [
@@ -36,15 +55,15 @@ const ExecutiveSolarAnalysis = () => {
         cell: ({ row }) => (
           <Link
             to={withHqReturnPath(
-              hqRoutes.solarSite(row.original.solar_system_id),
+              withPeriodQuery(
+                hqRoutes.solarSite(row.original.solar_system_id),
+                period,
+              ),
               location.pathname + location.search,
             )}
             state={{
               from: location.pathname + location.search,
               metrics: row.original,
-              ...(scope.apiFilters.year != null
-                ? { year: scope.apiFilters.year }
-                : {}),
             }}
             {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-muted"
@@ -55,10 +74,46 @@ const ExecutiveSolarAnalysis = () => {
         ),
       },
     ],
-    [baseColumns, location.pathname, location.search, scope.apiFilters.year],
+    [baseColumns, location.pathname, location.search, period],
   );
 
-  const getRowId = useCallback((row: SolarSystemDetailRow) => row.solar_system_id, []);
+  const aggregatedTotals = useMemo<AggregatedTotal[]>(() => {
+    let exportPeak = 0;
+    let importPeak = 0;
+    let exportOffPeak = 0;
+    let importOffPeak = 0;
+    for (const row of rows) {
+      // Peak / off-peak split only exists for time-of-use (TOU) metered sites.
+      if (!row.any_tou_required) continue;
+      exportPeak += kwh(row.total_export_peak_kwh);
+      importPeak += kwh(row.total_import_peak_kwh);
+      exportOffPeak += kwh(row.total_export_off_peak_kwh);
+      importOffPeak += kwh(row.total_import_off_peak_kwh);
+    }
+    const hint =
+      "Sum across sites with time-of-use (peak / off-peak) metering.";
+    return [
+      { label: "Total peak export", value: exportPeak, unit: "kWh", hint },
+      { label: "Total peak import", value: importPeak, unit: "kWh", hint },
+      {
+        label: "Total off-peak export",
+        value: exportOffPeak,
+        unit: "kWh",
+        hint,
+      },
+      {
+        label: "Total off-peak import",
+        value: importOffPeak,
+        unit: "kWh",
+        hint,
+      },
+    ];
+  }, [rows]);
+
+  const getRowId = useCallback(
+    (row: SolarSystemDetailRow) => row.solar_system_id,
+    [],
+  );
 
   const errorMessage = error
     ? getApiErrorMessage(error, "Failed to load solar system analysis")
@@ -84,6 +139,7 @@ const ExecutiveSolarAnalysis = () => {
         locationMeta={scope.locationMeta}
         locationsLoading={scope.catalogLoading}
         onUpdate={scope.updateFilter}
+        onUpdateMany={scope.updateFilters}
         onApply={scope.applyFilters}
       />
 
@@ -94,14 +150,25 @@ const ExecutiveSolarAnalysis = () => {
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : (
-        <DataGrid
-          title="Sites"
-          rows={rows}
-          columns={columns}
-          exportFileName={`solar-systems-${executiveYearExportSlug(scope.activeFilters.year)}-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
-          getRowId={getRowId}
-          initialPageSize={25}
-        />
+        <>
+          <AggregatedTotalsCard
+            title="Aggregated solar energy"
+            exportTitle="Solar analysis — aggregated totals"
+            exportFileName={`solar-aggregated-${executivePeriodExportSlug(period)}-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
+            scopeLabel={scope.activeScopeLabel}
+            periodLabel={executivePeriodLabel(period)}
+            siteCount={rows.length}
+            totals={aggregatedTotals}
+          />
+          <DataGrid
+            title="Sites"
+            rows={rows}
+            columns={columns}
+            exportFileName={`solar-systems-${executivePeriodExportSlug(period)}-${scope.activeFilters.tehsil}-${scope.activeFilters.village}`}
+            getRowId={getRowId}
+            initialPageSize={25}
+          />
+        </>
       )}
     </PageShell>
   );

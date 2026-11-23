@@ -240,7 +240,9 @@ export default function DataGrid<T extends Record<string, unknown>>({
     const exportRows = table.getFilteredRowModel().rows.map((r) => {
       const out: Record<string, unknown> = {};
       for (const col of visibleLeafColumns) {
-        out[String(col.columnDef.header ?? col.id)] = r.getValue(col.id);
+        // Display-only columns (e.g. row actions) have no data to export.
+        if (!col.accessorFn) continue;
+        out[getColumnLabel(col)] = r.getValue(col.id);
       }
       return out;
     });

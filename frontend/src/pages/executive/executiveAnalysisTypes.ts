@@ -4,6 +4,9 @@ export type ExecutiveScopeFilters = {
   settlement: string;
   month: string;
   year: string;
+  /** Inclusive YYYY-MM-DD custom range; overrides year/month when both set. */
+  dateFrom: string;
+  dateTo: string;
 };
 
 export type WaterSystemDetailRow = {

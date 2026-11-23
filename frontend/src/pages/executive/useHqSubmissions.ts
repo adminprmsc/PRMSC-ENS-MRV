@@ -17,6 +17,12 @@ export function filterApprovedSubmissions(
     if (String(s.system_info?.id ?? "") !== String(waterSystemId)) return false;
     if (scope?.year != null && s.system_info?.year !== scope.year) return false;
     if (scope?.month != null && s.system_info?.month !== scope.month) return false;
+    if (scope?.dateFrom || scope?.dateTo) {
+      const key = submissionLogDateKey(s);
+      if (!key) return false;
+      if (scope.dateFrom && key < scope.dateFrom) return false;
+      if (scope.dateTo && key > scope.dateTo) return false;
+    }
     if (scope?.logDate) {
       const key = submissionLogDateKey(s);
       if (key !== scope.logDate.slice(0, 10)) return false;
