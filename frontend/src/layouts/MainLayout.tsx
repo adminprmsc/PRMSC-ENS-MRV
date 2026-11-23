@@ -15,6 +15,7 @@ import {
   ListChecks,
   LogOut,
   MapPinned,
+  Map as MapIcon,
   Menu,
   PanelLeft,
   Radio,
@@ -25,6 +26,7 @@ import {
   Users,
   User as UserIcon,
   X,
+  History,
 } from "lucide-react";
 
 import { PendingSiteDeleteRequestsPrompt } from "../components/PendingSiteDeleteRequestsPrompt";
@@ -39,6 +41,7 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { AppBreadcrumbs } from "../components/layout/AppBreadcrumbs";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 import {
   HQ_DASHBOARD,
   accountRoutes,
@@ -203,6 +206,11 @@ const MainLayout = () => {
             label: "Command Center",
             end: true,
           },
+          {
+            path: hqRoutes.geography,
+            icon: <MapIcon className="size-4 shrink-0 opacity-90" />,
+            label: "Geography",
+          },
         ],
       });
       sections.push({
@@ -219,6 +227,11 @@ const MainLayout = () => {
             icon: <Trash2 className="size-4 shrink-0 opacity-90" />,
             label: "Delete requests",
             ...(deleteRequestCount > 0 ? { badge: deleteRequestCount } : {}),
+          },
+          {
+            path: hqRoutes.changeHistory,
+            icon: <History className="size-4 shrink-0 opacity-90" />,
+            label: "Change history",
           },
         ],
       });
@@ -269,6 +282,11 @@ const MainLayout = () => {
             icon: <MapPinned className="size-4 shrink-0 opacity-90" />,
             label: "Villages & settlements",
           },
+          {
+            path: adminRoutes.geography,
+            icon: <MapIcon className="size-4 shrink-0 opacity-90" />,
+            label: "Geography & population",
+          },
         ],
       });
     }
@@ -282,6 +300,11 @@ const MainLayout = () => {
             icon: <LayoutDashboard className="size-4 shrink-0 opacity-90" />,
             label: "Dashboard",
             end: true,
+          },
+          {
+            path: tehsilRoutes.geography,
+            icon: <MapIcon className="size-4 shrink-0 opacity-90" />,
+            label: "Geography",
           },
         ],
       });
@@ -315,6 +338,11 @@ const MainLayout = () => {
             path: tehsilRoutes.waterAlerts,
             icon: <AlertTriangle className="size-4 shrink-0 opacity-90" />,
             label: "Anomalies",
+          },
+          {
+            path: tehsilRoutes.changeHistory,
+            icon: <History className="size-4 shrink-0 opacity-90" />,
+            label: "Change history",
           },
         ],
       });
@@ -713,6 +741,8 @@ const MainLayout = () => {
               />
             </div>
 
+            <div className="flex shrink-0 items-center gap-2">
+            <NotificationBell />
             <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border/80 bg-card py-1 pr-3 pl-1 shadow-sm">
               <Avatar size="sm">
                 <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
@@ -722,6 +752,7 @@ const MainLayout = () => {
               <span className="hidden max-w-[160px] truncate text-sm font-medium text-foreground sm:inline">
                 {identity.primary}
               </span>
+            </div>
             </div>
           </header>
 

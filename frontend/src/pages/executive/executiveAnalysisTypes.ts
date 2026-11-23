@@ -15,6 +15,8 @@ export type WaterSystemDetailRow = {
   tehsil: string;
   village: string;
   settlement?: string | null;
+  /** Site start of operation, YYYY-MM-DD. */
+  start_of_operation?: string | null;
   bulk_meter_installed: boolean;
   /** `bulk_meter` = interval sum from logs; `estimated` = η × Q × runtime. */
   volume_basis?: "bulk_meter" | "estimated" | null;
@@ -49,6 +51,8 @@ export type SolarSystemDetailRow = {
   site_type?: string | null;
   disco_info?: string | null;
   bill_reference_number?: string | null;
+  /** Solar connection date, YYYY-MM-DD. */
+  solar_connection_date?: string | null;
   total_export_kwh: number;
   total_export_off_peak_kwh?: number | null;
   total_export_peak_kwh?: number | null;

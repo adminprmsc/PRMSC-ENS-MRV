@@ -918,6 +918,10 @@ export class DashboardService {
         tehsil: system.tehsil,
         village: system.village,
         settlement: system.settlement,
+        /** Site start of operation (YYYY-MM-DD). */
+        start_of_operation: system.startOfOperation
+          ? system.startOfOperation.toISOString().slice(0, 10)
+          : null,
         bulk_meter_installed: bulkMeter,
         /** Sum of meter interval volumes in scope (bulk meter sites only). */
         total_water_pumped_m3: bulkMeter ? water : null,
@@ -962,6 +966,11 @@ export class DashboardService {
       .addSelect('ss.site_type', 'site_type')
       .addSelect('ss.disco_info', 'disco_info')
       .addSelect('ss.bill_reference_number', 'bill_reference_number')
+      // Text form avoids the pg driver turning `date` into a local-midnight Date.
+      .addSelect(
+        "TO_CHAR(ss.solar_connection_date, 'YYYY-MM-DD')",
+        'solar_connection_date',
+      )
       .addSelect(
         'SUM(COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0))',
         'total_export_kwh',
@@ -1006,6 +1015,7 @@ export class DashboardService {
       .addGroupBy('ss.site_type')
       .addGroupBy('ss.disco_info')
       .addGroupBy('ss.bill_reference_number')
+      .addGroupBy('ss.solar_connection_date')
       .orderBy('ss.tehsil')
       .addOrderBy('ss.village')
       .addOrderBy('ss.unique_identifier');
@@ -1054,6 +1064,8 @@ export class DashboardService {
         site_type: (r.site_type as string | null) ?? null,
         disco_info: r.disco_info,
         bill_reference_number: r.bill_reference_number,
+        solar_connection_date:
+          (r.solar_connection_date as string | null) ?? null,
         total_export_kwh: expKwh,
         total_export_off_peak_kwh: expOffPeak,
         total_export_peak_kwh: expPeak,

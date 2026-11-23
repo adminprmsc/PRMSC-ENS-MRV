@@ -4129,9 +4129,15 @@ export class TehsilManagerService {
     return { statusCode: 200, body: result };
   }
 
-  async markAllNotificationsRead(jwt: JwtContext): Promise<ServiceResult> {
+  async markAllNotificationsRead(
+    jwt: JwtContext,
+    type?: string,
+  ): Promise<ServiceResult> {
     const result =
-      await this.notificationsService.markAllNotificationsReadResponse(jwt.sub);
+      await this.notificationsService.markAllNotificationsReadResponse(
+        jwt.sub,
+        type,
+      );
     return { statusCode: 200, body: result };
   }
 }

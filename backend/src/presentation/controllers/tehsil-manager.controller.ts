@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   HttpException,
   Param,
   Post,
@@ -23,10 +24,14 @@ import {
   TehsilManagerService,
 } from '../../application/services/tehsil-manager.service';
 import { ADMIN, SUPER_ADMIN } from '../../domain/constants/roles';
+import { NotificationsService } from '../../application/services/notifications.service';
 
 @Controller('api/operator')
 export class TehsilManagerController {
-  constructor(private readonly tehsilManagerService: TehsilManagerService) {}
+  constructor(
+    private readonly tehsilManagerService: TehsilManagerService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   private jwtFromRequest(req: Request): JwtContext {
     const user = req.user as JwtContext;
@@ -606,6 +611,19 @@ export class TehsilManagerController {
     );
   }
 
+  @Post('notifications/read-batch')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  markNotificationsReadBatch(
+    @Req() req: Request,
+    @Body() body: { ids?: unknown },
+  ) {
+    return this.notificationsService.markNotificationsReadByIdsResponse(
+      this.jwtFromRequest(req).sub,
+      body?.ids,
+    );
+  }
+
   @Post('notifications/:notificationId/read')
   @UseGuards(JwtAuthGuard)
   markNotificationRead(
@@ -622,10 +640,11 @@ export class TehsilManagerController {
 
   @Post('notifications/read-all')
   @UseGuards(JwtAuthGuard)
-  markAllNotificationsRead(@Req() req: Request) {
+  markAllNotificationsRead(@Req() req: Request, @Query('type') type?: string) {
     return this.respond(
       this.tehsilManagerService.markAllNotificationsRead(
         this.jwtFromRequest(req),
+        type,
       ),
     );
   }

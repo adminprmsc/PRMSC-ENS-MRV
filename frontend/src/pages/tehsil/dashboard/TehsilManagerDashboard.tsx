@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "../../../components/ui/select";
 import { tehsilRoutes } from "../../../constants/routes";
+import { PopulationDemographics } from "../../../components/geography/PopulationDemographics";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
   ALL_TEHSILS,
@@ -55,7 +56,13 @@ import {
   getPakistanIsoDateString,
   getPakistanYear,
 } from "../../../utils/pakistanTime";
-import { getLoggingCompliance } from "../../../services/tehsilManagerOperatorService";
+import {
+  getDashboardWaterSupplied,
+  getLoggingCompliance,
+} from "../../../services/tehsilManagerOperatorService";
+import { useQuery } from "@tanstack/react-query";
+import { CommandCenterPopulationStrip } from "../../../components/geography/CommandCenterPopulationStrip";
+import { usePopulationIndex } from "../../../hooks/usePopulationIndex";
 import type { WaterSystemRow } from "../logging/loggingComplianceTypes";
 import {
   formatAssignedOperators,
@@ -622,6 +629,32 @@ const TehsilManagerDashboard = () => {
     refetch,
   } = useTehsilProgramSummary(activeFilters);
 
+  // Population (Geography) + period water volume for the per-person KPI.
+  const population = usePopulationIndex(activeFilters.tehsil);
+  const { data: waterRows, isLoading: waterLoading } = useQuery({
+    queryKey: ["tehsil-dashboard-water-supplied", activeFilters],
+    queryFn: async () => {
+      const f: Record<string, string | number> = {
+        tehsil: activeFilters.tehsil,
+        village: activeFilters.village,
+        year: activeFilters.year,
+      };
+      if (activeFilters.month !== "") f.month = Number(activeFilters.month);
+      const rows = (await getDashboardWaterSupplied(f)) as unknown;
+      return Array.isArray(rows)
+        ? (rows as Array<{ total_water_pumped?: number | string }>)
+        : [];
+    },
+  });
+  const periodWaterM3 = useMemo(
+    () =>
+      (waterRows ?? []).reduce(
+        (a, r) => a + (Number(r.total_water_pumped) || 0),
+        0,
+      ),
+    [waterRows],
+  );
+
   const MONTHS: Array<{ value: string | number; label: string }> = [
     { value: "", label: "All months" },
     { value: 1, label: "January" },
@@ -799,6 +832,32 @@ const TehsilManagerDashboard = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── POPULATION KPIs (Geography × water systems) ── */}
+      <CommandCenterPopulationStrip
+        byKey={population.byKey}
+        loading={population.loading || statsLoading || waterLoading}
+        tehsil={activeFilters.tehsil}
+        village={activeFilters.village}
+        period={{
+          year: String(activeFilters.year),
+          month: String(activeFilters.month),
+          dateFrom: "",
+          dateTo: "",
+        }}
+        waterM3={periodWaterM3}
+        manageHref={tehsilRoutes.geography}
+      />
+
+      {/* ── POPULATION (Geography) ── */}
+      <PopulationDemographics
+        coverage={population.coverage}
+        loading={population.loading}
+        tehsil={activeFilters.tehsil}
+        village={activeFilters.village}
+        manageHref={tehsilRoutes.geography}
+        siteHref={tehsilRoutes.waterSystemView}
+      />
 
       {/* ── PERIOD LOGGING PROGRESS ── */}
       <div>

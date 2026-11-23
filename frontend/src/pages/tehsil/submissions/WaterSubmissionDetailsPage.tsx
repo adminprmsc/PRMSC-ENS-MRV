@@ -71,6 +71,8 @@ import { Skeleton } from "../../../components/ui/skeleton";
 import { Spinner } from "../../../components/ui/spinner";
 import { Textarea } from "../../../components/ui/textarea";
 import { resolveHqReturnPath } from "@/lib/hqDetailLink";
+import { EntryChangeHistoryCard } from "@/components/manager-ops/EntryChangeHistoryCard";
+import { ManagerOverrideCard } from "@/components/manager-ops/ManagerOverrideCard";
 import { tehsilRoutes, hqRoutes } from "../../../constants/routes";
 import { useTehsilManagerOperatorApi } from "../../../hooks";
 import { getApiErrorMessage } from "../../../lib/api-error";
@@ -102,6 +104,8 @@ type WaterSystemSummary = {
 type DetailResponse = {
   submission?: {
     id: string;
+    /** water_energy_logging_daily id */
+    record_id?: string | null;
     submission_type: string;
     status: "submitted" | "accepted" | "rejected" | "reverted_back" | string;
     operator_name?: string;
@@ -556,6 +560,7 @@ export default function WaterSubmissionDetailsPage({
   >(null);
   const [remarks, setRemarks] = useState("");
   const [acting, setActing] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const backTo = useMemo(() => {
     const fallback = readOnly
@@ -1224,6 +1229,36 @@ export default function WaterSubmissionDetailsPage({
               )}
             </CardContent>
           </Card>
+
+          {submission?.record_id ? (
+            <EntryChangeHistoryCard
+              entryId={submission.record_id}
+              refreshKey={historyKey}
+            />
+          ) : null}
+
+          {readOnly && submission?.record_id ? (
+            <ManagerOverrideCard
+              entryType="water_log"
+              recordId={submission.record_id}
+              status={submission.status}
+              entryLabel={[
+                kv(system?.unique_identifier),
+                kv(system?.village),
+                record?.log_date ?? periodLabel(record?.month, record?.year),
+              ]
+                .filter((x) => x && x !== "—")
+                .join(" · ")}
+              onDone={(action) => {
+                if (action === "delete") {
+                  navigate(backTo, { replace: true });
+                  return;
+                }
+                setHistoryKey((k) => k + 1);
+                void load();
+              }}
+            />
+          ) : null}
 
           {!readOnly ? (
           <Card>

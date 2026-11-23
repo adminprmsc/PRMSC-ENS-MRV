@@ -133,6 +133,8 @@ type OrganizationKpiPanelProps = {
   managementView?: boolean;
   /** Slot for a "today" card rendered above the health section. */
   todaySlot?: React.ReactNode;
+  /** Population KPIs rendered directly under the scope filter. */
+  populationSlot?: React.ReactNode;
 };
 
 const waterDeliveryConfig = {
@@ -604,6 +606,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
   restrictTehsils = false,
   managementView = false,
   todaySlot,
+  populationSlot,
 }: OrganizationKpiPanelProps) {
   const waterSystemsAll = summary.water_systems;
   const solarSystemsAll = summary.solar_systems;
@@ -736,6 +739,8 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
           scopeLabel={scopeLabel}
         />
       ) : null}
+
+      {populationSlot ?? null}
 
       {/* ── SECTION 1: PROGRAMME FOOTPRINT ─────────────────────────────── */}
       {mapSlot ? (

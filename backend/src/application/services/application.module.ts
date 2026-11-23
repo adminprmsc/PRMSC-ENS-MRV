@@ -3,6 +3,8 @@ import { DatabaseModule } from '../../infrastructure/database/database.module';
 import { AuthService } from './auth.service';
 import { DashboardService } from './dashboard.service';
 import { EmailService } from './email.service';
+import { EntryModerationService } from './entry-moderation.service';
+import { GeographyService } from './geography.service';
 import { NotificationsService } from './notifications.service';
 import { OperatorHelpersService } from './operator-helpers.service';
 import { PumpTimesService } from './pump-times.service';
@@ -23,6 +25,8 @@ const SERVICES = [
   AuthService,
   DashboardService,
   EmailService,
+  EntryModerationService,
+  GeographyService,
   LocationsService,
   NotificationsService,
   OperatorHelpersService,

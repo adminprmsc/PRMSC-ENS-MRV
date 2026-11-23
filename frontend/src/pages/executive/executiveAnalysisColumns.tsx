@@ -141,6 +141,19 @@ export function useWaterAnalysisColumns(
         cell: ({ getValue }) => (isBlank(getValue()) ? NA : String(getValue())),
       },
       {
+        accessorKey: "start_of_operation",
+        header: "Start date",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ getValue }) =>
+          isBlank(getValue()) ? (
+            NA
+          ) : (
+            <span className="tabular-nums whitespace-nowrap">
+              {String(getValue())}
+            </span>
+          ),
+      },
+      {
         accessorKey: "bulk_meter_installed",
         header: "Bulk meter",
         meta: {
@@ -324,6 +337,19 @@ export function useSolarAnalysisColumns(): Array<
         header: "Bill ref",
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
         cell: ({ getValue }) => String(getValue() ?? "—"),
+      },
+      {
+        accessorKey: "solar_connection_date",
+        header: "Solar connection date",
+        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        cell: ({ getValue }) =>
+          isBlank(getValue()) ? (
+            NA
+          ) : (
+            <span className="tabular-nums whitespace-nowrap">
+              {String(getValue())}
+            </span>
+          ),
       },
       {
         accessorKey: "total_export_kwh",
@@ -527,6 +553,7 @@ export function waterSystemDetailFields(row: WaterSystemDetailRow) {
     { label: "Tehsil", value: text(row.tehsil) },
     { label: "Village", value: text(row.village) },
     { label: "Settlement", value: text(row.settlement) },
+    { label: "Start date", value: text(row.start_of_operation) },
     {
       label: "Bulk meter installed",
       value: row.bulk_meter_installed ? "Yes" : "No",
@@ -560,6 +587,10 @@ export function solarSystemDetailFields(row: SolarSystemDetailRow) {
     { label: "Settlement", value: row.settlement ?? "—" },
     { label: "DISCO", value: row.disco_info ?? "—" },
     { label: "Bill reference", value: row.bill_reference_number ?? "—" },
+    {
+      label: "Solar connection date",
+      value: row.solar_connection_date || "—",
+    },
     { label: "Total export", value: `${fmtInt(row.total_export_kwh)} kWh` },
     ...(row.any_tou_required
       ? [

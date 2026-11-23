@@ -13,6 +13,8 @@ import { hqRoutes } from "@/constants/routes";
 import { resolveHqReturnPath } from "@/lib/hqDetailLink";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getSolarSupplyRecord } from "@/services/tehsilManagerOperatorService";
+import { EntryChangeHistoryCard } from "@/components/manager-ops/EntryChangeHistoryCard";
+import { ManagerOverrideCard } from "@/components/manager-ops/ManagerOverrideCard";
 import type { SolarMonthlySupplyRecordDetail } from "@/types/api";
 import { getApiOrigin } from "@/utils/apiOrigin";
 import { formatPakistanDateTime } from "@/utils/pakistanTime";
@@ -118,7 +120,7 @@ export default function HqSolarRecordViewPage() {
         }
         badge={
           <Badge variant="outline" className="font-normal">
-            Read-only review
+            Approved entry
           </Badge>
         }
         actions={
@@ -225,6 +227,15 @@ export default function HqSolarRecordViewPage() {
               </CardContent>
             </Card>
           ) : null}
+
+          <EntryChangeHistoryCard entryId={String(record.id)} />
+
+          <ManagerOverrideCard
+            entryType="solar_log"
+            recordId={String(record.id)}
+            entryLabel={`${record.tehsil} · ${record.village}${record.settlement ? ` · ${record.settlement}` : ""} · ${monthLabel} ${record.year}`}
+            onDone={() => navigate(backTo, { replace: true })}
+          />
         </div>
       )}
     </PageShell>

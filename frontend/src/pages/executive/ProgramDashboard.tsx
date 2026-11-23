@@ -36,6 +36,9 @@ import {
   AccordionTrigger,
 } from "../../components/ui/accordion";
 import SystemsMapCard from "./SystemsMapCard";
+import { PopulationDemographics } from "@/components/geography/PopulationDemographics";
+import { CommandCenterPopulationStrip } from "@/components/geography/CommandCenterPopulationStrip";
+import { usePopulationIndex } from "@/hooks/usePopulationIndex";
 import OrganizationKpiPanel, {
   type ScopeFilters,
 } from "./OrganizationKpiPanel";
@@ -566,6 +569,8 @@ const ProgramDashboard = ({
     [chartLabels, solarByMonth, gridByMonth],
   );
 
+  const population = usePopulationIndex(activeFilters.tehsil);
+
   const updateScope = useCallback((patch: Partial<ScopeFilters>) => {
     setActiveFilters((prev) => {
       const next = { ...prev, ...patch };
@@ -610,6 +615,17 @@ const ProgramDashboard = ({
           allowedTehsils={allowedTehsils}
           restrictTehsils={restrictTehsils}
           managementView={managementView}
+          populationSlot={
+            <CommandCenterPopulationStrip
+              byKey={population.byKey}
+              loading={population.loading || loading}
+              tehsil={activeFilters.tehsil}
+              village={activeFilters.village}
+              period={activeFilters}
+              waterM3={periodTotals.waterM3}
+              manageHref={hqRoutes.geography}
+            />
+          }
           todaySlot={
             managementView ? (
               <HqTodayWaterCard tehsils={allowedTehsils} />
@@ -633,10 +649,23 @@ const ProgramDashboard = ({
                 }}
                 waterCoverage={summary.water_systems ?? []}
                 solarCoverage={summary.solar_systems ?? []}
+                villagePopulation={population.byKey}
+                siteCoverage={population.siteById}
               />
             ) : undefined
           }
         />
+
+        {managementView ? (
+          <PopulationDemographics
+            coverage={population.coverage}
+            loading={population.loading}
+            tehsil={activeFilters.tehsil}
+            village={activeFilters.village}
+            manageHref={hqRoutes.geography}
+            siteHref={hqRoutes.waterSystem}
+          />
+        ) : null}
 
         {showSystemsMap && mapPosition === "inline" ? (
           <SystemsMapCard
@@ -652,6 +681,8 @@ const ProgramDashboard = ({
             }
             waterCoverage={summary.water_systems ?? []}
             solarCoverage={summary.solar_systems ?? []}
+            villagePopulation={population.byKey}
+                siteCoverage={population.siteById}
             defaultCollapsed
           />
         ) : null}

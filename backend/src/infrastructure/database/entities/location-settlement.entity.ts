@@ -37,6 +37,21 @@ export class LocationSettlement {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
+  /** Residents counted directly under this row (village: main abadi, excluding settlements). */
+  @Column({ type: 'integer', default: 0 })
+  population!: number;
+
+  @Column({ name: 'population_updated_at', type: 'timestamp', nullable: true })
+  populationUpdatedAt!: Date | null;
+
+  @Column({
+    name: 'population_updated_by',
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+  })
+  populationUpdatedBy!: string | null;
+
   @Column({ name: 'created_by', type: 'varchar', length: 36, nullable: true })
   createdBy!: string | null;
 

@@ -408,3 +408,73 @@ export const revertWaterSubmission = async (
   );
   return response.data;
 };
+
+// ── Manager Operations overrides on approved entries ─────────────────────────
+
+export type EntryChangeLogRow = {
+  id: string;
+  entry_type: "water_log" | "solar_log";
+  entry_id: string;
+  action: "reject" | "delete";
+  reason: string;
+  previous_status: string | null;
+  new_status: string | null;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  performed_by_role: string;
+  system_id: string | null;
+  system_uid: string | null;
+  tehsil: string;
+  village: string | null;
+  settlement: string | null;
+  /** Water: YYYY-MM-DD log day. Solar: YYYY-MM billing month. */
+  entry_period: string | null;
+  submission_id: string | null;
+  snapshot: Record<string, unknown> | null;
+  created_at: string | null;
+};
+
+export type EntryChangeLogFilters = {
+  entry_type?: "water_log" | "solar_log";
+  action?: "reject" | "delete";
+  entry_id?: string;
+  tehsil?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+};
+
+export const listEntryChangeLogs = async (filters: EntryChangeLogFilters = {}) => {
+  const clean: QueryFilters = {};
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") clean[k] = v;
+  }
+  const response = await api.get(
+    `/operator/manager-ops/change-logs${buildQueryString(clean)}`,
+  );
+  return response.data as { change_logs: EntryChangeLogRow[] };
+};
+
+export const managerOpsRejectWaterLog = async (recordId: string, reason: string) => {
+  const response = await api.post(
+    `/operator/manager-ops/water-logs/${encodeURIComponent(recordId)}/reject`,
+    { reason },
+  );
+  return response.data as { message: string; change_log: EntryChangeLogRow };
+};
+
+export const managerOpsDeleteWaterLog = async (recordId: string, reason: string) => {
+  const response = await api.post(
+    `/operator/manager-ops/water-logs/${encodeURIComponent(recordId)}/delete`,
+    { reason },
+  );
+  return response.data as { message: string; change_log: EntryChangeLogRow };
+};
+
+export const managerOpsDeleteSolarLog = async (recordId: string, reason: string) => {
+  const response = await api.post(
+    `/operator/manager-ops/solar-logs/${encodeURIComponent(recordId)}/delete`,
+    { reason },
+  );
+  return response.data as { message: string; change_log: EntryChangeLogRow };
+};
