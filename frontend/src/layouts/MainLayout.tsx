@@ -681,13 +681,15 @@ const MainLayout = () => {
         enabled={exec}
         onCountChange={onDeleteRequestCountChange}
       />
-      <div className="flex h-screen overflow-hidden bg-background">
+      {/* `relative` + `overflow-hidden`: absolutely positioned descendants (e.g. `sr-only`)
+          must not grow the document, or the whole shell scrolls away. */}
+      <div className="relative flex h-dvh overflow-hidden bg-background">
         {/* Desktop: expanded or icon rail */}
         <motion.aside
           initial={false}
           animate={{ width: isSidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_RAIL }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className="relative hidden h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
+          className="relative hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
         >
           {renderSidebar(!isSidebarOpen)}
         </motion.aside>
@@ -756,7 +758,7 @@ const MainLayout = () => {
             </div>
           </header>
 
-          <main className="app-shell-bg flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+          <main className="app-shell-bg relative flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-7xl">
               <AnimatePresence mode="wait">
                 <motion.div
