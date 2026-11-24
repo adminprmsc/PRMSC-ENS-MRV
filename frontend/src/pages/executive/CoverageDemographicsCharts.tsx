@@ -54,6 +54,9 @@ export type CoverageScopeQuery = {
   village?: string;
   year?: string;
   month?: string;
+  /** Custom inclusive range (YYYY-MM-DD) — replaces year/month in links. */
+  date_from?: string;
+  date_to?: string;
 };
 
 function withScopeQuery(

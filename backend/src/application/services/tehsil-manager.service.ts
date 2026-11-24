@@ -10,6 +10,17 @@ import {
 import { pumpCapacityKwFromHp } from '../../domain/utils/water-pump.util';
 import { canonicalTehsil } from '../../domain/constants/tehsils';
 import {
+  METER_PHASE_PRE_GREEN,
+  formatYearMonth,
+  normalizeSolarLog,
+  phaseConflicts,
+  pakistanYearMonth,
+  validateLogPeriod,
+  type MeterPhase,
+  type SolarLogFields,
+  type YearMonth,
+} from '../../domain/constants/solar-meter-phase.rules';
+import {
   normalizeSolarSiteType,
   SOLAR_SITE_TYPES,
 } from '../../domain/constants/solar-site-types';
@@ -260,78 +271,52 @@ export class TehsilManagerService {
     return missing;
   }
 
-  private solarMonthlyTouRequired(payload: Record<string, unknown>): boolean {
-    const explicit = this.coerceOptionalBool(payload.tou_required);
-    if (explicit !== null) return explicit;
-    return ['export_peak', 'import_peak', 'net_peak'].some(
-      (k) =>
-        payload[k] !== null && payload[k] !== undefined && payload[k] !== '',
-    );
-  }
-
-  private normalizeSolarMonthlyFields(payload: Record<string, unknown>): {
-    normalized: Record<string, unknown>;
-    error: string | null;
-  } {
-    const touRequired = this.solarMonthlyTouRequired(payload);
-    try {
-      if (touRequired) {
-        return {
-          normalized: {
-            tou_required: true,
-            export_off_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.export_off_peak,
-            ),
-            export_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.export_peak,
-            ),
-            import_off_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.import_off_peak,
-            ),
-            import_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.import_peak,
-            ),
-            net_off_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.net_off_peak,
-            ),
-            net_peak: this.operatorHelpers.coerceOptionalFloat(
-              payload.net_peak,
-            ),
-          },
-          error: null,
-        };
-      }
-      return {
-        normalized: {
-          tou_required: false,
-          export_off_peak: this.operatorHelpers.coerceOptionalFloat(
-            payload.export_total,
-          ),
-          export_peak: null,
-          import_off_peak: this.operatorHelpers.coerceOptionalFloat(
-            payload.import_total,
-          ),
-          import_peak: null,
-          net_off_peak: this.operatorHelpers.coerceOptionalFloat(
-            payload.net_total,
-          ),
-          net_peak: null,
-        },
-        error: null,
-      };
-    } catch (exc) {
-      return { normalized: {}, error: String(exc) };
-    }
+  /**
+   * Validate a monthly solar log for a site + period against the meter-phase
+   * rules (period sanity, green-meter window, per-phase fields).
+   */
+  private validateSolarLog(
+    system: SolarSystem,
+    year: unknown,
+    month: unknown,
+    payload: Record<string, unknown>,
+  ):
+    | { ok: true; period: YearMonth; phase: MeterPhase; fields: SolarLogFields }
+    | { ok: false; message: string } {
+    const { period, error } = validateLogPeriod(year, month);
+    if (error || !period)
+      return { ok: false, message: error ?? 'Invalid period' };
+    const n = normalizeSolarLog(payload, {
+      greenMeterDate: system.greenMeterConnectionDate,
+      period,
+    });
+    if (!n.ok) return { ok: false, message: n.error };
+    return { ok: true, period, phase: n.phase, fields: n.fields };
   }
 
   private solarMonthlyResponseFields(
     record: SolarEnergyLoggingMonthly,
   ): Record<string, unknown> {
-    const touRequired = ['export_peak', 'import_peak', 'net_peak'].some(
-      (k) =>
-        (record as unknown as Record<string, unknown>)[k] !== null &&
-        (record as unknown as Record<string, unknown>)[k] !== undefined,
-    );
+    const phase: MeterPhase = record.meterPhase ?? 'green';
+    if (phase === METER_PHASE_PRE_GREEN) {
+      const peak = record.importPeak ?? 0;
+      const offPeak = record.importOffPeak ?? 0;
+      return {
+        meter_phase: phase,
+        tou_required: true,
+        units_consumed_peak: record.importPeak,
+        units_consumed_off_peak: record.importOffPeak,
+        units_consumed_total: peak + offPeak,
+        export_total: null,
+        import_total: peak + offPeak,
+        net_total: null,
+      };
+    }
+    const touRequired = [
+      record.exportPeak,
+      record.importPeak,
+      record.netPeak,
+    ].some((v) => v !== null && v !== undefined);
     let exportTotal: number | null;
     let importTotal: number | null;
     let netTotal: number | null;
@@ -345,7 +330,11 @@ export class TehsilManagerService {
       netTotal = record.netOffPeak ?? null;
     }
     return {
+      meter_phase: phase,
       tou_required: touRequired,
+      units_consumed_peak: null,
+      units_consumed_off_peak: null,
+      units_consumed_total: null,
       export_total: exportTotal,
       import_total: importTotal,
       net_total: netTotal,
@@ -503,16 +492,30 @@ export class TehsilManagerService {
     return this.operatorHelpers.getActiveMeter(system, this.systemMeterRepo);
   }
 
-  private applySolarNormalized(
+  /** Green meter dates can't be in the future (Pakistan calendar day). */
+  private futureGreenMeterDateError(d: Date | null): string | null {
+    if (!d) return null;
+    const pkToday = new Date(Date.now() + 5 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const iso = d.toISOString().slice(0, 10);
+    return iso > pkToday
+      ? `Green meter connection date (${iso}) cannot be in the future`
+      : null;
+  }
+
+  private applySolarFields(
     record: SolarEnergyLoggingMonthly,
-    normalized: Record<string, unknown>,
+    phase: MeterPhase,
+    fields: SolarLogFields,
   ): void {
-    record.exportOffPeak = normalized.export_off_peak as number | null;
-    record.exportPeak = normalized.export_peak as number | null;
-    record.importOffPeak = normalized.import_off_peak as number | null;
-    record.importPeak = normalized.import_peak as number | null;
-    record.netOffPeak = normalized.net_off_peak as number | null;
-    record.netPeak = normalized.net_peak as number | null;
+    record.meterPhase = phase;
+    record.exportOffPeak = fields.exportOffPeak;
+    record.exportPeak = fields.exportPeak;
+    record.importOffPeak = fields.importOffPeak;
+    record.importPeak = fields.importPeak;
+    record.netOffPeak = fields.netOffPeak;
+    record.netPeak = fields.netPeak;
   }
 
   private async upsertMeter(
@@ -1423,6 +1426,10 @@ export class TehsilManagerService {
         data.green_connection_date || data.green_meter_connection_date,
       ),
     );
+    const greenFutureErr = this.futureGreenMeterDateError(greenConnectionDate);
+    if (greenFutureErr) {
+      return { statusCode: 400, body: { message: greenFutureErr } };
+    }
 
     let uniqueId = data.unique_identifier as string | undefined;
     if (!uniqueId) {
@@ -1498,20 +1505,32 @@ export class TehsilManagerService {
       };
     }
 
-    const { normalized, error } = this.normalizeSolarMonthlyFields(data || {});
-    if (error) return { statusCode: 400, body: { message: error } };
+    const v = this.validateSolarLog(ss!, data.year, data.month, data || {});
+    if (!v.ok) return { statusCode: 400, body: { message: v.message } };
+    const dup = await this.solarMonthlyRepo.findOne({
+      where: {
+        solarSystemId: ss!.id,
+        year: v.period.year,
+        month: v.period.month,
+      },
+    });
+    if (dup) {
+      return {
+        statusCode: 409,
+        body: {
+          message: `A monthly log already exists for ${formatYearMonth(v.period)} — edit it instead`,
+          id: String(dup.id),
+        },
+      };
+    }
 
     const newRecord = this.solarMonthlyRepo.create({
-      solarSystemId: data.solar_system_id as string,
-      year: data.year as number,
-      month: data.month as number,
-      exportOffPeak: normalized.export_off_peak as number | null,
-      exportPeak: normalized.export_peak as number | null,
-      importOffPeak: normalized.import_off_peak as number | null,
-      importPeak: normalized.import_peak as number | null,
-      netOffPeak: normalized.net_off_peak as number | null,
-      netPeak: normalized.net_peak as number | null,
+      solarSystemId: ss!.id,
+      year: v.period.year,
+      month: v.period.month,
     });
+    this.applySolarFields(newRecord, v.phase, v.fields);
+    if (typeof data.remarks === 'string') newRecord.remarks = data.remarks;
     await this.solarMonthlyRepo.save(newRecord);
     return {
       statusCode: 201,
@@ -2910,6 +2929,42 @@ export class TehsilManagerService {
       );
     }
     if (greenConnectionDate !== null) {
+      const futureErr = this.futureGreenMeterDateError(greenConnectionDate);
+      if (futureErr) return { statusCode: 400, body: { message: futureErr } };
+      // A new date must agree with logs already recorded for this site.
+      const logs = await this.solarMonthlyRepo.find({
+        where: { solarSystemId: system.id },
+        select: { year: true, month: true, meterPhase: true },
+      });
+      const conflicts = phaseConflicts(
+        greenConnectionDate,
+        logs.map((l) => ({
+          year: l.year,
+          month: l.month,
+          phase: l.meterPhase ?? 'green',
+        })),
+      );
+      if (conflicts.length) {
+        const list = conflicts
+          .slice(0, 6)
+          .map(
+            (c) =>
+              `${formatYearMonth(c)} (${c.phase === METER_PHASE_PRE_GREEN ? 'before green meter' : 'green meter'} log)`,
+          )
+          .join(', ');
+        return {
+          statusCode: 409,
+          body: {
+            message: `This green meter date contradicts ${conflicts.length} existing monthly log${conflicts.length === 1 ? '' : 's'}: ${list}${conflicts.length > 6 ? ', …' : ''}. Fix or delete those logs first.`,
+            error: 'green_meter_date_conflict',
+            conflicts: conflicts.map((c) => ({
+              year: c.year,
+              month: c.month,
+              meter_phase: c.phase,
+            })),
+          },
+        };
+      }
       system.greenConnectionDate = greenConnectionDate;
       system.greenMeterConnectionDate = greenConnectionDate;
     }
@@ -3271,6 +3326,9 @@ export class TehsilManagerService {
         tehsil: system!.tehsil,
         village: system!.village,
         settlement: system!.settlement || '',
+        green_meter_connection_date: system!.greenMeterConnectionDate
+          ? this.isoDate(system!.greenMeterConnectionDate)
+          : null,
         year: record.year,
         month: record.month,
         export_off_peak: record.exportOffPeak,
@@ -3323,9 +3381,16 @@ export class TehsilManagerService {
     }
 
     const payload = data ?? {};
-    const { normalized, error } = this.normalizeSolarMonthlyFields(payload);
-    if (error) return { statusCode: 400, body: { message: error } };
-    this.applySolarNormalized(record, normalized);
+    // Period is fixed on edit; the phase rules still apply to it.
+    // No meter_phase → inferred from the fields sent (see normalizeSolarLog).
+    const v = this.validateSolarLog(
+      system!,
+      record.year,
+      record.month,
+      payload,
+    );
+    if (!v.ok) return { statusCode: 400, body: { message: v.message } };
+    this.applySolarFields(record, v.phase, v.fields);
 
     if ('remarks' in payload) {
       record.remarks = payload.remarks as string;
@@ -3410,8 +3475,10 @@ export class TehsilManagerService {
     const denied = this.assertMinRole(jwt, ADMIN);
     if (denied) return denied;
 
-    const rows = (data.data as Record<string, unknown>[]) || [];
-    const year = (data.year as number) ?? new Date().getFullYear();
+    const rows = Array.isArray(data.data)
+      ? (data.data as Record<string, unknown>[])
+      : [];
+    const year = data.year ?? pakistanYearMonth().year;
     const imageUrl = (data.image_url || data.image_path) as string | undefined;
 
     if (!rows.length) {
@@ -3422,145 +3489,161 @@ export class TehsilManagerService {
     if (!opUser)
       return { statusCode: 404, body: { message: 'User not found' } };
 
-    const savedIds: string[] = [];
+    type Planned = {
+      system: SolarSystem;
+      period: YearMonth;
+      phase: MeterPhase;
+      fields: SolarLogFields;
+      remarks: unknown;
+      hasRemarks: boolean;
+    };
+    const planned: Planned[] = [];
     const errors: string[] = [];
+    const seen = new Set<string>();
 
+    // Pass 1 — validate everything; nothing is written if any row fails.
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      const row = rows[i] ?? {};
+      const ct = canonicalTehsil(row.tehsil as string);
+      if (!ct) {
+        errors.push(`Row ${i + 1}: invalid tehsil`);
+        continue;
+      }
       try {
-        const ct = canonicalTehsil(row.tehsil as string);
-        if (!ct) {
-          errors.push(`Row ${i + 1}: invalid tehsil`);
-          continue;
-        }
+        await this.tehsilAccess.assertUserMayAccessTehsil(opUser, ct, {
+          forWrite: true,
+        });
+      } catch {
+        errors.push(`Row ${i + 1}: tehsil not permitted for your account`);
+        continue;
+      }
+
+      const rowSystemId = this.coerceString(row.solar_system_id).trim();
+      let system = rowSystemId
+        ? await this.solarSystemRepo.findOne({ where: { id: rowSystemId } })
+        : null;
+
+      if (system) {
         try {
-          await this.tehsilAccess.assertUserMayAccessTehsil(opUser, ct, {
-            forWrite: true,
-          });
+          await this.tehsilAccess.assertUserMayAccessSolarSystem(
+            opUser,
+            system,
+            { forWrite: true },
+          );
         } catch {
-          errors.push(`Row ${i + 1}: tehsil not permitted for your account`);
-          continue;
-        }
-
-        const rowSystemId = this.coerceString(row.solar_system_id).trim();
-        let system = rowSystemId
-          ? await this.solarSystemRepo.findOne({ where: { id: rowSystemId } })
-          : null;
-
-        if (system) {
-          try {
-            await this.tehsilAccess.assertUserMayAccessSolarSystem(
-              opUser,
-              system,
-              { forWrite: true },
-            );
-          } catch {
-            errors.push(
-              `Row ${i + 1}: solar site not permitted for your account`,
-            );
-            continue;
-          }
-          // Prefer explicit id; still require tehsil access alignment.
-          if (canonicalTehsil(system.tehsil) !== ct) {
-            errors.push(`Row ${i + 1}: solar_system_id does not match tehsil`);
-            continue;
-          }
-        } else if (rowSystemId) {
           errors.push(
-            `Row ${i + 1}: No solar system for solar_system_id — register the site first`,
+            `Row ${i + 1}: solar site not permitted for your account`,
           );
           continue;
-        } else {
-          // Legacy: location-only lookup (ambiguous when ABR + Tubewell share a village).
-          system = await this.operatorHelpers.findSolarSystemByLocation(
-            ct,
-            row.village as string,
-            row.settlement as string,
-            this.solarSystemRepo,
-          );
-          if (!system) {
-            errors.push(
-              `Row ${i + 1}: No solar system for this location — your tehsil manager must register it first`,
-            );
-            continue;
-          }
         }
-
-        const monthlyData =
-          (row.monthlyData as Record<string, unknown>[]) || [];
-        let rowEnergyError = false;
-        for (const monthRecord of monthlyData) {
-          const month = monthRecord.month as number;
-          const { normalized, error } = this.normalizeSolarMonthlyFields(
-            monthRecord || {},
-          );
-          if (error) {
-            errors.push(
-              `Row ${i + 1}, month ${this.coerceString(monthRecord.month)}: ${error}`,
-            );
-            rowEnergyError = true;
-            break;
-          }
-
-          const existing = await this.solarMonthlyRepo.findOne({
-            where: { solarSystemId: system.id, year, month },
-          });
-
-          if (existing) {
-            this.applySolarNormalized(existing, normalized);
-            if ('remarks' in monthRecord) {
-              existing.remarks = monthRecord.remarks as string;
-            }
-            if (
-              imageUrl &&
-              (existing.electricityBillImageUrl || '') !==
-                String(imageUrl).trim()
-            ) {
-              await this.storageService.tryDeletePublicObject(
-                existing.electricityBillImageUrl,
-              );
-              existing.electricityBillImageUrl = String(imageUrl).trim();
-            }
-            await this.solarMonthlyRepo.save(existing);
-          } else {
-            const newRecord = this.solarMonthlyRepo.create({
-              solarSystemId: system.id,
-              year,
-              month,
-              exportOffPeak: normalized.export_off_peak as number | null,
-              exportPeak: normalized.export_peak as number | null,
-              importOffPeak: normalized.import_off_peak as number | null,
-              importPeak: normalized.import_peak as number | null,
-              netOffPeak: normalized.net_off_peak as number | null,
-              netPeak: normalized.net_peak as number | null,
-              electricityBillImageUrl: imageUrl
-                ? String(imageUrl).trim()
-                : null,
-              remarks: monthRecord.remarks as string,
-            });
-            await this.solarMonthlyRepo.save(newRecord);
-          }
+        if (canonicalTehsil(system.tehsil) !== ct) {
+          errors.push(`Row ${i + 1}: solar_system_id does not match tehsil`);
+          continue;
         }
+      } else if (rowSystemId) {
+        errors.push(
+          `Row ${i + 1}: No solar system for solar_system_id — register the site first`,
+        );
+        continue;
+      } else {
+        // Legacy: location-only lookup (ambiguous when ABR + Tubewell share a village).
+        system = await this.operatorHelpers.findSolarSystemByLocation(
+          ct,
+          row.village as string,
+          row.settlement as string,
+          this.solarSystemRepo,
+        );
+        if (!system) {
+          errors.push(
+            `Row ${i + 1}: No solar system for this location — your tehsil manager must register it first`,
+          );
+          continue;
+        }
+      }
 
-        if (rowEnergyError) continue;
-        savedIds.push(String(system.id));
-      } catch (e) {
-        errors.push(`Row ${i + 1}: ${String(e)}`);
+      const monthlyData = Array.isArray(row.monthlyData)
+        ? (row.monthlyData as Record<string, unknown>[])
+        : [];
+      if (!monthlyData.length) {
+        errors.push(`Row ${i + 1}: no monthly data`);
+        continue;
+      }
+      for (const monthRecord of monthlyData) {
+        const mr = monthRecord ?? {};
+        const v = this.validateSolarLog(system, year, mr.month, mr);
+        if (!v.ok) {
+          errors.push(
+            `Row ${i + 1}, month ${this.coerceString(mr.month)}: ${v.message}`,
+          );
+          continue;
+        }
+        const key = `${system.id}|${v.period.year}|${v.period.month}`;
+        if (seen.has(key)) {
+          errors.push(
+            `Row ${i + 1}: ${formatYearMonth(v.period)} appears more than once`,
+          );
+          continue;
+        }
+        seen.add(key);
+        planned.push({
+          system,
+          period: v.period,
+          phase: v.phase,
+          fields: v.fields,
+          remarks: mr.remarks,
+          hasRemarks: 'remarks' in mr,
+        });
       }
     }
 
     if (errors.length) {
       return {
         statusCode: 400,
-        body: { message: 'Validation errors', errors },
+        body: { message: errors[0] ?? 'Validation errors', errors },
       };
+    }
+
+    // Pass 2 — upsert (one log per site per month).
+    const savedIds = new Set<string>();
+    for (const p of planned) {
+      const existing = await this.solarMonthlyRepo.findOne({
+        where: {
+          solarSystemId: p.system.id,
+          year: p.period.year,
+          month: p.period.month,
+        },
+      });
+      const record =
+        existing ??
+        this.solarMonthlyRepo.create({
+          solarSystemId: p.system.id,
+          year: p.period.year,
+          month: p.period.month,
+        });
+      this.applySolarFields(record, p.phase, p.fields);
+      if (p.hasRemarks) {
+        record.remarks = typeof p.remarks === 'string' ? p.remarks : null;
+      }
+      if (
+        imageUrl &&
+        (record.electricityBillImageUrl || '') !== String(imageUrl).trim()
+      ) {
+        if (existing) {
+          await this.storageService.tryDeletePublicObject(
+            existing.electricityBillImageUrl,
+          );
+        }
+        record.electricityBillImageUrl = String(imageUrl).trim();
+      }
+      await this.solarMonthlyRepo.save(record);
+      savedIds.add(String(p.system.id));
     }
 
     return {
       statusCode: 201,
       body: {
-        message: `Saved solar data for ${savedIds.length} location(s)`,
-        ids: savedIds,
+        message: `Saved solar data for ${savedIds.size} location(s)`,
+        ids: [...savedIds],
       },
     };
   }
@@ -4129,9 +4212,15 @@ export class TehsilManagerService {
     return { statusCode: 200, body: result };
   }
 
-  async markAllNotificationsRead(jwt: JwtContext): Promise<ServiceResult> {
+  async markAllNotificationsRead(
+    jwt: JwtContext,
+    type?: string,
+  ): Promise<ServiceResult> {
     const result =
-      await this.notificationsService.markAllNotificationsReadResponse(jwt.sub);
+      await this.notificationsService.markAllNotificationsReadResponse(
+        jwt.sub,
+        type,
+      );
     return { statusCode: 200, body: result };
   }
 }

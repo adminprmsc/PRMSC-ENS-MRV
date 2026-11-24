@@ -11,6 +11,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Submission } from './submission.entity';
 import { User } from './user.entity';
 
+/** Manager Operations rejected/deleted an approved entry; entity_id = entry_change_logs.id */
+export const NOTIFICATION_TYPE_ENTRY_CHANGE = 'entry_change';
+
 @Entity('notifications')
 export class Notification {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
@@ -32,6 +35,19 @@ export class Notification {
     nullable: true,
   })
   submissionId!: string | null;
+
+  /** e.g. 'entry_change' — null for legacy/general notices. */
+  @Column({
+    name: 'notification_type',
+    type: 'varchar',
+    length: 40,
+    nullable: true,
+  })
+  notificationType!: string | null;
+
+  /** Record the notification points at (meaning depends on the type). */
+  @Column({ name: 'entity_id', type: 'varchar', length: 36, nullable: true })
+  entityId!: string | null;
 
   @Column({ name: 'is_read', type: 'boolean', default: false })
   isRead!: boolean;

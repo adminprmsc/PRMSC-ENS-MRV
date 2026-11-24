@@ -20,11 +20,12 @@ function monthOrder(a: SolarMonthlyLogTableRow, b: SolarMonthlyLogTableRow): num
  * request (GET /operator/solar-monthly-logs-bulk?year=YYYY).
  * Results are cached by React Query — switching year only fetches once per session.
  */
-export function useSolarMonthlyLogs(year: number) {
+/** `year` null = all years. */
+export function useSolarMonthlyLogs(year: number | null) {
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["solarMonthlyLogsBulk", year],
+    queryKey: ["solarMonthlyLogsBulk", year ?? "all"],
     queryFn: async () => {
       const res = await getSolarMonthlyLogsBulk(year);
       return (res.records ?? []).sort(monthOrder);
@@ -42,7 +43,9 @@ export function useSolarMonthlyLogs(year: number) {
     loading: isLoading,
     error: errorMsg,
     refetch: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["solarMonthlyLogsBulk", year] });
+      await queryClient.invalidateQueries({
+        queryKey: ["solarMonthlyLogsBulk", year ?? "all"],
+      });
     },
   };
 }

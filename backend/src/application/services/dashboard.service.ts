@@ -8,7 +8,13 @@ import {
 import {
   getCalendarMonth,
   getCalendarYear,
+  toIsoDateString,
 } from '../../domain/utils/date.util';
+import {
+  DashboardPeriod,
+  monthBucketsForPeriod,
+  periodMeta,
+} from '../../domain/utils/dashboard-period.util';
 import { SolarEnergyLoggingMonthly } from '../../infrastructure/database/entities/solar-energy-logging-monthly.entity';
 import { SolarSystem } from '../../infrastructure/database/entities/solar-system.entity';
 import { SystemMeter } from '../../infrastructure/database/entities/system-meter.entity';
@@ -113,6 +119,45 @@ export class DashboardService {
     return `(${alias}.status IS NULL OR ${alias}.status != '${SUBMISSION_STATUS_REJECTED}')`;
   }
 
+  /**
+   * Restrict monthly solar logs to the period. A custom range includes every
+   * month it touches; a legacy month-without-year matches that month in any year.
+   */
+  private applySolarPeriodToQb<T extends object>(
+    qb: SelectQueryBuilder<T>,
+    alias: string,
+    period: DashboardPeriod,
+  ): void {
+    if (period.ymStart != null && period.ymEnd != null) {
+      qb.andWhere(
+        `(${alias}.year * 100 + ${alias}.month) BETWEEN :_ymStart AND :_ymEnd`,
+        { _ymStart: period.ymStart, _ymEnd: period.ymEnd },
+      );
+    } else if (period.month) {
+      qb.andWhere(`${alias}.month = :_solarMonth`, {
+        _solarMonth: period.month,
+      });
+    }
+  }
+
+  /** Restrict daily water logs to the period's day bounds. */
+  private applyWaterPeriodToQb<T extends object>(
+    qb: SelectQueryBuilder<T>,
+    alias: string,
+    period: DashboardPeriod,
+  ): void {
+    if (period.start) {
+      qb.andWhere(`${alias}.log_date >= :_periodStart`, {
+        _periodStart: period.start,
+      });
+    }
+    if (period.endExclusive) {
+      qb.andWhere(`${alias}.log_date < :_periodEnd`, {
+        _periodEnd: period.endExclusive,
+      });
+    }
+  }
+
   /** Build a TypeORM `where` object for location filtering pushed to the DB. */
   private locationWhere(
     tehsil?: string,
@@ -129,10 +174,9 @@ export class DashboardService {
   }
 
   async getProgramSummary(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     settlement?: string,
     tehsils?: string,
   ) {
@@ -171,7 +215,7 @@ export class DashboardService {
       })
       .getCount();
 
-    let waterLogQb = this.waterLogRepo
+    const waterLogQb = this.waterLogRepo
       .createQueryBuilder('log')
       .select('log.water_system_id', 'system_id')
       .addSelect('COUNT(log.id)', 'logs_count')
@@ -183,28 +227,7 @@ export class DashboardService {
       })
       .groupBy('log.water_system_id');
 
-    let fetchEndExclusive: string | null = null;
-    let fetchStart: string | null = null;
-    if (year && month) {
-      fetchStart = `${year}-${String(month).padStart(2, '0')}-01`;
-      fetchEndExclusive =
-        month === 12
-          ? `${year + 1}-01-01`
-          : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    } else if (year) {
-      fetchStart = `${year}-01-01`;
-      fetchEndExclusive = `${year + 1}-01-01`;
-    }
-    if (fetchStart) {
-      waterLogQb = waterLogQb.andWhere('log.log_date >= :start', {
-        start: fetchStart,
-      });
-    }
-    if (fetchEndExclusive) {
-      waterLogQb = waterLogQb.andWhere('log.log_date < :end', {
-        end: fetchEndExclusive,
-      });
-    }
+    this.applyWaterPeriodToQb(waterLogQb, 'log', period);
 
     const waterLogRows = waterIds.length
       ? await waterLogQb.getRawMany<{
@@ -227,21 +250,17 @@ export class DashboardService {
       ]),
     );
 
-    let solarLogQb = this.solarLogRepo
+    const solarLogQb = this.solarLogRepo
       .createQueryBuilder('log')
       .select('log.solar_system_id', 'system_id')
       .addSelect('COUNT(log.id)', 'logs_count')
-      .addSelect('COUNT(DISTINCT log.month)', 'months_logged')
+      // Distinct calendar months (year-aware) so multi-year ranges count correctly.
+      .addSelect('COUNT(DISTINCT log.year * 100 + log.month)', 'months_logged')
       .where('log.solar_system_id IN (:...ids)', {
         ids: solarIds.length ? solarIds : [''],
       })
       .groupBy('log.solar_system_id');
-    if (year) {
-      solarLogQb = solarLogQb.andWhere('log.year = :year', { year });
-    }
-    if (month) {
-      solarLogQb = solarLogQb.andWhere('log.month = :month', { month });
-    }
+    this.applySolarPeriodToQb(solarLogQb, 'log', period);
 
     const solarLogRows = solarIds.length
       ? await solarLogQb.getRawMany<{
@@ -498,12 +517,12 @@ export class DashboardService {
   }
 
   async getWaterSupplied(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     tehsils?: string,
   ) {
+    const { year, month } = period;
     let qb = this.waterLogRepo
       .createQueryBuilder('log')
       .where(this.logNotRejectedQb('log'));
@@ -516,21 +535,22 @@ export class DashboardService {
       }
     }
 
-    let fetchEndExclusive: string | null = null;
-    if (year && month) {
-      fetchEndExclusive =
-        month === 12
-          ? `${year + 1}-01-01`
-          : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    } else if (year) {
-      fetchEndExclusive = `${year + 1}-01-01`;
-    }
-
-    if (fetchEndExclusive) {
-      qb = qb.andWhere('log.log_date < :end', { end: fetchEndExclusive });
+    // Only bound the end: earlier logs are the baseline for meter intervals.
+    if (period.endExclusive) {
+      qb = qb.andWhere('log.log_date < :end', { end: period.endExclusive });
     }
 
     const logs = await qb.getMany();
+
+    if (period.isRange) {
+      const monthlyTotals = this.aggregateMonthlyTotals(logs, period.start);
+      return monthBucketsForPeriod(period).map((b) => ({
+        year: b.year,
+        month: b.month,
+        total_water_pumped: monthlyTotals.get(`${b.year}-${b.month}`) ?? 0,
+      }));
+    }
+
     const monthlyTotals = this.aggregateMonthlyTotals(logs);
 
     if (year && month) {
@@ -569,8 +589,13 @@ export class DashboardService {
     }));
   }
 
+  /**
+   * Sum interval volumes per calendar month. When `countFrom` is set, logs
+   * before that day still seed meter baselines but are not counted.
+   */
   private aggregateMonthlyTotals(
     logs: WaterEnergyLoggingDaily[],
+    countFrom?: string | null,
   ): Map<string, number> {
     const bySystem = new Map<string, WaterEnergyLoggingDaily[]>();
     for (const log of logs) {
@@ -587,6 +612,10 @@ export class DashboardService {
       for (const log of systemLogs) {
         const vol = volumes[String(log.id)];
         if (vol != null && log.logDate) {
+          if (countFrom) {
+            const day = toIsoDateString(log.logDate);
+            if (!day || day < countFrom) continue;
+          }
           const y = getCalendarYear(log.logDate);
           const m = getCalendarMonth(log.logDate);
           if (y == null || m == null) {
@@ -601,19 +630,19 @@ export class DashboardService {
   }
 
   async getPumpHours(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     tehsils?: string,
   ) {
     let qb = this.waterLogRepo
       .createQueryBuilder('log')
-      .select('EXTRACT(MONTH FROM log.log_date)', 'month')
+      .select('EXTRACT(YEAR FROM log.log_date)', 'year')
+      .addSelect('EXTRACT(MONTH FROM log.log_date)', 'month')
       .addSelect('SUM(COALESCE(log.pump_operating_hours, 0))', 'total')
       .where(this.logNotRejectedQb('log'))
-      .groupBy('EXTRACT(MONTH FROM log.log_date)')
-      .orderBy('month');
+      .groupBy('EXTRACT(YEAR FROM log.log_date)')
+      .addGroupBy('EXTRACT(MONTH FROM log.log_date)');
 
     if (this.needsSystemJoinForScope(tehsil, village, tehsils)) {
       qb = qb.innerJoin(WaterSystem, 'ws', 'ws.id = log.water_system_id');
@@ -623,28 +652,40 @@ export class DashboardService {
       }
     }
 
-    if (year && month) {
-      const start = `${year}-${String(month).padStart(2, '0')}-01`;
-      const end =
-        month === 12
-          ? `${year + 1}-01-01`
-          : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      qb = qb.andWhere('log.log_date >= :start AND log.log_date < :end', {
-        start,
-        end,
+    if (period.start || period.endExclusive) {
+      this.applyWaterPeriodToQb(qb, 'log', period);
+    } else if (period.month) {
+      qb = qb.andWhere('EXTRACT(MONTH FROM log.log_date) = :month', {
+        month: period.month,
       });
-    } else if (year) {
-      qb = qb
-        .andWhere('log.log_date >= :start', { start: `${year}-01-01` })
-        .andWhere('log.log_date < :end', { end: `${year + 1}-01-01` });
-    } else if (month) {
-      qb = qb.andWhere('EXTRACT(MONTH FROM log.log_date) = :month', { month });
     }
 
-    const results = await qb.getRawMany<{ month: string; total: string }>();
+    const results = await qb.getRawMany<{
+      year: string;
+      month: string;
+      total: string;
+    }>();
+
+    if (period.isRange) {
+      const byYm = new Map<string, number>();
+      for (const r of results) {
+        byYm.set(
+          `${parseInt(r.year, 10)}-${parseInt(r.month, 10)}`,
+          parseFloat(r.total || '0'),
+        );
+      }
+      return monthBucketsForPeriod(period).map((b) => ({
+        year: b.year,
+        month: b.month,
+        pump_operating_hours: byYm.get(`${b.year}-${b.month}`) ?? 0,
+      }));
+    }
+
+    // Year / month / all-time: fold into 12 month-of-year slots.
     const dataDict = new Map<number, number>();
     for (const r of results) {
-      dataDict.set(parseInt(r.month, 10), parseFloat(r.total || '0'));
+      const m = parseInt(r.month, 10);
+      dataDict.set(m, (dataDict.get(m) ?? 0) + parseFloat(r.total || '0'));
     }
     return Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
@@ -652,18 +693,58 @@ export class DashboardService {
     }));
   }
 
+  /**
+   * Calendar years that actually have logged data in scope — drives every
+   * year filter so users only see years they can pick something from.
+   */
+  async getDataYears(tehsil?: string, tehsils?: string) {
+    const scoped = this.needsSystemJoinForScope(tehsil, undefined, tehsils);
+
+    let wq = this.waterLogRepo
+      .createQueryBuilder('log')
+      .select('DISTINCT EXTRACT(YEAR FROM log.log_date)::int', 'year')
+      .where('log.log_date IS NOT NULL');
+    if (scoped) {
+      wq = wq.innerJoin(WaterSystem, 'ws', 'ws.id = log.water_system_id');
+      this.applyTehsilScopeToQb(wq, 'ws', tehsil, tehsils);
+    }
+
+    let sq = this.solarLogRepo
+      .createQueryBuilder('log')
+      .select('DISTINCT log.year', 'year')
+      .where('log.year IS NOT NULL');
+    if (scoped) {
+      sq = sq.innerJoin(SolarSystem, 'ss', 'ss.id = log.solar_system_id');
+      this.applyTehsilScopeToQb(sq, 'ss', tehsil, tehsils);
+    }
+
+    const [w, so] = await Promise.all([
+      wq.getRawMany<{ year: number | string }>(),
+      sq.getRawMany<{ year: number | string }>(),
+    ]);
+    const clean = (rows: Array<{ year: number | string }>) =>
+      [...new Set(rows.map((r) => Number(r.year)))]
+        .filter((y) => Number.isInteger(y) && y >= 2000 && y <= 2100)
+        .sort((a, b) => b - a);
+    const water = clean(w);
+    const solar = clean(so);
+    return {
+      years: [...new Set([...water, ...solar])].sort((a, b) => b - a),
+      water_years: water,
+      solar_years: solar,
+    };
+  }
+
   async getSolarGeneration(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     tehsils?: string,
   ) {
     return this.aggregateSolarMonthly(
       tehsil,
       village,
-      month,
-      year,
+      period,
       'export',
       'solar_generation_kwh',
       tehsils,
@@ -671,17 +752,15 @@ export class DashboardService {
   }
 
   async getGridImport(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     tehsils?: string,
   ) {
     return this.aggregateSolarMonthly(
       tehsil,
       village,
-      month,
-      year,
+      period,
       'import',
       'grid_import_kwh',
       tehsils,
@@ -689,10 +768,9 @@ export class DashboardService {
   }
 
   private async aggregateSolarMonthly(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     field: 'export' | 'import' = 'export',
     label = 'total',
     tehsils?: string,
@@ -703,10 +781,14 @@ export class DashboardService {
 
     let qb = this.solarLogRepo
       .createQueryBuilder('log')
-      .select('log.month', 'month')
+      .select('log.year', 'year')
+      .addSelect('log.month', 'month')
       .addSelect(`SUM(COALESCE(${offPeak}, 0) + COALESCE(${peak}, 0))`, 'total')
-      .groupBy('log.month')
-      .orderBy('log.month');
+      // Green-meter logs only: pre-green months have no export and their
+      // consumption is a baseline, reported separately (pre_green_* fields).
+      .where('log.meter_phase = :_greenPhase', { _greenPhase: 'green' })
+      .groupBy('log.year')
+      .addGroupBy('log.month');
 
     if (this.needsSystemJoinForScope(tehsil, village, tehsils)) {
       qb = qb.innerJoin(SolarSystem, 'ss', 'ss.id = log.solar_system_id');
@@ -715,17 +797,33 @@ export class DashboardService {
         qb = qb.andWhere('ss.village = :village', { village });
       }
     }
-    if (month) {
-      qb = qb.andWhere('log.month = :month', { month });
-    }
-    if (year) {
-      qb = qb.andWhere('log.year = :year', { year });
+    this.applySolarPeriodToQb(qb, 'log', period);
+
+    const results = await qb.getRawMany<{
+      year: number;
+      month: number;
+      total: string;
+    }>();
+
+    if (period.isRange) {
+      const byYm = new Map<string, number>();
+      for (const r of results) {
+        byYm.set(
+          `${Number(r.year)}-${Number(r.month)}`,
+          parseFloat(r.total || '0'),
+        );
+      }
+      return monthBucketsForPeriod(period).map((b) => ({
+        year: b.year,
+        month: b.month,
+        [label]: byYm.get(`${b.year}-${b.month}`) ?? 0,
+      }));
     }
 
-    const results = await qb.getRawMany<{ month: number; total: string }>();
     const dataDict = new Map<number, number>();
     for (const r of results) {
-      dataDict.set(Number(r.month), parseFloat(r.total || '0'));
+      const m = Number(r.month);
+      dataDict.set(m, (dataDict.get(m) ?? 0) + parseFloat(r.total || '0'));
     }
     return Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
@@ -734,29 +832,15 @@ export class DashboardService {
   }
 
   async getWaterSystemsDetail(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     settlement?: string,
     tehsils?: string,
   ) {
-    let rangeStart: string | null = null;
-    let rangeEndExclusive: string | null = null;
-    let fetchEndExclusive: string | null = null;
-
-    if (year && month) {
-      rangeStart = `${year}-${String(month).padStart(2, '0')}-01`;
-      rangeEndExclusive =
-        month === 12
-          ? `${year + 1}-01-01`
-          : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      fetchEndExclusive = rangeEndExclusive;
-    } else if (year) {
-      rangeStart = `${year}-01-01`;
-      rangeEndExclusive = `${year + 1}-01-01`;
-      fetchEndExclusive = rangeEndExclusive;
-    }
+    const rangeStart = period.start;
+    const rangeEndExclusive = period.endExclusive;
+    const fetchEndExclusive = rangeEndExclusive;
 
     let systemsQb = this.waterSystemRepo
       .createQueryBuilder('ws')
@@ -775,7 +859,7 @@ export class DashboardService {
     const systems = await systemsQb.getMany();
 
     if (!systems.length) {
-      return { rows: [], meta: { month, year } };
+      return { rows: [], meta: periodMeta(period) };
     }
 
     const systemIds = systems.map((s) => s.id);
@@ -879,6 +963,10 @@ export class DashboardService {
         tehsil: system.tehsil,
         village: system.village,
         settlement: system.settlement,
+        /** Site start of operation (YYYY-MM-DD). */
+        start_of_operation: system.startOfOperation
+          ? system.startOfOperation.toISOString().slice(0, 10)
+          : null,
         bulk_meter_installed: bulkMeter,
         /** Sum of meter interval volumes in scope (bulk meter sites only). */
         total_water_pumped_m3: bulkMeter ? water : null,
@@ -889,8 +977,7 @@ export class DashboardService {
         total_pump_hours_h: hours,
         days_logged: dLogged,
         logs_count: lCount,
-        avg_m3_per_hour:
-          bulkMeter && hours > 0 ? water / hours : null,
+        avg_m3_per_hour: bulkMeter && hours > 0 ? water / hours : null,
         avg_m3_per_day_logged:
           bulkMeter && dLogged > 0 ? water / dLogged : null,
         avg_hours_per_day_logged: dLogged > 0 ? hours / dLogged : null,
@@ -903,14 +990,13 @@ export class DashboardService {
       });
     }
 
-    return { rows, meta: { month, year } };
+    return { rows, meta: periodMeta(period) };
   }
 
   async getSolarSystemsDetail(
-    tehsil?: string,
-    village?: string,
-    month?: number,
-    year?: number,
+    tehsil: string | undefined,
+    village: string | undefined,
+    period: DashboardPeriod,
     settlement?: string,
     tehsils?: string,
   ) {
@@ -925,41 +1011,85 @@ export class DashboardService {
       .addSelect('ss.site_type', 'site_type')
       .addSelect('ss.disco_info', 'disco_info')
       .addSelect('ss.bill_reference_number', 'bill_reference_number')
+      // Text form avoids the pg driver turning `date` into a local-midnight Date.
       .addSelect(
-        'SUM(COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0))',
+        "TO_CHAR(ss.solar_connection_date, 'YYYY-MM-DD')",
+        'solar_connection_date',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0) ELSE 0 END)`,
         'total_export_kwh',
       )
       .addSelect(
-        'SUM(COALESCE(log.export_off_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_off_peak, 0) ELSE 0 END)`,
         'total_export_off_peak_kwh',
       )
-      .addSelect('SUM(COALESCE(log.export_peak, 0))', 'total_export_peak_kwh')
       .addSelect(
-        'SUM(COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_peak, 0) ELSE 0 END)`,
+        'total_export_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0) ELSE 0 END)`,
         'total_import_kwh',
       )
       .addSelect(
-        'SUM(COALESCE(log.import_off_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_off_peak, 0) ELSE 0 END)`,
         'total_import_off_peak_kwh',
       )
-      .addSelect('SUM(COALESCE(log.import_peak, 0))', 'total_import_peak_kwh')
       .addSelect(
-        'SUM(COALESCE(log.net_off_peak, 0) + COALESCE(log.net_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'total_import_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_off_peak, 0) + COALESCE(log.net_peak, 0) ELSE 0 END)`,
         'total_net_kwh',
       )
-      .addSelect('SUM(COALESCE(log.net_off_peak, 0))', 'total_net_off_peak_kwh')
-      .addSelect('SUM(COALESCE(log.net_peak, 0))', 'total_net_peak_kwh')
-      // tou_required is not a DB column — derive from peak fields (same as save/normalize logic)
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_off_peak, 0) ELSE 0 END)`,
+        'total_net_off_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_peak, 0) ELSE 0 END)`,
+        'total_net_peak_kwh',
+      )
+      // Before green meter: units consumed only (stored in import_*).
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_off_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_off_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_peak_kwh',
+      )
+      // tou_required is not a DB column — derive from peak fields (green logs)
       .addSelect(
         `BOOL_OR(
-          log.export_peak IS NOT NULL
-          OR log.import_peak IS NOT NULL
-          OR log.net_peak IS NOT NULL
+          log.meter_phase = 'green' AND (
+            log.export_peak IS NOT NULL
+            OR log.import_peak IS NOT NULL
+            OR log.net_peak IS NOT NULL
+          )
         )`,
         'any_tou_required',
       )
-      .addSelect('COUNT(DISTINCT log.month)', 'months_logged')
+      // Distinct calendar months (year-aware) so multi-year ranges average correctly.
+      .addSelect(
+        `COUNT(DISTINCT CASE WHEN log.meter_phase = 'green' THEN log.year * 100 + log.month END)`,
+        'months_logged',
+      )
+      .addSelect(
+        `COUNT(DISTINCT CASE WHEN log.meter_phase = 'pre_green' THEN log.year * 100 + log.month END)`,
+        'pre_green_months_logged',
+      )
       .addSelect('COUNT(log.id)', 'records_count')
+      .addSelect(
+        "TO_CHAR(ss.green_meter_connection_date, 'YYYY-MM-DD')",
+        'green_meter_connection_date',
+      )
       .groupBy('ss.id')
       .addGroupBy('ss.unique_identifier')
       .addGroupBy('ss.tehsil')
@@ -968,6 +1098,8 @@ export class DashboardService {
       .addGroupBy('ss.site_type')
       .addGroupBy('ss.disco_info')
       .addGroupBy('ss.bill_reference_number')
+      .addGroupBy('ss.solar_connection_date')
+      .addGroupBy('ss.green_meter_connection_date')
       .orderBy('ss.tehsil')
       .addOrderBy('ss.village')
       .addOrderBy('ss.unique_identifier');
@@ -979,12 +1111,7 @@ export class DashboardService {
     if (settlement && settlement !== 'All Settlements') {
       qb = qb.andWhere('ss.settlement = :settlement', { settlement });
     }
-    if (month) {
-      qb = qb.andWhere('log.month = :month', { month });
-    }
-    if (year) {
-      qb = qb.andWhere('log.year = :year', { year });
-    }
+    this.applySolarPeriodToQb(qb, 'log', period);
 
     const results = await qb.getRawMany<Record<string, unknown>>();
     const rows = results.map((r) => {
@@ -1004,6 +1131,9 @@ export class DashboardService {
       const netOffPeak = parseFloat(str(r.total_net_off_peak_kwh));
       const netPeak = parseFloat(str(r.total_net_peak_kwh));
       const mLogged = parseInt(str(r.months_logged), 10);
+      const preMonths = parseInt(str(r.pre_green_months_logged), 10);
+      const preTotal = parseFloat(str(r.pre_green_consumed_kwh));
+      const preAvg = preMonths > 0 ? preTotal / preMonths : null;
       const recs = parseInt(str(r.records_count), 10);
       const touRaw = r.any_tou_required;
       const anyTou =
@@ -1021,6 +1151,8 @@ export class DashboardService {
         site_type: (r.site_type as string | null) ?? null,
         disco_info: r.disco_info,
         bill_reference_number: r.bill_reference_number,
+        solar_connection_date:
+          (r.solar_connection_date as string | null) ?? null,
         total_export_kwh: expKwh,
         total_export_off_peak_kwh: expOffPeak,
         total_export_peak_kwh: expPeak,
@@ -1036,9 +1168,26 @@ export class DashboardService {
         avg_export_kwh_per_month: mLogged > 0 ? expKwh / mLogged : null,
         avg_import_kwh_per_month: mLogged > 0 ? impKwh / mLogged : null,
         avg_net_kwh_per_month: mLogged > 0 ? netTotal / mLogged : null,
+        green_meter_connection_date:
+          (r.green_meter_connection_date as string | null) ?? null,
+        // Before-green-meter baseline (units consumed, nothing exported).
+        pre_green_months_logged: preMonths,
+        pre_green_consumed_kwh: preTotal,
+        pre_green_consumed_peak_kwh: parseFloat(
+          str(r.pre_green_consumed_peak_kwh),
+        ),
+        pre_green_consumed_off_peak_kwh: parseFloat(
+          str(r.pre_green_consumed_off_peak_kwh),
+        ),
+        avg_pre_green_consumed_kwh_per_month: preAvg,
+        // % drop in monthly grid draw after the green meter vs the baseline.
+        grid_draw_change_pct:
+          preAvg && preAvg > 0 && mLogged > 0
+            ? ((impKwh / mLogged - preAvg) / preAvg) * 100
+            : null,
       };
     });
 
-    return { rows, meta: { month, year } };
+    return { rows, meta: periodMeta(period) };
   }
 }

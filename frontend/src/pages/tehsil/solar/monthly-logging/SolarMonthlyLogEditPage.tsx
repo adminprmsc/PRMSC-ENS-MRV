@@ -41,6 +41,15 @@ import { getApiErrorMessage } from "../../../../lib/api-error";
 import { getSolarSupplyRecord as fetchSolarSupplyRecord } from "../../../../services/tehsilManagerOperatorService";
 import type { SolarMonthlySupplyRecordDetail } from "../../../../types/api";
 import { useLocationCatalog } from "../../../../hooks/useLocationCatalog";
+import {
+  MeterPhaseSelector,
+  PreGreenConsumptionFields,
+} from "../../../../components/solar/MeterPhaseFields";
+import {
+  kwhError,
+  phaseWindow,
+  type MeterPhase,
+} from "../../../../lib/solarMeterPhase";
 
 const MONTH_NAMES = [
   "",
@@ -110,6 +119,9 @@ export default function SolarMonthlyLogEditPage() {
   const [importTotal, setImportTotal] = useState("");
   const [netTotal, setNetTotal] = useState("");
   const [touRequired, setTouRequired] = useState<"yes" | "no">("yes");
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("green");
+  const [consumedPeak, setConsumedPeak] = useState("");
+  const [consumedOffPeak, setConsumedOffPeak] = useState("");
   const [remarks, setRemarks] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -171,6 +183,15 @@ export default function SolarMonthlyLogEditPage() {
                 (v) => v != null && String(v).trim() !== "",
               );
         setTouRequired(requiresTou ? "yes" : "no");
+        setMeterPhase(rec.meter_phase === "pre_green" ? "pre_green" : "green");
+        setConsumedPeak(
+          rec.units_consumed_peak != null ? String(rec.units_consumed_peak) : "",
+        );
+        setConsumedOffPeak(
+          rec.units_consumed_off_peak != null
+            ? String(rec.units_consumed_off_peak)
+            : "",
+        );
         setExportOffPeak(
           rec.export_off_peak != null && String(rec.export_off_peak) !== ""
             ? String(rec.export_off_peak)
@@ -246,9 +267,49 @@ export default function SolarMonthlyLogEditPage() {
         ? `Month ${record.month}`
         : "";
 
+  const phaseWin = useMemo(
+    () =>
+      phaseWindow(record?.green_meter_connection_date ?? null, {
+        year: record?.year ?? 0,
+        month: record?.month ?? 1,
+      }),
+    [record?.green_meter_connection_date, record?.year, record?.month],
+  );
+
   const save = async () => {
     if (!recordId || !record) return;
-    if (touRequired === "yes") {
+    if (!phaseWin.allowed.includes(meterPhase)) {
+      toast.error(
+        "This log type isn't allowed for this month — check the site's green meter connection date.",
+      );
+      return;
+    }
+    const fieldErrors =
+      meterPhase === "pre_green"
+        ? [
+            kwhError(consumedPeak, "Units consumed (peak)"),
+            kwhError(consumedOffPeak, "Units consumed (off-peak)"),
+          ]
+        : touRequired === "yes"
+          ? [
+              kwhError(exportOffPeak, "Export (off-peak)"),
+              kwhError(exportPeak, "Export (peak)"),
+              kwhError(importOffPeak, "Import (off-peak)"),
+              kwhError(importPeak, "Import (peak)"),
+              kwhError(netOffPeak, "Net (off-peak)", { allowNegative: true }),
+              kwhError(netPeak, "Net (peak)", { allowNegative: true }),
+            ]
+          : [
+              kwhError(exportTotal, "Export"),
+              kwhError(importTotal, "Import"),
+              kwhError(netTotal, "Net", { allowNegative: true }),
+            ];
+    const firstError = fieldErrors.find(Boolean);
+    if (firstError) {
+      toast.error(firstError);
+      return;
+    }
+    if (meterPhase === "green" && touRequired === "yes") {
       const values = [
         exportOffPeak,
         exportPeak,
@@ -264,7 +325,7 @@ export default function SolarMonthlyLogEditPage() {
         );
         return;
       }
-    } else {
+    } else if (meterPhase === "green") {
       const values = [exportTotal, importTotal, netTotal];
       const nums = values.map((v) => parseFloat(v));
       if (values.some((v) => v.trim() === "") || nums.some((n) => Number.isNaN(n))) {
@@ -284,7 +345,16 @@ export default function SolarMonthlyLogEditPage() {
         imagePath = typeof raw === "string" ? raw : null;
       }
 
-      const payload: Record<string, unknown> = {
+      const payload: Record<string, unknown> =
+        meterPhase === "pre_green"
+          ? {
+              meter_phase: "pre_green",
+              units_consumed_peak: consumedPeak,
+              units_consumed_off_peak: consumedOffPeak,
+              remarks: remarks.trim() || null,
+            }
+          : {
+        meter_phase: "green",
         tou_required: touRequired === "yes",
         export_off_peak: touRequired === "yes" ? exportOffPeak : null,
         export_peak: touRequired === "yes" ? exportPeak : null,
@@ -310,6 +380,7 @@ export default function SolarMonthlyLogEditPage() {
         if (!prev) return prev;
         const next: SolarMonthlySupplyRecordDetail = {
           ...prev,
+          meter_phase: meterPhase,
           tou_required: touRequired === "yes",
           export_off_peak:
             touRequired === "yes"
@@ -441,11 +512,20 @@ export default function SolarMonthlyLogEditPage() {
           <CardHeader className="border-b border-border/60 bg-card">
             <CardTitle>Energy & evidence</CardTitle>
             <CardDescription>
-              Update either peak/off-peak readings or total import/export/net
-              values (kWh), plus optional bill image for this month.
+              Green meter months: peak/off-peak or total import/export/net.
+              Months before the green meter: units consumed only. Plus an
+              optional bill image.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
+            <MeterPhaseSelector
+              value={meterPhase}
+              onChange={setMeterPhase}
+              window={phaseWin}
+              disabled={saving}
+            />
+
+            {meterPhase === "green" ? (
             <div className="rounded-xl border border-border/70 bg-card p-4">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -481,9 +561,20 @@ export default function SolarMonthlyLogEditPage() {
                 </div>
               </div>
             </div>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {touRequired === "yes" ? (
+              {meterPhase === "pre_green" ? (
+                <div className="sm:col-span-2">
+                  <PreGreenConsumptionFields
+                    peak={consumedPeak}
+                    offPeak={consumedOffPeak}
+                    onPeak={setConsumedPeak}
+                    onOffPeak={setConsumedOffPeak}
+                    disabled={saving}
+                  />
+                </div>
+              ) : touRequired === "yes" ? (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="export-off-peak">Export off-peak (kWh)</Label>

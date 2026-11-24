@@ -3,10 +3,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import L from "leaflet";
 import {
+  CircleMarker,
   GeoJSON,
   MapContainer,
   Marker,
   TileLayer,
+  Tooltip as LeafletTooltip,
   useMap,
   ZoomControl,
 } from "react-leaflet";
@@ -20,7 +22,14 @@ import {
   MapPin,
   Maximize2,
   Sun,
+  Users,
 } from "lucide-react";
+import type { VillagePopulation } from "@/hooks/usePopulationIndex";
+import {
+  formatPopulation,
+  villageKey,
+  type SiteCoverage,
+} from "@/services/geographyService";
 
 import { LivePulseBadge } from "@/components/LivePulseBadge";
 import {
@@ -79,6 +88,22 @@ type GeoPoint = {
   longitude: number;
   approximate?: boolean;
 };
+
+/** Populated village drawn at the centroid of its GPS-located facilities. */
+type PopulationBubble = {
+  key: string;
+  tehsil: string;
+  village: string;
+  population: number;
+  served: number;
+  siteCount: number;
+  latitude: number;
+  longitude: number;
+  facilities: number;
+};
+
+const POPULATION_COLOR = "#7c3aed";
+const SERVED_COLOR = "#2563eb";
 
 export type SystemsMapFilters = {
   tehsil: string;
@@ -223,7 +248,13 @@ function mapListQuery(filters: SystemsMapFilters): QueryFilters {
   };
 }
 
-function MapLegend({ compact }: { compact?: boolean | undefined }) {
+function MapLegend({
+  compact,
+  showPopulation,
+}: {
+  compact?: boolean | undefined;
+  showPopulation?: boolean | undefined;
+}) {
   return (
     <div
       className={`pointer-events-none absolute bottom-2 left-2 z-[10] flex flex-wrap gap-1.5 rounded-md border border-border/70 bg-background/95 px-2 py-1.5 shadow-sm ${
@@ -242,6 +273,20 @@ function MapLegend({ compact }: { compact?: boolean | undefined }) {
         <span className="size-2 rounded-full border border-dashed border-slate-400 bg-transparent" />
         Approx. location
       </span>
+      {showPopulation ? (
+        <span className="flex items-center gap-1 font-medium text-foreground">
+          <span
+            className="relative inline-flex size-3 items-center justify-center rounded-full border border-dashed"
+            style={{ borderColor: POPULATION_COLOR, backgroundColor: `${POPULATION_COLOR}1f` }}
+          >
+            <span
+              className="size-1.5 rounded-full"
+              style={{ backgroundColor: SERVED_COLOR }}
+            />
+          </span>
+          Ring = village population · fill = served by water sites
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -257,6 +302,9 @@ const SystemsMapCanvas = memo(function SystemsMapCanvas({
   lightBasemap,
   selectedId,
   onSelect,
+  bubbles = [],
+  showPopulation = false,
+  onTogglePopulation,
 }: {
   mapRef: MutableRefObject<L.Map | null>;
   points: GeoPoint[];
@@ -268,7 +316,11 @@ const SystemsMapCanvas = memo(function SystemsMapCanvas({
   lightBasemap?: boolean | undefined;
   selectedId?: string | null;
   onSelect?: (point: GeoPoint) => void;
+  bubbles?: PopulationBubble[];
+  showPopulation?: boolean;
+  onTogglePopulation?: (() => void) | undefined;
 }) {
+  const maxPopulation = Math.max(1, ...bubbles.map((b) => b.population));
   return (
     <div
       className={`relative w-full min-w-0 overflow-hidden rounded-xl border border-border/60 bg-gradient-to-b from-slate-50/80 to-muted/30 shadow-inner [&_.leaflet-container]:z-0 ${heightClass}`}
@@ -282,6 +334,21 @@ const SystemsMapCanvas = memo(function SystemsMapCanvas({
             {scopeLabel}
           </p>
         </div>
+      ) : null}
+      {bubbles.length > 0 && onTogglePopulation ? (
+        <button
+          type="button"
+          onClick={onTogglePopulation}
+          aria-pressed={showPopulation}
+          className={`absolute right-2 top-2 z-[10] inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium shadow-sm transition-colors ${
+            showPopulation
+              ? "border-violet-300 bg-violet-50 text-violet-800"
+              : "border-border/70 bg-background/95 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Users className="size-3.5" />
+          Population {showPopulation ? "on" : "off"}
+        </button>
       ) : null}
       {loading ? (
         <div
@@ -331,6 +398,62 @@ const SystemsMapCanvas = memo(function SystemsMapCanvas({
             opacity: 0.9,
           }}
         />
+        {showPopulation
+          ? bubbles.map((b) => {
+              const radius = 8 + 26 * Math.sqrt(b.population / maxPopulation);
+              const servedShare = b.population > 0 ? b.served / b.population : 0;
+              const pct = Math.round(100 * servedShare);
+              const tip = (
+                <LeafletTooltip direction="top" offset={[0, -6]}>
+                  <span className="font-semibold">{b.village}</span>
+                  <span className="text-muted-foreground"> · {b.tehsil}</span>
+                  <br />
+                  Population {formatPopulation(b.population)}
+                  <br />
+                  Served {formatPopulation(b.served)} ({pct}%) by {b.siteCount}{" "}
+                  water {b.siteCount === 1 ? "site" : "sites"}
+                  {b.population - b.served > 0 ? (
+                    <>
+                      <br />
+                      Not served {formatPopulation(b.population - b.served)}
+                    </>
+                  ) : null}
+                </LeafletTooltip>
+              );
+              return [
+                <CircleMarker
+                  key={`pop-${b.key}`}
+                  center={[b.latitude, b.longitude]}
+                  radius={radius}
+                  pathOptions={{
+                    color: POPULATION_COLOR,
+                    weight: 1.5,
+                    opacity: 0.85,
+                    dashArray: servedShare < 1 ? "4 3" : undefined,
+                    fillColor: POPULATION_COLOR,
+                    fillOpacity: 0.1,
+                  }}
+                >
+                  {tip}
+                </CircleMarker>,
+                servedShare > 0 ? (
+                  <CircleMarker
+                    key={`served-${b.key}`}
+                    center={[b.latitude, b.longitude]}
+                    radius={Math.max(3, radius * Math.sqrt(servedShare))}
+                    pathOptions={{
+                      color: "#ffffff",
+                      weight: 1.5,
+                      fillColor: SERVED_COLOR,
+                      fillOpacity: 0.45,
+                    }}
+                  >
+                    {tip}
+                  </CircleMarker>
+                ) : null,
+              ];
+            })
+          : null}
         {points.map((p) => (
           <Marker
             key={p.id}
@@ -343,7 +466,10 @@ const SystemsMapCanvas = memo(function SystemsMapCanvas({
           />
         ))}
       </MapContainer>
-      <MapLegend compact={compact} />
+      <MapLegend
+        compact={compact}
+        showPopulation={showPopulation && bubbles.length > 0}
+      />
     </div>
   );
 });
@@ -368,6 +494,10 @@ type SystemsMapCardProps = {
   solarCoverage?: ProgramSolarSystemCoverage[];
   /** Start collapsed to keep KPI/issues primary (default true for compact). */
   defaultCollapsed?: boolean;
+  /** Village populations (Geography) keyed by `villageKey` — enables the population layer. */
+  villagePopulation?: Map<string, VillagePopulation> | undefined;
+  /** Per water site: people it serves (Geography coverage). */
+  siteCoverage?: Map<string, SiteCoverage> | undefined;
 };
 
 function SiteDetailPanel({
@@ -375,7 +505,11 @@ function SiteDetailPanel({
   waterCoverage,
   solarCoverage,
   onClose,
+  villagePopulation,
+  siteServed,
 }: {
+  villagePopulation?: number | null | undefined;
+  siteServed?: SiteCoverage | null | undefined;
   point: GeoPoint;
   waterCoverage: ProgramWaterSystemCoverage[];
   solarCoverage: ProgramSolarSystemCoverage[];
@@ -413,6 +547,43 @@ function SiteDetailPanel({
       </div>
 
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        {villagePopulation != null ? (
+          <div className="sm:col-span-2">
+            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+              Village population
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold text-violet-700">
+              {formatPopulation(villagePopulation)} people
+            </dd>
+          </div>
+        ) : null}
+        {siteServed ? (
+          <div className="sm:col-span-2 rounded-md border border-blue-200 bg-blue-50/60 p-2">
+            <dt className="font-medium uppercase tracking-wide text-muted-foreground">
+              People served by this site
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold text-blue-700">
+              {formatPopulation(siteServed.served_population)} people
+            </dd>
+            {siteServed.areas.length ? (
+              <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+                {siteServed.areas.map((a) => (
+                  <li key={`${a.kind}-${a.name}`}>
+                    {a.kind === "village" ? "Main abadi" : a.name}:{" "}
+                    {formatPopulation(a.served)}
+                    {a.shared_with > 1
+                      ? ` (shared with ${a.shared_with - 1} other site${a.shared_with > 2 ? "s" : ""})`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : siteServed.unmatched ? (
+              <p className="mt-1 text-[11px] text-amber-700">
+                Village not found in the location catalog
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {point.type === "water" && water ? (
           <>
             <div>
@@ -521,6 +692,8 @@ export default function SystemsMapCard({
   waterCoverage = [],
   solarCoverage = [],
   defaultCollapsed,
+  villagePopulation,
+  siteCoverage,
 }: SystemsMapCardProps) {
   const isHero = variant === "hero";
   const mapRef = useRef<L.Map | null>(null);
@@ -533,8 +706,53 @@ export default function SystemsMapCard({
     return !defaultCollapsed;
   });
   const [selected, setSelected] = useState<GeoPoint | null>(null);
+  const [showPopulation, setShowPopulation] = useState(true);
+  const togglePopulation = useCallback(() => setShowPopulation((v) => !v), []);
+
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [pointsTruncated, setPointsTruncated] = useState(0);
+
+  /** Populated villages placed at the centroid of their GPS-located pins. */
+  const populationBubbles = useMemo((): PopulationBubble[] => {
+    if (!villagePopulation?.size) return [];
+    const acc = new Map<
+      string,
+      { lat: number; lng: number; n: number; pop: VillagePopulation }
+    >();
+    for (const p of points) {
+      if (p.approximate) continue; // hashed positions would mislead
+      const k = villageKey(p.tehsil, p.village);
+      const pop = villagePopulation.get(k);
+      if (!pop || pop.total <= 0) continue;
+      const a = acc.get(k) ?? { lat: 0, lng: 0, n: 0, pop };
+      a.lat += p.latitude;
+      a.lng += p.longitude;
+      a.n += 1;
+      acc.set(k, a);
+    }
+    return [...acc.entries()]
+      .map(([key, a]) => ({
+        key,
+        tehsil: a.pop.tehsil,
+        village: a.pop.village,
+        population: a.pop.total,
+        served: a.pop.served,
+        siteCount: a.pop.siteCount,
+        latitude: a.lat / a.n,
+        longitude: a.lng / a.n,
+        facilities: a.n,
+      }))
+      .sort((a, b) => b.population - a.population); // big circles underneath
+  }, [points, villagePopulation]);
+
+  const selectedSiteCoverage =
+    selected?.type === "water"
+      ? (siteCoverage?.get(selected.systemId) ?? null)
+      : null;
+  const selectedVillagePopulation = selected
+    ? (villagePopulation?.get(villageKey(selected.tehsil, selected.village))
+        ?.total ?? null)
+    : null;
   const [registryTotals, setRegistryTotals] = useState({ water: 0, solar: 0 });
   const [villageCount, setVillageCount] = useState(0);
 
@@ -798,12 +1016,17 @@ export default function SystemsMapCard({
               lightBasemap={compact || isHero}
               selectedId={selected?.id ?? null}
               onSelect={setSelected}
+              bubbles={populationBubbles}
+              showPopulation={showPopulation}
+              onTogglePopulation={togglePopulation}
             />
             {selected ? (
               <SiteDetailPanel
                 point={selected}
                 waterCoverage={waterCoverage}
                 solarCoverage={solarCoverage}
+                villagePopulation={selectedVillagePopulation}
+                siteServed={selectedSiteCoverage}
                 onClose={() => setSelected(null)}
               />
             ) : (
@@ -853,6 +1076,9 @@ export default function SystemsMapCard({
                 lightBasemap
                 selectedId={selected?.id ?? null}
                 onSelect={setSelected}
+                bubbles={populationBubbles}
+                showPopulation={showPopulation}
+                onTogglePopulation={togglePopulation}
               />
             </div>
             <div className="min-h-0 overflow-y-auto">
@@ -861,6 +1087,8 @@ export default function SystemsMapCard({
                   point={selected}
                   waterCoverage={waterCoverage}
                   solarCoverage={solarCoverage}
+                  villagePopulation={selectedVillagePopulation}
+                  siteServed={selectedSiteCoverage}
                   onClose={() => setSelected(null)}
                 />
               ) : (

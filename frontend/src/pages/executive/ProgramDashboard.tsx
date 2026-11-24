@@ -36,6 +36,9 @@ import {
   AccordionTrigger,
 } from "../../components/ui/accordion";
 import SystemsMapCard from "./SystemsMapCard";
+import { PopulationDemographics } from "@/components/geography/PopulationDemographics";
+import { CommandCenterPopulationStrip } from "@/components/geography/CommandCenterPopulationStrip";
+import { usePopulationIndex } from "@/hooks/usePopulationIndex";
 import OrganizationKpiPanel, {
   type ScopeFilters,
 } from "./OrganizationKpiPanel";
@@ -53,12 +56,14 @@ import { formatAssignedOperators } from "../tehsil/logging/loggingComplianceType
 import { getPakistanIsoDateString } from "../../utils/pakistanTime";
 import {
   buildExecutiveScopeApiFilters,
-  executiveYearLabel,
-  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  executivePeriodLabel,
+  periodMonthBuckets,
 } from "./executivePeriodFilters";
 
 type SummaryData = ProgramSummary;
 type RowData = {
+  /** Present in custom-range mode (one row per calendar month). */
+  year?: number;
   month: number;
   total_water_pumped?: number;
   pump_operating_hours?: number;
@@ -133,6 +138,19 @@ function seriesByMonth<T extends { month: number }>(
     if (m >= 1 && m <= 12) out[m - 1] = pick(r);
   }
   return out;
+}
+
+/** Map range-mode API rows (each has `year` + `month`) onto the range buckets. */
+function seriesByBucket<T extends { year?: number; month: number }>(
+  rows: T[],
+  bucketKeys: string[],
+  pick: (r: T) => number,
+): number[] {
+  const byKey = new Map<string, number>();
+  for (const r of rows) {
+    if (r.year != null) byKey.set(`${r.year}-${r.month}`, pick(r));
+  }
+  return bucketKeys.map((k) => byKey.get(k) ?? 0);
 }
 
 type ProgramDashboardProps = {
@@ -344,6 +362,8 @@ const ProgramDashboard = ({
     village: ALL_VILLAGES,
     month: "All Months",
     year: "2026",
+    dateFrom: "",
+    dateTo: "",
   }));
   const [summary, setSummary] = useState<SummaryData>({
     ohr_count: 0,
@@ -383,6 +403,8 @@ const ProgramDashboard = ({
           village: activeFilters.village,
           year: activeFilters.year,
           month: activeFilters.month,
+          dateFrom: activeFilters.dateFrom,
+          dateTo: activeFilters.dateTo,
         });
         const { summary: sum, water, pump, solar, grid } =
           await fetchScopedProgramDashboard(apiFilters, allowedTehsils, {
@@ -437,11 +459,7 @@ const ProgramDashboard = ({
       activeFilters.village === "All Villages"
         ? "All villages"
         : activeFilters.village;
-    const month =
-      activeFilters.month === "All Months"
-        ? "All months"
-        : MONTHS[Number(activeFilters.month) - 1];
-    return `${tehsil} · ${village} · ${executiveYearLabel(activeFilters.year)} · ${month}`;
+    return `${tehsil} · ${village} · ${executivePeriodLabel(activeFilters)}`;
   }, [activeFilters, allowedTehsils.length, restrictTehsils]);
 
   const activeScopeTooltip = useMemo(() => {
@@ -459,33 +477,43 @@ const ProgramDashboard = ({
     return `${activeFilters.village} · ${tehsilPart}`;
   }, [activeFilters.tehsil, activeFilters.village, allowedTehsils.length, restrictTehsils]);
 
+  /** Custom range → one bucket per calendar month; otherwise Jan–Dec. */
+  const rangeBuckets = useMemo(
+    () => periodMonthBuckets(activeFilters),
+    [activeFilters],
+  );
+  const chartLabels = useMemo(
+    () => (rangeBuckets ? rangeBuckets.map((b) => b.label) : MONTHS),
+    [rangeBuckets],
+  );
+  const toSeries = useCallback(
+    (rows: RowData[], pick: (r: RowData) => number) =>
+      rangeBuckets
+        ? seriesByBucket(
+            rows,
+            rangeBuckets.map((b) => b.key),
+            pick,
+          )
+        : seriesByMonth(rows, pick),
+    [rangeBuckets],
+  );
+
   const waterByMonth = useMemo(
-    () =>
-      seriesByMonth(waterSupplied as RowData[], (r) =>
-        Number(r.total_water_pumped ?? 0),
-      ),
-    [waterSupplied],
+    () => toSeries(waterSupplied, (r) => Number(r.total_water_pumped ?? 0)),
+    [waterSupplied, toSeries],
   );
   const pumpByMonth = useMemo(
-    () =>
-      seriesByMonth(pumpHours as RowData[], (r) =>
-        Number(r.pump_operating_hours ?? 0),
-      ),
-    [pumpHours],
+    () => toSeries(pumpHours, (r) => Number(r.pump_operating_hours ?? 0)),
+    [pumpHours, toSeries],
   );
   const solarByMonth = useMemo(
     () =>
-      seriesByMonth(solarGeneration as RowData[], (r) =>
-        Number(r.solar_generation_kwh ?? 0),
-      ),
-    [solarGeneration],
+      toSeries(solarGeneration, (r) => Number(r.solar_generation_kwh ?? 0)),
+    [solarGeneration, toSeries],
   );
   const gridByMonth = useMemo(
-    () =>
-      seriesByMonth(gridImport as RowData[], (r) =>
-        Number(r.grid_import_kwh ?? 0),
-      ),
-    [gridImport],
+    () => toSeries(gridImport, (r) => Number(r.grid_import_kwh ?? 0)),
+    [gridImport, toSeries],
   );
 
   const periodTotals = useMemo(
@@ -514,32 +542,34 @@ const ProgramDashboard = ({
 
   const waterVolumeChartData = useMemo(
     () =>
-      MONTHS.map((m, i) => ({
+      chartLabels.map((m, i) => ({
         month: m,
         monthly: waterByMonth[i] ?? 0,
         ytd: ytdWaterSeries[i] ?? 0,
       })),
-    [waterByMonth, ytdWaterSeries],
+    [chartLabels, waterByMonth, ytdWaterSeries],
   );
 
   const pumpOnlyChartData = useMemo(
     () =>
-      MONTHS.map((m, i) => ({
+      chartLabels.map((m, i) => ({
         month: m,
         value: pumpByMonth[i] ?? 0,
       })),
-    [pumpByMonth],
+    [chartLabels, pumpByMonth],
   );
 
   const solarProgramChartData = useMemo(
     () =>
-      MONTHS.map((m, i) => ({
+      chartLabels.map((m, i) => ({
         month: m,
         solarKwh: solarByMonth[i] ?? 0,
         gridKwh: gridByMonth[i] ?? 0,
       })),
-    [solarByMonth, gridByMonth],
+    [chartLabels, solarByMonth, gridByMonth],
   );
+
+  const population = usePopulationIndex(activeFilters.tehsil);
 
   const updateScope = useCallback((patch: Partial<ScopeFilters>) => {
     setActiveFilters((prev) => {
@@ -584,9 +614,18 @@ const ProgramDashboard = ({
           villageOptions={villageOptions}
           allowedTehsils={allowedTehsils}
           restrictTehsils={restrictTehsils}
-          scopeFilterYears={[...EXECUTIVE_YEAR_SELECT_OPTIONS]}
-          scopeFilterMonths={MONTHS}
           managementView={managementView}
+          populationSlot={
+            <CommandCenterPopulationStrip
+              byKey={population.byKey}
+              loading={population.loading || loading}
+              tehsil={activeFilters.tehsil}
+              village={activeFilters.village}
+              period={activeFilters}
+              waterM3={periodTotals.waterM3}
+              manageHref={hqRoutes.geography}
+            />
+          }
           todaySlot={
             managementView ? (
               <HqTodayWaterCard tehsils={allowedTehsils} />
@@ -610,10 +649,23 @@ const ProgramDashboard = ({
                 }}
                 waterCoverage={summary.water_systems ?? []}
                 solarCoverage={summary.solar_systems ?? []}
+                villagePopulation={population.byKey}
+                siteCoverage={population.siteById}
               />
             ) : undefined
           }
         />
+
+        {managementView ? (
+          <PopulationDemographics
+            coverage={population.coverage}
+            loading={population.loading}
+            tehsil={activeFilters.tehsil}
+            village={activeFilters.village}
+            manageHref={hqRoutes.geography}
+            siteHref={hqRoutes.waterSystem}
+          />
+        ) : null}
 
         {showSystemsMap && mapPosition === "inline" ? (
           <SystemsMapCard
@@ -629,6 +681,8 @@ const ProgramDashboard = ({
             }
             waterCoverage={summary.water_systems ?? []}
             solarCoverage={summary.solar_systems ?? []}
+            villagePopulation={population.byKey}
+                siteCoverage={population.siteById}
             defaultCollapsed
           />
         ) : null}

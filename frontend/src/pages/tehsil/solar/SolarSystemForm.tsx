@@ -1,3 +1,4 @@
+import { getPakistanIsoDateString } from "../../../utils/pakistanTime";
 import {
   useState,
   useMemo,
@@ -740,9 +741,14 @@ const SolarSystemForm = () => {
                   />
                 </FormField>
 
-                <FormField label="Green connection date" required>
+                <FormField
+                  label="Green connection date"
+                  required
+                  description='Months before this date are logged as "Before green meter" (units consumed only).'
+                >
                   <Input
                     type="date"
+                    max={getPakistanIsoDateString()}
                     name="green_connection_date"
                     value={formData.green_connection_date}
                     onChange={handleChange}

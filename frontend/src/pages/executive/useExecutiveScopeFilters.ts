@@ -10,8 +10,12 @@ import {
 import type { ExecutiveScopeFilters } from "./executiveAnalysisTypes";
 import {
   buildExecutiveScopeApiFilters,
+  executivePeriodLabel,
   executiveYearLabel,
+  hasDateRange,
+  resolveDateRangeFromUrl,
   resolveExecutiveYearFromUrl,
+  writePeriodToSearchParams,
   type ExecutivePeriodFilterMode,
 } from "./executivePeriodFilters";
 import { ALL_ASSIGNED_TEHSILS } from "./fetchExecutiveScopedDashboard";
@@ -30,7 +34,7 @@ export function useExecutiveScopeFilters(options?: {
     options?.periodFilterMode ??
     (options?.showPeriodFilters === false ? "none" : "full");
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     loading: catalogLoading,
     matchTehsil,
@@ -80,6 +84,7 @@ export function useExecutiveScopeFilters(options?: {
       settlement: urlSettlement || ALL_SETTLEMENTS,
       month: urlMonth || "All Months",
       year: resolveExecutiveYearFromUrl(urlYear),
+      ...resolveDateRangeFromUrl(searchParams),
     };
   }, [
     searchParams,
@@ -169,6 +174,8 @@ export function useExecutiveScopeFilters(options?: {
         village: activeFilters.village,
         year: activeFilters.year,
         month: activeFilters.month,
+        dateFrom: activeFilters.dateFrom,
+        dateTo: activeFilters.dateTo,
         settlement: activeFilters.settlement,
         periodFilterMode,
       }),
@@ -193,6 +200,9 @@ export function useExecutiveScopeFilters(options?: {
     if (periodFilterMode === "none") {
       return `${tehsil} · ${village} · ${settlement}`;
     }
+    if (hasDateRange(activeFilters)) {
+      return `${tehsil} · ${village} · ${settlement} · ${executivePeriodLabel(activeFilters)}`;
+    }
     if (periodFilterMode === "year-only") {
       return `${tehsil} · ${village} · ${settlement} · ${executiveYearLabel(activeFilters.year)}`;
     }
@@ -205,7 +215,22 @@ export function useExecutiveScopeFilters(options?: {
 
   const applyFilters = useCallback(() => {
     setActiveFilters(filters);
-  }, [filters]);
+    if (periodFilterMode !== "none") {
+      // Keep the period in the URL so refresh / back / shared links retain it.
+      setSearchParams(
+        (prev) => writePeriodToSearchParams(new URLSearchParams(prev), filters),
+        { replace: true },
+      );
+    }
+  }, [filters, periodFilterMode, setSearchParams]);
+
+  /** Patch several fields at once (used by the period picker). */
+  const updateFilters = useCallback(
+    (patch: Partial<ExecutiveScopeFilters>) => {
+      setFilters((prev) => ({ ...prev, ...patch }));
+    },
+    [],
+  );
 
   const updateFilter = useCallback(
     <K extends keyof ExecutiveScopeFilters>(
@@ -242,6 +267,7 @@ export function useExecutiveScopeFilters(options?: {
     catalogLoading,
     applyFilters,
     updateFilter,
+    updateFilters,
   };
 }
 

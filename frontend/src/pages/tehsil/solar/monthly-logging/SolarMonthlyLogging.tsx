@@ -1,3 +1,4 @@
+import { useDataYears } from "../../../../hooks/useDataYears";
 import { useMemo, useState } from "react";
 import { useClientPagination } from "../../../../hooks/useClientPagination";
 import PaginatedListFooter from "../../../../components/PaginatedListFooter";
@@ -43,6 +44,7 @@ import {
   NativeSelectOption,
 } from "../../../../components/ui/native-select";
 import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
+import { MeterPhaseBadge } from "../../../../components/solar/MeterPhaseFields";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { useSolarMonthlyLogs, useTehsilManagerOperatorApi } from "../../../../hooks";
 import { getApiErrorMessage } from "../../../../lib/api-error";
@@ -73,16 +75,23 @@ function formatNum(v: unknown) {
 }
 
 const currentYear = getPakistanYear();
-const YEAR_OPTIONS = Array.from({ length: 8 }, (_, i) => currentYear - 5 + i);
+
 
 export default function SolarMonthlyLogging() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [year, setYear] = useState(currentYear);
+  /** null = all years. */
+  const [year, setYear] = useState<number | null>(currentYear);
+  const yearLabel = year == null ? "All years" : String(year);
+  // Only years that have solar logs (+ current & selected year).
+  const { years: yearOptions } = useDataYears("solar", year == null ? [] : [year]);
   const { rows, loading, error, refetch } = useSolarMonthlyLogs(year);
   const { deleteSolarSupplyRecord } = useTehsilManagerOperatorApi();
 
   const [search, setSearch] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState<"all" | "green" | "pre_green">(
+    "all",
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SolarMonthlyLogTableRow | null>(
     null,
@@ -91,8 +100,14 @@ export default function SolarMonthlyLogging() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
+    const byPhase =
+      phaseFilter === "all"
+        ? rows
+        : rows.filter(
+            (r) => (r.meter_phase === "pre_green" ? "pre_green" : "green") === phaseFilter,
+          );
+    if (!q) return byPhase;
+    return byPhase.filter((r) => {
       const monthLabel = MONTH_NAMES[r.month] ?? String(r.month);
       const blob = [
         r.tehsil,
@@ -103,6 +118,7 @@ export default function SolarMonthlyLogging() {
         monthLabel,
         String(r.month),
         r.remarks ?? "",
+        r.meter_phase === "pre_green" ? "before green meter pre-green" : "green meter",
         r.id,
         r.solar_system_id,
       ]
@@ -110,7 +126,12 @@ export default function SolarMonthlyLogging() {
         .toLowerCase();
       return blob.includes(q);
     });
-  }, [rows, search]);
+  }, [rows, search, phaseFilter]);
+
+  const preGreenCount = useMemo(
+    () => rows.filter((r) => r.meter_phase === "pre_green").length,
+    [rows],
+  );
 
   const {
     pageItems,
@@ -123,7 +144,7 @@ export default function SolarMonthlyLogging() {
     resetPage,
   } = useClientPagination(filtered, 25);
 
-  useMemo(() => { resetPage(); }, [search, year, resetPage]);
+  useMemo(() => { resetPage(); }, [search, year, phaseFilter, resetPage]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -157,16 +178,35 @@ export default function SolarMonthlyLogging() {
       <PageHeader
         icon={<CalendarRange />}
         title="Solar monthly logging"
-        description={`${filtered.length} records · ${year}`}
+        description={`${filtered.length} records · ${yearLabel}${preGreenCount ? ` · ${preGreenCount} before green meter` : ""}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <NativeSelect
-              id="sml-year"
-              value={String(year)}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="h-9 w-[100px]"
+              id="sml-phase"
+              aria-label="Log type"
+              value={phaseFilter}
+              onChange={(e) =>
+                setPhaseFilter(e.target.value as "all" | "green" | "pre_green")
+              }
+              className="h-9 w-[180px]"
             >
-              {YEAR_OPTIONS.map((y) => (
+              <NativeSelectOption value="all">All log types</NativeSelectOption>
+              <NativeSelectOption value="green">Green meter</NativeSelectOption>
+              <NativeSelectOption value="pre_green">
+                Before green meter
+              </NativeSelectOption>
+            </NativeSelect>
+            <NativeSelect
+              id="sml-year"
+              aria-label="Year"
+              value={year == null ? "all" : String(year)}
+              onChange={(e) =>
+                setYear(e.target.value === "all" ? null : Number(e.target.value))
+              }
+              className="h-9 w-[120px]"
+            >
+              <NativeSelectOption value="all">All years</NativeSelectOption>
+              {yearOptions.map((y) => (
                 <NativeSelectOption key={y} value={String(y)}>
                   {y}
                 </NativeSelectOption>
@@ -217,7 +257,7 @@ export default function SolarMonthlyLogging() {
             <DataTableHeader>
               <DataTableHead>Location</DataTableHead>
               <DataTableHead>Period</DataTableHead>
-              <DataTableHead>Mode</DataTableHead>
+              <DataTableHead>Log type</DataTableHead>
               <DataTableHead align="right">Import (kWh)</DataTableHead>
               <DataTableHead align="right">Export (kWh)</DataTableHead>
               <DataTableHead align="right">Net (kWh)</DataTableHead>
@@ -232,7 +272,7 @@ export default function SolarMonthlyLogging() {
                     colSpan={9}
                     className="h-20 text-center text-sm text-muted-foreground"
                   >
-                    No logs for {year}.
+                    {year == null ? "No logs yet." : `No logs for ${year}.`}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -256,22 +296,47 @@ export default function SolarMonthlyLogging() {
                       {MONTH_NAMES[r.month] ?? r.month} {r.year}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {r.tou_required === false ? "Total" : "TOU"}
+                      {r.meter_phase === "pre_green" ? (
+                        <MeterPhaseBadge phase="pre_green" />
+                      ) : r.tou_required === false ? (
+                        "Total"
+                      ) : (
+                        "TOU"
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
-                      {r.tou_required === false
-                        ? formatNum(r.import_total ?? r.import_off_peak)
-                        : `${formatNum(r.import_off_peak)} / ${formatNum(r.import_peak)}`}
+                      {r.meter_phase === "pre_green" ? (
+                        <span title="Units consumed off-peak / peak">
+                          {formatNum(r.import_off_peak)} / {formatNum(r.import_peak)}
+                          <span className="block text-[11px] text-muted-foreground">
+                            consumed
+                          </span>
+                        </span>
+                      ) : r.tou_required === false ? (
+                        formatNum(r.import_total ?? r.import_off_peak)
+                      ) : (
+                        `${formatNum(r.import_off_peak)} / ${formatNum(r.import_peak)}`
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
-                      {r.tou_required === false
-                        ? formatNum(r.export_total ?? r.export_off_peak)
-                        : `${formatNum(r.export_off_peak)} / ${formatNum(r.export_peak)}`}
+                      {r.meter_phase === "pre_green" ? (
+                        <span className="text-xs text-muted-foreground" title="Nothing exported before the green meter">
+                          n/a
+                        </span>
+                      ) : r.tou_required === false ? (
+                        formatNum(r.export_total ?? r.export_off_peak)
+                      ) : (
+                        `${formatNum(r.export_off_peak)} / ${formatNum(r.export_peak)}`
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
-                      {r.tou_required === false
-                        ? formatNum(r.net_total ?? r.net_off_peak)
-                        : `${formatNum(r.net_off_peak)} / ${formatNum(r.net_peak)}`}
+                      {r.meter_phase === "pre_green" ? (
+                        <span className="text-xs text-muted-foreground">n/a</span>
+                      ) : r.tou_required === false ? (
+                        formatNum(r.net_total ?? r.net_off_peak)
+                      ) : (
+                        `${formatNum(r.net_off_peak)} / ${formatNum(r.net_peak)}`
+                      )}
                     </TableCell>
                     <TableCell>
                       {r.electricity_bill_image_url?.trim() ? (

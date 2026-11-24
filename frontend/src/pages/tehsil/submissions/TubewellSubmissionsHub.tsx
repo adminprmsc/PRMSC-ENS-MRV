@@ -1,3 +1,4 @@
+import { useDataYears } from "../../../hooks/useDataYears";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, PageShell, StatCard } from "../../../components/layout";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -110,7 +111,6 @@ function statusBadge(status: TubewellSubmissionRow["status"]) {
 }
 
 const currentYear = getPakistanYear();
-const YEAR_OPTIONS = Array.from({ length: 8 }, (_, i) => currentYear - 5 + i);
 const MONTH_OPTIONS = [
   { v: "", label: "All months" },
   { v: "1", label: "Jan" },
@@ -145,7 +145,12 @@ export default function TubewellSubmissionsHub() {
   const [status, setStatus] = useState("submitted");
   const [tehsil, setTehsil] = useState("all");
   const [waterSystemId, setWaterSystemId] = useState("all");
+  /** "" = all years. */
   const [year, setYear] = useState(String(currentYear));
+  const { years: waterYears } = useDataYears(
+    "water",
+    year ? [Number(year)] : [],
+  );
   const [month, setMonth] = useState("");
 
   const userTehsils = useMemo(
@@ -345,12 +350,18 @@ export default function TubewellSubmissionsHub() {
           </div>
           <div className="space-y-2">
             <Label>Year</Label>
-            <Select value={year} onValueChange={(v) => setYear(v ?? year)}>
+            <Select
+              value={year || "all"}
+              onValueChange={(v) => setYear(v === "all" ? "" : (v ?? year))}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select year" />
+                <SelectValue placeholder="Select year">
+                  {(v: string) => (v === "all" ? "All years" : v)}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {YEAR_OPTIONS.map((y) => (
+                <SelectItem value="all">All years</SelectItem>
+                {waterYears.map((y) => (
                   <SelectItem key={y} value={String(y)}>
                     {y}
                   </SelectItem>

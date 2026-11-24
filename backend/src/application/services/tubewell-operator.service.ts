@@ -37,6 +37,7 @@ import {
   toIsoDateString,
   toIsoDateTimeString,
 } from '../../domain/utils/date.util';
+import { formatMessageNumber } from '../../domain/utils/number-format.util';
 import { pumpCapacityKwFromHp } from '../../domain/utils/water-pump.util';
 import { UserService } from './user.service';
 import { StorageService } from './storage.service';
@@ -197,8 +198,8 @@ export class TubewellOperatorService {
     const details =
       `New Monthly Water Report (${getCalendarMonth(record.logDate)}/${getCalendarYear(record.logDate)}) submitted by ${currentUser.name}.\n` +
       `Location: ${system?.tehsil}, ${system?.village} ${system?.settlement || ''}\n` +
-      `Pump Operating Hours: ${record.pumpOperatingHours ?? 'N/A'}\n` +
-      `Total Water Pumped: ${record.totalWaterPumped ?? 'N/A'}`;
+      `Pump Operating Hours: ${formatMessageNumber(record.pumpOperatingHours)}\n` +
+      `Total Water Pumped: ${formatMessageNumber(record.totalWaterPumped)}`;
 
     await this.workflowService.notifyAnalysts(
       'New Detailed Water Submission',
@@ -1156,8 +1157,8 @@ export class TubewellOperatorService {
       const details =
         `New Monthly Water Report (${getCalendarMonth(record.logDate)}/${getCalendarYear(record.logDate)}) submitted by ${currentUser!.name}.\n` +
         `Location: ${system!.tehsil}, ${system!.village} ${system!.settlement || ''}\n` +
-        `Pump Operating Hours: ${record.pumpOperatingHours ?? 'N/A'}\n` +
-        `Total Water Pumped: ${record.totalWaterPumped ?? 'N/A'}`;
+        `Pump Operating Hours: ${formatMessageNumber(record.pumpOperatingHours)}\n` +
+        `Total Water Pumped: ${formatMessageNumber(record.totalWaterPumped)}`;
 
       await this.workflowService.notifyAnalysts(
         'New Detailed Water Submission',
@@ -1716,9 +1717,9 @@ export class TubewellOperatorService {
                 const details =
                   `New Monthly Water Report (${mi}/${yi}) submitted by ${currentUser!.name}.\n` +
                   `Location: ${system.tehsil}, ${system.village} ${system.settlement || ''}\n` +
-                  `Pump Operating Hours: ${rec.pumpOperatingHours ?? 'N/A'}\n` +
-                  `Meter reading (stop): ${rec.meterReadingEnd ?? 'N/A'}\n` +
-                  `Water pumped this interval: ${rec.totalWaterPumped ?? 'N/A'} m³`;
+                  `Pump Operating Hours: ${formatMessageNumber(rec.pumpOperatingHours)}\n` +
+                  `Meter reading (stop): ${formatMessageNumber(rec.meterReadingEnd)}\n` +
+                  `Water pumped this interval: ${formatMessageNumber(rec.totalWaterPumped)} m³`;
 
                 postSubmitWorkflows.push({
                   submissionId: submission.id,

@@ -32,6 +32,9 @@ export type HqSubmissionRow = {
 export type HqSubmissionScope = {
   year?: number;
   month?: number;
+  /** Inclusive YYYY-MM-DD bounds on the log day. */
+  dateFrom?: string;
+  dateTo?: string;
   /** YYYY-MM-DD when filtering to a single calendar day */
   logDate?: string;
 };

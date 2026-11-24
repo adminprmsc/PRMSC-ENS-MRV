@@ -4,6 +4,9 @@ export type ExecutiveScopeFilters = {
   settlement: string;
   month: string;
   year: string;
+  /** Inclusive YYYY-MM-DD custom range; overrides year/month when both set. */
+  dateFrom: string;
+  dateTo: string;
 };
 
 export type WaterSystemDetailRow = {
@@ -12,6 +15,8 @@ export type WaterSystemDetailRow = {
   tehsil: string;
   village: string;
   settlement?: string | null;
+  /** Site start of operation, YYYY-MM-DD. */
+  start_of_operation?: string | null;
   bulk_meter_installed: boolean;
   /** `bulk_meter` = interval sum from logs; `estimated` = η × Q × runtime. */
   volume_basis?: "bulk_meter" | "estimated" | null;
@@ -46,6 +51,8 @@ export type SolarSystemDetailRow = {
   site_type?: string | null;
   disco_info?: string | null;
   bill_reference_number?: string | null;
+  /** Solar connection date, YYYY-MM-DD. */
+  solar_connection_date?: string | null;
   total_export_kwh: number;
   total_export_off_peak_kwh?: number | null;
   total_export_peak_kwh?: number | null;
@@ -61,6 +68,16 @@ export type SolarSystemDetailRow = {
   avg_export_kwh_per_month?: number | null;
   avg_import_kwh_per_month?: number | null;
   avg_net_kwh_per_month?: number | null;
+  /** YYYY-MM-DD; months before it are "before green meter" logs. */
+  green_meter_connection_date?: string | null;
+  /** Before green meter baseline (units consumed, nothing exported). */
+  pre_green_months_logged?: number | null;
+  pre_green_consumed_kwh?: number | null;
+  pre_green_consumed_peak_kwh?: number | null;
+  pre_green_consumed_off_peak_kwh?: number | null;
+  avg_pre_green_consumed_kwh_per_month?: number | null;
+  /** % change of avg monthly grid import vs the pre-green baseline. */
+  grid_draw_change_pct?: number | null;
 };
 
 export const EXECUTIVE_YEARS = [2025, 2026, 2027, 2028, 2029] as const;

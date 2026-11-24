@@ -10,7 +10,12 @@ import { Skeleton } from "../../../../components/ui/skeleton";
 import { SolarSiteTypeBadge } from "../../../../components/SolarSiteTypeBadge";
 import { tehsilRoutes } from "../../../../constants/routes";
 import { getApiErrorMessage } from "../../../../lib/api-error";
-import { getSolarSystem } from "../../../../services/tehsilManagerOperatorService";
+import {
+  getSolarSupplyData,
+  getSolarSystem,
+} from "../../../../services/tehsilManagerOperatorService";
+import { GreenMeterBaselineCard } from "../../../../components/solar/GreenMeterBaselineCard";
+import type { PhaseLogLike } from "../../../../lib/solarMeterPhase";
 import type { SolarSystemRow } from "../../../../types/api";
 import Toast from "../../../../components/Toast";
 import { formatPakistanDateTime } from "../../../../utils/pakistanTime";
@@ -31,6 +36,8 @@ export default function SolarSiteViewPage() {
 
   const [loading, setLoading] = useState(true);
   const [site, setSite] = useState<SolarSystemRow | null>(null);
+  const [logs, setLogs] = useState<PhaseLogLike[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" }>({
     message: "",
     type: "success",
@@ -55,6 +62,26 @@ export default function SolarSiteViewPage() {
       }
     };
     void run();
+  }, [id]);
+
+  // All years — the baseline usually predates the current year.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setLogsLoading(true);
+    getSolarSupplyData({ solar_system_id: id })
+      .then((rows: unknown) => {
+        if (!cancelled) setLogs(Array.isArray(rows) ? (rows as PhaseLogLike[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLogsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const title = site?.unique_identifier ? kv(site.unique_identifier) : "Solar site";
@@ -157,12 +184,21 @@ export default function SolarSiteViewPage() {
                   label="Connected"
                   value={kv(site.solar_connection_date ?? site.installation_date)}
                 />
+                <DetailRow
+                  label="Green meter connected"
+                  value={kv(site.green_meter_connection_date ?? site.green_connection_date)}
+                />
                 <DetailRow label="Meter model" value={kv(site.meter_model)} />
                 <DetailRow label="Meter serial" value={kv(site.meter_serial_number)} />
                 <DetailRow label="Monthly logs" value={kv(site.monthly_log_count)} />
               </CardContent>
             </Card>
           </div>
+          <GreenMeterBaselineCard
+            logs={logs}
+            loading={logsLoading}
+            greenMeterDate={site.green_meter_connection_date ?? site.green_connection_date}
+          />
         </div>
       ) : (
         <Card>

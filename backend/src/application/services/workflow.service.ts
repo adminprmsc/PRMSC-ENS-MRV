@@ -49,12 +49,17 @@ export class WorkflowService {
     title: string,
     message: string,
     submissionId?: string | null,
+    link?: { type?: string | null; entityId?: string | null },
   ): Promise<Notification> {
     const notification = this.notificationRepo.create({
       userId,
       title,
       message,
       submissionId: submissionId ?? null,
+      // Explicit: legacy DBs have no column default for is_read.
+      isRead: false,
+      notificationType: link?.type ?? null,
+      entityId: link?.entityId ?? null,
     });
     return this.notificationRepo.save(notification);
   }

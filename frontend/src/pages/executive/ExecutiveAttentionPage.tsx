@@ -41,31 +41,21 @@ import {
 
 import {
   buildExecutiveScopeApiFilters,
-  executiveYearLabel,
-  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  executivePeriodLabel,
+  resolveDateRangeFromUrl,
   resolveExecutiveYearFromUrl,
+  writePeriodToSearchParams,
 } from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 
 type ScopeFilters = {
   tehsil: string;
   village: string;
   month: string;
   year: string;
+  dateFrom: string;
+  dateTo: string;
 };
 
 const ExecutiveAttentionPage = () => {
@@ -90,7 +80,7 @@ const ExecutiveAttentionPage = () => {
         ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
         : ALL_ASSIGNED_TEHSILS;
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlTehsil = searchParams.get("tehsil")?.trim() || "";
   const resolvedTehsil =
     urlTehsil &&
@@ -105,6 +95,7 @@ const ExecutiveAttentionPage = () => {
     village: searchParams.get("village")?.trim() || ALL_VILLAGES,
     month: searchParams.get("month")?.trim() || "All Months",
     year: resolveExecutiveYearFromUrl(searchParams.get("year")),
+    ...resolveDateRangeFromUrl(searchParams),
   }));
   const [summary, setSummary] = useState<ProgramSummary>({
     ohr_count: 0,
@@ -142,6 +133,8 @@ const ExecutiveAttentionPage = () => {
           village: filters.village,
           year: filters.year,
           month: filters.month,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
         });
         const { summary: sum } = await fetchScopedProgramDashboard(
           apiFilters,
@@ -167,13 +160,15 @@ const ExecutiveAttentionPage = () => {
     void load();
   }, [filters, allowedTehsils, getDashboardProgramSummary]);
 
-  const periodHint = useMemo(() => {
-    const yearLabel = executiveYearLabel(filters.year);
-    if (filters.month !== "All Months") {
-      return `${MONTHS[Number(filters.month) - 1] ?? "Month"} ${yearLabel}`;
-    }
-    return yearLabel;
-  }, [filters.month, filters.year]);
+  const periodHint = useMemo(() => executivePeriodLabel(filters), [filters]);
+
+  // Keep the period in the URL so refresh / back / shared links retain it.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => writePeriodToSearchParams(new URLSearchParams(prev), filters),
+      { replace: true },
+    );
+  }, [filters, setSearchParams]);
 
   const issues = useMemo(
     () =>
@@ -211,7 +206,7 @@ const ExecutiveAttentionPage = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
-          <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Field>
               <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 Tehsil
@@ -258,49 +253,12 @@ const ExecutiveAttentionPage = () => {
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Year
-              </FieldLabel>
-              <Select
-                value={filters.year}
-                onValueChange={(v) => updateScope({ year: v ?? filters.year })}
-              >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXECUTIVE_YEAR_SELECT_OPTIONS.map((y) => (
-                    <SelectItem key={y} value={y}>
-                      {executiveYearLabel(y)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Month
-              </FieldLabel>
-              <Select
-                value={filters.month}
-                onValueChange={(v) =>
-                  updateScope({ month: v ?? filters.month })
-                }
-              >
-                <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Months">All months</SelectItem>
-                  {MONTHS.map((m, i) => (
-                    <SelectItem key={m} value={String(i + 1)}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            <ExecutivePeriodFields
+              value={filters}
+              onChange={updateScope}
+              size="md"
+              rangeClassName="sm:col-span-2"
+            />
           </FieldGroup>
         </CardContent>
       </Card>

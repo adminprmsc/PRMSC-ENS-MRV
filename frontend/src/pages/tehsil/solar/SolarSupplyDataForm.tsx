@@ -63,6 +63,18 @@ import {
   nowIsoTimestamp,
 } from "../../../utils/pakistanTime";
 import { useLocationCatalog } from "../../../hooks/useLocationCatalog";
+import {
+  MeterPhaseSelector,
+  PreGreenConsumptionFields,
+} from "../../../components/solar/MeterPhaseFields";
+import {
+  SOLAR_LOG_MIN_YEAR,
+  formatYearMonth,
+  isFutureMonth,
+  kwhError,
+  phaseWindow,
+  type MeterPhase,
+} from "../../../lib/solarMeterPhase";
 
 type RegisteredSolarSystem = {
   id: string | number;
@@ -71,6 +83,8 @@ type RegisteredSolarSystem = {
   settlement?: string | undefined;
   site_type?: string | null;
   solar_panel_capacity?: number | null;
+  /** YYYY-MM-DD; decides which months are "before green meter". */
+  green_meter_connection_date?: string | null;
 };
 
 function FormField({
@@ -114,6 +128,9 @@ type ToastType = "success" | "error";
 type SolarSupplyRow = {
   id?: string;
   month: number;
+  meter_phase?: MeterPhase | null;
+  units_consumed_peak?: string | number | null;
+  units_consumed_off_peak?: string | number | null;
   tou_required?: boolean | null;
   export_off_peak?: string | number | null;
   export_peak?: string | number | null;
@@ -197,6 +214,9 @@ const SolarSupplyDataForm = () => {
   const [importTotal, setImportTotal] = useState("");
   const [netTotal, setNetTotal] = useState("");
   const [touRequired, setTouRequired] = useState<"yes" | "no">("yes");
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("green");
+  const [consumedPeak, setConsumedPeak] = useState("");
+  const [consumedOffPeak, setConsumedOffPeak] = useState("");
   const [remarks, setRemarks] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -391,6 +411,9 @@ const SolarSupplyDataForm = () => {
         solar_system_id?: string;
         year?: number;
         month?: number;
+        meter_phase?: MeterPhase | null;
+        units_consumed_peak?: number | string | null;
+        units_consumed_off_peak?: number | string | null;
         tou_required?: boolean | null;
         export_off_peak?: number | string | null;
         export_peak?: number | string | null;
@@ -426,6 +449,15 @@ const SolarSupplyDataForm = () => {
               (v) => v != null && String(v).trim() !== "",
             );
       setTouRequired(requiresTou ? "yes" : "no");
+      setMeterPhase(rec.meter_phase === "pre_green" ? "pre_green" : "green");
+      setConsumedPeak(
+        rec.units_consumed_peak != null ? String(rec.units_consumed_peak) : "",
+      );
+      setConsumedOffPeak(
+        rec.units_consumed_off_peak != null
+          ? String(rec.units_consumed_off_peak)
+          : "",
+      );
       setExportOffPeak(
         rec.export_off_peak != null && String(rec.export_off_peak) !== ""
           ? String(rec.export_off_peak)
@@ -498,6 +530,7 @@ const SolarSupplyDataForm = () => {
           tehsil?: string;
           village?: string;
           settlement?: string;
+          green_meter_connection_date?: string | null;
           year?: number;
           month?: number;
           export_off_peak?: number | string | null;
@@ -528,6 +561,7 @@ const SolarSupplyDataForm = () => {
           village: String(rec.village ?? ""),
           settlement: (rec.settlement ?? "").trim() || undefined,
           solar_panel_capacity: null,
+          green_meter_connection_date: rec.green_meter_connection_date ?? null,
         });
         applyRecordPayload(rec, recordIdFromPath);
       } catch (e: unknown) {
@@ -655,6 +689,15 @@ const SolarSupplyDataForm = () => {
                   (v) => v != null && String(v).trim() !== "",
                 );
           setTouRequired(requiresTou ? "yes" : "no");
+          setMeterPhase(row.meter_phase === "pre_green" ? "pre_green" : "green");
+          setConsumedPeak(
+            row.units_consumed_peak != null ? String(row.units_consumed_peak) : "",
+          );
+          setConsumedOffPeak(
+            row.units_consumed_off_peak != null
+              ? String(row.units_consumed_off_peak)
+              : "",
+          );
           setExportOffPeak(
             row.export_off_peak != null && String(row.export_off_peak) !== ""
               ? String(row.export_off_peak)
@@ -712,6 +755,8 @@ const SolarSupplyDataForm = () => {
           setExistingEvidenceUrl(null);
           setRecordUpdatedAt(null);
           setTouRequired("yes");
+          setConsumedPeak("");
+          setConsumedOffPeak("");
           setExportOffPeak("");
           setExportPeak("");
           setImportOffPeak("");
@@ -764,6 +809,49 @@ const SolarSupplyDataForm = () => {
     }
   };
 
+  /** Which log types this site + month allows (green meter date rules). */
+  const phaseWin = useMemo(
+    () =>
+      phaseWindow(selectedSystem?.green_meter_connection_date ?? null, {
+        year,
+        month,
+      }),
+    [selectedSystem?.green_meter_connection_date, year, month],
+  );
+  // Keep the selected type valid when the site or period changes.
+  useEffect(() => {
+    if (!phaseWin.allowed.includes(meterPhase)) {
+      setMeterPhase(phaseWin.defaultPhase);
+    }
+  }, [phaseWin, meterPhase]);
+  // Fresh (unsaved) month: start on the type the dates suggest.
+  useEffect(() => {
+    if (!editingRecordId) setMeterPhase(phaseWin.defaultPhase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseWin.defaultPhase, selectedSystemId, year, month]);
+
+  /** Energy fields for the API, shaped by log type. */
+  const energyPayload = (): Record<string, unknown> =>
+    meterPhase === "pre_green"
+      ? {
+          meter_phase: "pre_green",
+          units_consumed_peak: consumedPeak,
+          units_consumed_off_peak: consumedOffPeak,
+        }
+      : {
+          meter_phase: "green",
+          tou_required: touRequired === "yes",
+          export_off_peak: touRequired === "yes" ? exportOffPeak : null,
+          export_peak: touRequired === "yes" ? exportPeak : null,
+          import_off_peak: touRequired === "yes" ? importOffPeak : null,
+          import_peak: touRequired === "yes" ? importPeak : null,
+          net_off_peak: touRequired === "yes" ? netOffPeak : null,
+          net_peak: touRequired === "yes" ? netPeak : null,
+          export_total: touRequired === "no" ? exportTotal : null,
+          import_total: touRequired === "no" ? importTotal : null,
+          net_total: touRequired === "no" ? netTotal : null,
+        };
+
   const save = async () => {
     if (!selectedSystem) {
       setToast({ message: "Select a solar site.", type: "error" });
@@ -777,7 +865,47 @@ const SolarSupplyDataForm = () => {
       });
       return;
     }
-    if (touRequired === "yes") {
+    if (isFutureMonth({ year, month })) {
+      setToast({
+        message: `${formatYearMonth({ year, month })} is in the future — logs can only be entered for past or current months.`,
+        type: "error",
+      });
+      return;
+    }
+    if (!phaseWin.allowed.includes(meterPhase)) {
+      setToast({
+        message:
+          "This log type isn't allowed for the selected month — check the site's green meter connection date.",
+        type: "error",
+      });
+      return;
+    }
+    const fieldErrors =
+      meterPhase === "pre_green"
+        ? [
+            kwhError(consumedPeak, "Units consumed (peak)"),
+            kwhError(consumedOffPeak, "Units consumed (off-peak)"),
+          ]
+        : touRequired === "yes"
+          ? [
+              kwhError(exportOffPeak, "Export (off-peak)"),
+              kwhError(exportPeak, "Export (peak)"),
+              kwhError(importOffPeak, "Import (off-peak)"),
+              kwhError(importPeak, "Import (peak)"),
+              kwhError(netOffPeak, "Net (off-peak)", { allowNegative: true }),
+              kwhError(netPeak, "Net (peak)", { allowNegative: true }),
+            ]
+          : [
+              kwhError(exportTotal, "Export"),
+              kwhError(importTotal, "Import"),
+              kwhError(netTotal, "Net", { allowNegative: true }),
+            ];
+    const firstError = fieldErrors.find(Boolean);
+    if (firstError) {
+      setToast({ message: firstError, type: "error" });
+      return;
+    }
+    if (meterPhase === "green" && touRequired === "yes") {
       const values = [
         exportOffPeak,
         exportPeak,
@@ -798,7 +926,7 @@ const SolarSupplyDataForm = () => {
         });
         return;
       }
-    } else {
+    } else if (meterPhase === "green") {
       const values = [exportTotal, importTotal, netTotal];
       const nums = values.map((v) => parseFloat(v));
       if (
@@ -838,16 +966,7 @@ const SolarSupplyDataForm = () => {
               monthlyData: [
                 {
                   month,
-                  tou_required: touRequired === "yes",
-                  export_off_peak: touRequired === "yes" ? exportOffPeak : null,
-                  export_peak: touRequired === "yes" ? exportPeak : null,
-                  import_off_peak: touRequired === "yes" ? importOffPeak : null,
-                  import_peak: touRequired === "yes" ? importPeak : null,
-                  net_off_peak: touRequired === "yes" ? netOffPeak : null,
-                  net_peak: touRequired === "yes" ? netPeak : null,
-                  export_total: touRequired === "no" ? exportTotal : null,
-                  import_total: touRequired === "no" ? importTotal : null,
-                  net_total: touRequired === "no" ? netTotal : null,
+                  ...energyPayload(),
                   remarks: remarks.trim() || null,
                 },
               ],
@@ -863,6 +982,8 @@ const SolarSupplyDataForm = () => {
         setExistingEvidenceUrl(null);
         setRecordUpdatedAt(null);
         setTouRequired("yes");
+        setConsumedPeak("");
+        setConsumedOffPeak("");
         setExportOffPeak("");
         setExportPeak("");
         setImportOffPeak("");
@@ -879,16 +1000,7 @@ const SolarSupplyDataForm = () => {
 
       if (editingRecordId) {
         const payload: Record<string, unknown> = {
-          tou_required: touRequired === "yes",
-          export_off_peak: touRequired === "yes" ? exportOffPeak : null,
-          export_peak: touRequired === "yes" ? exportPeak : null,
-          import_off_peak: touRequired === "yes" ? importOffPeak : null,
-          import_peak: touRequired === "yes" ? importPeak : null,
-          net_off_peak: touRequired === "yes" ? netOffPeak : null,
-          net_peak: touRequired === "yes" ? netPeak : null,
-          export_total: touRequired === "no" ? exportTotal : null,
-          import_total: touRequired === "no" ? importTotal : null,
-          net_total: touRequired === "no" ? netTotal : null,
+          ...energyPayload(),
           remarks: remarks.trim() || null,
         };
         if (imagePath) {
@@ -920,16 +1032,7 @@ const SolarSupplyDataForm = () => {
               monthlyData: [
                 {
                   month,
-                  tou_required: touRequired === "yes",
-                  export_off_peak: touRequired === "yes" ? exportOffPeak : null,
-                  export_peak: touRequired === "yes" ? exportPeak : null,
-                  import_off_peak: touRequired === "yes" ? importOffPeak : null,
-                  import_peak: touRequired === "yes" ? importPeak : null,
-                  net_off_peak: touRequired === "yes" ? netOffPeak : null,
-                  net_peak: touRequired === "yes" ? netPeak : null,
-                  export_total: touRequired === "no" ? exportTotal : null,
-                  import_total: touRequired === "no" ? importTotal : null,
-                  net_total: touRequired === "no" ? netTotal : null,
+                  ...energyPayload(),
                   remarks: remarks.trim() || null,
                 },
               ],
@@ -973,6 +1076,8 @@ const SolarSupplyDataForm = () => {
       setExistingEvidenceUrl(null);
       setRecordUpdatedAt(null);
       setTouRequired("yes");
+      setConsumedPeak("");
+      setConsumedOffPeak("");
       setExportOffPeak("");
       setExportPeak("");
       setImportOffPeak("");
@@ -1275,7 +1380,10 @@ const SolarSupplyDataForm = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {[currentYear, currentYear - 1, currentYear - 2].map(
+                        {Array.from(
+                          { length: currentYear - Math.max(SOLAR_LOG_MIN_YEAR, 2010) + 1 },
+                          (_, i) => currentYear - i,
+                        ).map(
                           (y) => (
                             <SelectItem key={y} value={String(y)}>
                               {y}
@@ -1323,6 +1431,14 @@ const SolarSupplyDataForm = () => {
 
               <Separator />
 
+              <MeterPhaseSelector
+                value={meterPhase}
+                onChange={setMeterPhase}
+                window={phaseWin}
+                disabled={!selectedSystem}
+              />
+
+              {meterPhase === "green" ? (
               <div className="rounded-xl border border-border/70 bg-card p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -1356,9 +1472,20 @@ const SolarSupplyDataForm = () => {
                   </div>
                 </div>
               </div>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {touRequired === "yes" ? (
+                {meterPhase === "pre_green" ? (
+                  <div className="col-span-full">
+                    <PreGreenConsumptionFields
+                      peak={consumedPeak}
+                      offPeak={consumedOffPeak}
+                      onPeak={setConsumedPeak}
+                      onOffPeak={setConsumedOffPeak}
+                      inputClassName={inputClass}
+                    />
+                  </div>
+                ) : touRequired === "yes" ? (
                   <>
                     <FormField label="Export off-peak (kWh)">
                       <Input

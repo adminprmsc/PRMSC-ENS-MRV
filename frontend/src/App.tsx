@@ -53,6 +53,7 @@ import HqSolarRecordViewPage from "./pages/executive/HqSolarRecordViewPage";
 import HqWaterSystemDetailPage from "./pages/executive/HqWaterSystemDetailPage";
 import HqSolarSiteDetailPage from "./pages/executive/HqSolarSiteDetailPage";
 import HqSitesTechInfoPage from "./pages/executive/HqSitesTechInfoPage";
+import EntryChangeHistoryPage from "./pages/executive/EntryChangeHistoryPage";
 import TehsilManagerDashboard from "./pages/tehsil/dashboard/TehsilManagerDashboard";
 import LoggingCompliance from "./pages/tehsil/logging/LoggingCompliance";
 import SolarLoggingCompliancePage from "./pages/tehsil/logging/SolarLoggingCompliancePage";
@@ -63,11 +64,17 @@ import SubmissionsAudit from "./pages/verification/VerificationDashboard";
 import SubmissionReview from "./pages/verification/SubmissionReview";
 import UsersAdminPage from "./pages/admin/UsersAdminPage";
 import AdminLocationsPage from "./pages/admin/AdminLocationsPage";
+import GeographyPage from "./pages/geography/GeographyPage";
 import TrainingLayout from "./pages/training/TrainingLayout";
 import { TrainingHub } from "./pages/training/TrainingHub";
 import TrainingGuidePage from "./pages/training/TrainingGuidePage";
 import TrainingVideosPage from "./pages/training/TrainingVideosPage";
-import { adminRoutes, tehsilRoutes, trainingRoutes } from "./constants/routes";
+import {
+  adminRoutes,
+  hqRoutes,
+  tehsilRoutes,
+  trainingRoutes,
+} from "./constants/routes";
 
 const VerificationsRedirect = () => {
   const { user } = useAuth();
@@ -178,6 +185,31 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Geography & population — scoped to each role's tehsils by the API */}
+            <Route
+              path={adminRoutes.geography}
+              element={
+                <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
+                  <GeographyPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={hqRoutes.geography}
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <GeographyPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={tehsilRoutes.geography}
+              element={
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
+                  <GeographyPage />
+                </ProtectedRoute>
+              }
+            />
             {/* MRV COO & Manager Operations — org KPI only */}
             <Route
               path="/hq"
@@ -216,6 +248,22 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
                   <ExecutiveSiteDeleteRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hq/change-history"
+              element={
+                <ProtectedRoute allowedRoles={[...EXECUTIVE_ROLES]}>
+                  <EntryChangeHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tehsil/change-history"
+              element={
+                <ProtectedRoute allowedRoles={[...TEHSIL_MANAGER_ROLES]}>
+                  <EntryChangeHistoryPage />
                 </ProtectedRoute>
               }
             />

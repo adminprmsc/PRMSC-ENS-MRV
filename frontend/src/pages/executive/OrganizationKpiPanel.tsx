@@ -70,7 +70,13 @@ import {
   buildRankedTehsilCoverage,
 } from "./AdminDashboardBlocks";
 import { CoverageDemographicsCharts } from "./CoverageDemographicsCharts";
-import { executiveYearLabel } from "./executivePeriodFilters";
+import {
+  DATE_FROM_PARAM,
+  DATE_TO_PARAM,
+  executivePeriodLabel,
+  hasDateRange,
+} from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 import { PAGE_SIZE } from "./useClientPagination";
 
 type SummaryData = {
@@ -93,6 +99,9 @@ export type ScopeFilters = {
   village: string;
   month: string;
   year: string;
+  /** Inclusive YYYY-MM-DD custom range; overrides year/month when both set. */
+  dateFrom: string;
+  dateTo: string;
 };
 
 type OrganizationKpiPanelProps = {
@@ -120,12 +129,12 @@ type OrganizationKpiPanelProps = {
   villageOptions?: string[];
   allowedTehsils?: string[];
   restrictTehsils?: boolean;
-  scopeFilterYears?: string[];
-  scopeFilterMonths?: string[];
   /** When true hides heavy Performance / Trends / Demographics sections. */
   managementView?: boolean;
   /** Slot for a "today" card rendered above the health section. */
   todaySlot?: React.ReactNode;
+  /** Population KPIs rendered directly under the scope filter. */
+  populationSlot?: React.ReactNode;
 };
 
 const waterDeliveryConfig = {
@@ -485,8 +494,6 @@ function ScopeFilterControls({
   villageOptions,
   allowedTehsils,
   restrictTehsils,
-  years,
-  months,
   scopeLabel,
 }: {
   filters: ScopeFilters;
@@ -494,8 +501,6 @@ function ScopeFilterControls({
   villageOptions: string[];
   allowedTehsils: string[];
   restrictTehsils: boolean;
-  years: string[];
-  months: string[];
   scopeLabel: string;
 }) {
   const tehsilOptions = useMemo(
@@ -536,7 +541,7 @@ function ScopeFilterControls({
         </Badge>
       </CardHeader>
       <CardContent className="py-4">
-        <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Field>
             <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Tehsil
@@ -568,47 +573,12 @@ function ScopeFilterControls({
             maxResults={PAGE_SIZE.villages}
             onChange={(village) => onChange({ village })}
           />
-          <Field>
-            <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Year
-            </FieldLabel>
-            <Select
-              value={filters.year}
-              onValueChange={(v) => onChange({ year: v ?? filters.year })}
-            >
-              <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
-                <SelectValue placeholder="Year" />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y} value={y}>
-                    {executiveYearLabel(y)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Month
-            </FieldLabel>
-            <Select
-              value={filters.month}
-              onValueChange={(v) => onChange({ month: v ?? filters.month })}
-            >
-              <SelectTrigger className="h-9 w-full bg-background text-sm shadow-none">
-                <SelectValue placeholder="Month" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All Months">All months</SelectItem>
-                {months.map((m, i) => (
-                  <SelectItem key={m} value={String(i + 1)}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <ExecutivePeriodFields
+            value={filters}
+            onChange={onChange}
+            size="md"
+            rangeClassName="sm:col-span-2"
+          />
         </FieldGroup>
       </CardContent>
     </Card>
@@ -634,23 +604,29 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
   villageOptions = ["All Villages"],
   allowedTehsils = [],
   restrictTehsils = false,
-  scopeFilterYears = [],
-  scopeFilterMonths = [],
   managementView = false,
   todaySlot,
+  populationSlot,
 }: OrganizationKpiPanelProps) {
   const waterSystemsAll = summary.water_systems;
   const solarSystemsAll = summary.solar_systems;
 
-  const periodHint = useMemo(() => {
-    const yearLabel = executiveYearLabel(
-      scopeFilters?.year ?? year,
-    );
-    if (scopeFilters?.month && scopeFilters.month !== "All Months") {
-      return `${scopeFilterMonths[Number(scopeFilters.month) - 1] ?? "Month"} ${yearLabel}`;
-    }
-    return yearLabel;
-  }, [scopeFilters?.month, scopeFilters?.year, scopeFilterMonths, year]);
+  const periodHint = useMemo(
+    () =>
+      executivePeriodLabel(
+        scopeFilters ?? { year, month: "All Months", dateFrom: "", dateTo: "" },
+      ),
+    [scopeFilters, year],
+  );
+  const rangeMode = hasDateRange(scopeFilters);
+  const cumulativeLabel = rangeMode ? "Cumulative" : "Year-to-date";
+  const waterChartConfig = useMemo(
+    () => ({
+      ...waterDeliveryConfig,
+      ytd: { ...waterDeliveryConfig.ytd, label: cumulativeLabel },
+    }),
+    [cumulativeLabel],
+  );
 
   const derived = useMemo(() => {
     const totalSites = summary.ohr_count + summary.solar_facilities;
@@ -760,11 +736,11 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
           villageOptions={villageOptions}
           allowedTehsils={allowedTehsils}
           restrictTehsils={restrictTehsils}
-          years={scopeFilterYears}
-          months={scopeFilterMonths}
           scopeLabel={scopeLabel}
         />
       ) : null}
+
+      {populationSlot ?? null}
 
       {/* ── SECTION 1: PROGRAMME FOOTPRINT ─────────────────────────────── */}
       {mapSlot ? (
@@ -976,8 +952,15 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                 ? {
                     tehsil: scopeFilters.tehsil,
                     village: scopeFilters.village,
-                    year: scopeFilters.year,
-                    month: scopeFilters.month,
+                    ...(hasDateRange(scopeFilters)
+                      ? {
+                          [DATE_FROM_PARAM]: scopeFilters.dateFrom,
+                          [DATE_TO_PARAM]: scopeFilters.dateTo,
+                        }
+                      : {
+                          year: scopeFilters.year,
+                          month: scopeFilters.month,
+                        }),
                   }
                 : { year }
             }
@@ -1049,20 +1032,20 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
       <Card className="overflow-hidden shadow-sm">
         <CardHeader className="border-b border-border/50 bg-muted/30 py-3.5">
           <CardTitle className="text-base font-semibold">Monthly trends</CardTitle>
-          <CardDescription className="text-xs">{executiveYearLabel(year)} · water delivery, pump runtime & solar energy</CardDescription>
+          <CardDescription className="text-xs">{periodHint} · water delivery, pump runtime & solar energy</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
               <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
                 <p className="text-sm font-semibold">Water delivery</p>
-                <p className="text-xs text-muted-foreground">Volume (m³) and year-to-date</p>
+                <p className="text-xs text-muted-foreground">Volume (m³) and {cumulativeLabel.toLowerCase()}</p>
               </div>
               <div className="overflow-x-auto p-4">
                 {loading ? (
                   <Skeleton className="h-[260px] w-full" />
                 ) : (
-                  <ChartContainer config={waterDeliveryConfig} className="h-[260px] min-w-[320px] w-full">
+                  <ChartContainer config={waterChartConfig} className="h-[260px] min-w-[320px] w-full">
                     <ComposedChart data={waterVolumeChartData}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" />
                       <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
@@ -1074,7 +1057,7 @@ const OrganizationKpiPanel = memo(function OrganizationKpiPanel({
                             labelFormatter={(label) => `${String(label)} · ${scopeTooltip}`}
                             formatter={(value, name) => {
                               const n = Number(value ?? 0);
-                              return [`${formatTooltipNumber(n)} m³`, name === "monthly" ? "Monthly delivery" : "Year-to-date"];
+                              return [`${formatTooltipNumber(n)} m³`, name === "monthly" ? "Monthly delivery" : cumulativeLabel];
                             }}
                           />
                         }

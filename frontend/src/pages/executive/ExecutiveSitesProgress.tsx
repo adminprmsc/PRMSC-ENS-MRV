@@ -52,10 +52,13 @@ import {
 } from "./fetchScopedProgramDashboard";
 import {
   buildExecutiveScopeApiFilters,
-  executiveYearLabel,
-  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  executivePeriodLabel,
+  resolveDateRangeFromUrl,
   resolveExecutiveYearFromUrl,
+  withPeriodQuery,
+  writePeriodToSearchParams,
 } from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 import {
   TehsilCoveragePanel,
   buildRankedTehsilCoverage,
@@ -63,26 +66,14 @@ import {
   formatSolarPeriod,
 } from "./AdminDashboardBlocks";
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 
 type ScopeFilters = {
   tehsil: string;
   village: string;
   month: string;
   year: string;
+  dateFrom: string;
+  dateTo: string;
 };
 
 type WaterGridRow = ProgramWaterSystemCoverage & {
@@ -220,7 +211,7 @@ const ExecutiveSitesProgress = () => {
         ? String(allowedTehsils[0] ?? "").trim() || ALL_ASSIGNED_TEHSILS
         : ALL_ASSIGNED_TEHSILS;
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlTehsil = searchParams.get("tehsil")?.trim() || "";
   const urlYear = searchParams.get("year")?.trim() || "";
   const urlMonth = searchParams.get("month")?.trim() || "";
@@ -238,6 +229,7 @@ const ExecutiveSitesProgress = () => {
     village: searchParams.get("village")?.trim() || ALL_VILLAGES,
     month: urlMonth || "All Months",
     year: resolveExecutiveYearFromUrl(urlYear),
+    ...resolveDateRangeFromUrl(searchParams),
   }));
   const [activeTab, setActiveTab] = useState(() =>
     urlTab === "solar" || urlTab === "coverage" || urlTab === "water"
@@ -285,6 +277,8 @@ const ExecutiveSitesProgress = () => {
           village: filters.village,
           year: filters.year,
           month: filters.month,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
         });
         const { summary: sum } = await fetchScopedProgramDashboard(
           apiFilters,
@@ -310,13 +304,15 @@ const ExecutiveSitesProgress = () => {
     void load();
   }, [filters, allowedTehsils, getDashboardProgramSummary]);
 
-  const periodHint = useMemo(() => {
-    const yearLabel = executiveYearLabel(filters.year);
-    if (filters.month !== "All Months") {
-      return `${MONTHS[Number(filters.month) - 1] ?? "Month"} ${yearLabel}`;
-    }
-    return yearLabel;
-  }, [filters.month, filters.year]);
+  const periodHint = useMemo(() => executivePeriodLabel(filters), [filters]);
+
+  // Keep the period in the URL so refresh / back / shared links retain it.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => writePeriodToSearchParams(new URLSearchParams(prev), filters),
+      { replace: true },
+    );
+  }, [filters, setSearchParams]);
 
   const waterRows = useMemo<WaterGridRow[]>(() => {
     return (summary.water_systems ?? []).map((s) => ({
@@ -428,7 +424,10 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={withHqReturnPath(hqRoutes.waterSystem(row.original.id), returnPath)}
+            to={withHqReturnPath(
+              withPeriodQuery(hqRoutes.waterSystem(row.original.id), filters),
+              returnPath,
+            )}
             {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
@@ -440,7 +439,7 @@ const ExecutiveSitesProgress = () => {
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
     ],
-    [returnPath],
+    [returnPath, filters],
   );
 
   const solarColumns = useMemo<Array<ColumnDef<SolarGridRow, unknown>>>(
@@ -510,7 +509,10 @@ const ExecutiveSitesProgress = () => {
         enableSorting: false,
         cell: ({ row }) => (
           <Link
-            to={withHqReturnPath(hqRoutes.solarSite(row.original.id), returnPath)}
+            to={withHqReturnPath(
+              withPeriodQuery(hqRoutes.solarSite(row.original.id), filters),
+              returnPath,
+            )}
             {...HQ_NEW_TAB_LINK_PROPS}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
@@ -522,7 +524,7 @@ const ExecutiveSitesProgress = () => {
         meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
       },
     ],
-    [returnPath],
+    [returnPath, filters],
   );
 
   const tehsilOptions = useMemo(
@@ -551,7 +553,7 @@ const ExecutiveSitesProgress = () => {
 
       <Card className="gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-foreground/10">
         <CardContent className="p-3 sm:p-4">
-          <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+          <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <Field className="gap-1">
               <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Tehsil
@@ -598,49 +600,7 @@ const ExecutiveSitesProgress = () => {
                 </SelectContent>
               </Select>
             </Field>
-            <Field className="gap-1">
-              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Year
-              </FieldLabel>
-              <Select
-                value={filters.year}
-                onValueChange={(v) => updateScope({ year: v ?? filters.year })}
-              >
-                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXECUTIVE_YEAR_SELECT_OPTIONS.map((y) => (
-                    <SelectItem key={y} value={y}>
-                      {executiveYearLabel(y)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field className="gap-1">
-              <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Month
-              </FieldLabel>
-              <Select
-                value={filters.month}
-                onValueChange={(v) =>
-                  updateScope({ month: v ?? filters.month })
-                }
-              >
-                <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Months">All months</SelectItem>
-                  {MONTHS.map((m, i) => (
-                    <SelectItem key={m} value={String(i + 1)}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            <ExecutivePeriodFields value={filters} onChange={updateScope} />
             <div className="col-span-2 flex items-end sm:col-span-1">
               <LivePulseBadge syncing={loading} />
             </div>

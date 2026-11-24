@@ -13,6 +13,8 @@ import { hqRoutes } from "@/constants/routes";
 import { resolveHqReturnPath } from "@/lib/hqDetailLink";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getSolarSupplyRecord } from "@/services/tehsilManagerOperatorService";
+import { EntryChangeHistoryCard } from "@/components/manager-ops/EntryChangeHistoryCard";
+import { ManagerOverrideCard } from "@/components/manager-ops/ManagerOverrideCard";
 import type { SolarMonthlySupplyRecordDetail } from "@/types/api";
 import { getApiOrigin } from "@/utils/apiOrigin";
 import { formatPakistanDateTime } from "@/utils/pakistanTime";
@@ -105,6 +107,7 @@ export default function HqSolarRecordViewPage() {
     : null;
 
   const tou = record?.tou_required === true;
+  const preGreen = record?.meter_phase === "pre_green";
 
   return (
     <PageShell>
@@ -118,7 +121,7 @@ export default function HqSolarRecordViewPage() {
         }
         badge={
           <Badge variant="outline" className="font-normal">
-            Read-only review
+            Approved entry
           </Badge>
         }
         actions={
@@ -163,7 +166,13 @@ export default function HqSolarRecordViewPage() {
                 <DetailItem label="Village" value={record.village} />
                 <DetailItem label="Settlement" value={record.settlement?.trim() || "—"} />
                 <DetailItem label="Period" value={`${monthLabel} ${record.year}`} />
-                <DetailItem label="TOU billing" value={tou ? "Yes" : "No"} />
+                <DetailItem
+                  label="Log type"
+                  value={preGreen ? "Before green meter" : "Green meter"}
+                />
+                {preGreen ? null : (
+                  <DetailItem label="TOU billing" value={tou ? "Yes" : "No"} />
+                )}
                 <DetailItem
                   label="Last updated"
                   value={formatPakistanDateTime(record.updated_at) || "—"}
@@ -177,7 +186,31 @@ export default function HqSolarRecordViewPage() {
               <CardTitle className="text-sm font-semibold">Energy (kWh)</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              {tou ? (
+              {preGreen ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Logged for a month before the green meter was installed —
+                    units consumed only; nothing was exported.
+                  </p>
+                  <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <DetailItem
+                      label="Units consumed — peak"
+                      value={fmtNum(record.import_peak)}
+                    />
+                    <DetailItem
+                      label="Units consumed — off-peak"
+                      value={fmtNum(record.import_off_peak)}
+                    />
+                    <DetailItem
+                      label="Total consumed"
+                      value={fmtNum(
+                        Number(record.import_peak ?? 0) +
+                          Number(record.import_off_peak ?? 0),
+                      )}
+                    />
+                  </dl>
+                </div>
+              ) : tou ? (
                 <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <DetailItem label="Export off-peak" value={fmtNum(record.export_off_peak)} />
                   <DetailItem label="Export peak" value={fmtNum(record.export_peak)} />
@@ -225,6 +258,15 @@ export default function HqSolarRecordViewPage() {
               </CardContent>
             </Card>
           ) : null}
+
+          <EntryChangeHistoryCard entryId={String(record.id)} />
+
+          <ManagerOverrideCard
+            entryType="solar_log"
+            recordId={String(record.id)}
+            entryLabel={`${record.tehsil} · ${record.village}${record.settlement ? ` · ${record.settlement}` : ""} · ${monthLabel} ${record.year}`}
+            onDone={() => navigate(backTo, { replace: true })}
+          />
         </div>
       )}
     </PageShell>

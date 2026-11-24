@@ -16,20 +16,11 @@ import { kv, PageHeader, PageShell, StatCard } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
+import { MeterPhaseBadge } from "@/components/solar/MeterPhaseFields";
+import { GreenMeterBaselineCard } from "@/components/solar/GreenMeterBaselineCard";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { HQ_NEW_TAB_LINK_PROPS, resolveHqReturnPath, withHqReturnPath } from "@/lib/hqDetailLink";
@@ -42,7 +33,17 @@ import {
 import type { SolarMonthlySupplyListItem, SolarSystemRow } from "@/types/api";
 import { formatPakistanDateTime } from "@/utils/pakistanTime";
 import type { SolarSystemDetailRow } from "./executiveAnalysisTypes";
-import { EXECUTIVE_MONTHS, EXECUTIVE_YEARS } from "./executiveAnalysisTypes";
+import {
+  ALL_MONTHS,
+  ALL_YEARS,
+  executivePeriodLabel,
+  hasDateRange,
+  isoParts,
+  resolvePeriodFromUrl,
+  writePeriodToSearchParams,
+  type ExecutivePeriod,
+} from "./executivePeriodFilters";
+import { ExecutivePeriodFields } from "./ExecutivePeriodFields";
 import PaginatedListFooter from "./PaginatedListFooter";
 
 const MONTH_NAMES = [
@@ -94,6 +95,16 @@ function fmtNum(v: unknown) {
 }
 
 function recordTotals(row: SolarMonthlySupplyListItem) {
+  // Before-green-meter months: consumption only — keep it out of import.
+  if (row.meter_phase === "pre_green") {
+    return {
+      exportKwh: 0,
+      importKwh: 0,
+      netKwh: 0,
+      consumedKwh:
+        Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0),
+    };
+  }
   const exportKwh =
     row.export_total ??
     Number(row.export_off_peak ?? 0) + Number(row.export_peak ?? 0);
@@ -102,7 +113,7 @@ function recordTotals(row: SolarMonthlySupplyListItem) {
     Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0);
   const netKwh =
     row.net_total ?? Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
-  return { exportKwh, importKwh, netKwh };
+  return { exportKwh, importKwh, netKwh, consumedKwh: 0 };
 }
 
 function monthLabel(month: number): string {
@@ -123,12 +134,14 @@ type MonthBranch = {
   exportKwh: number;
   importKwh: number;
   netKwh: number;
+  /** Units consumed in "before green meter" records. */
+  consumedKwh: number;
+  preGreen: boolean;
 };
 
 type LocationState = {
   from?: string;
   metrics?: SolarSystemDetailRow;
-  year?: number;
 };
 
 export default function HqSolarSiteDetailPage() {
@@ -139,18 +152,14 @@ export default function HqSolarSiteDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = (location.state as LocationState | null) ?? {};
 
-  const initialYear = String(
-    searchParams.get("year")?.trim() ||
-      state.year ||
-      new Date().getFullYear(),
+  const [filterPeriod, setFilterPeriod] = useState<ExecutivePeriod>(() =>
+    resolvePeriodFromUrl(searchParams, String(new Date().getFullYear())),
   );
-  const initialMonth =
-    searchParams.get("month")?.trim() || "All Months";
-
-  const [filterYear, setFilterYear] = useState(initialYear);
-  const [filterMonth, setFilterMonth] = useState(initialMonth);
-  const [activeYear, setActiveYear] = useState(initialYear);
-  const [activeMonth, setActiveMonth] = useState(initialMonth);
+  const [activePeriod, setActivePeriod] =
+    useState<ExecutivePeriod>(filterPeriod);
+  const rangeActive = hasDateRange(activePeriod);
+  const activeYear = activePeriod.year;
+  const activeMonth = rangeActive ? ALL_MONTHS : activePeriod.month;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -163,19 +172,59 @@ export default function HqSolarSiteDetailPage() {
 
   const backTo = resolveHqReturnPath(state, searchParams, hqRoutes.solarAnalysis);
   const metrics = state.metrics;
-  const activeYearNum = Number(activeYear);
 
-  const applyPeriodFilters = () => {
-    setActiveYear(filterYear);
-    setActiveMonth(filterMonth);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("year", filterYear);
-      if (filterMonth === "All Months") next.delete("month");
-      else next.set("month", filterMonth);
-      return next;
-    });
+  /** Records are monthly: a range keeps every month it touches. */
+  const rangeYm = useMemo(() => {
+    if (!rangeActive) return null;
+    const [fy, fm] = isoParts(activePeriod.dateFrom);
+    const [ty, tm] = isoParts(activePeriod.dateTo);
+    return { start: fy * 100 + fm, end: ty * 100 + tm, fromYear: fy, toYear: ty };
+  }, [rangeActive, activePeriod.dateFrom, activePeriod.dateTo]);
+
+  /** Single-year scopes use the API year filter; cross-year ranges load all. */
+  const fetchYear = rangeYm
+    ? rangeYm.fromYear === rangeYm.toYear
+      ? String(rangeYm.fromYear)
+      : ""
+    : activeYear === ALL_YEARS
+      ? ""
+      : activeYear;
+
+  const commitPeriod = (next: ExecutivePeriod) => {
+    setFilterPeriod(next);
+    setActivePeriod(next);
+    setSearchParams((prev) =>
+      writePeriodToSearchParams(new URLSearchParams(prev), next),
+    );
   };
+
+  const applyPeriodFilters = () => commitPeriod(filterPeriod);
+
+  /** All years — the before-green-meter baseline usually predates the filter. */
+  const [baselineLogs, setBaselineLogs] = useState<SolarMonthlySupplyListItem[]>(
+    [],
+  );
+  const [baselineLoading, setBaselineLoading] = useState(true);
+  useEffect(() => {
+    if (!systemId) return;
+    let cancelled = false;
+    setBaselineLoading(true);
+    getSolarSupplyData({ solar_system_id: systemId })
+      .then((d: unknown) => {
+        if (!cancelled) {
+          setBaselineLogs(Array.isArray(d) ? (d as SolarMonthlySupplyListItem[]) : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBaselineLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBaselineLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [systemId]);
 
   const loadAll = async () => {
     if (!systemId) {
@@ -196,7 +245,7 @@ export default function HqSolarSiteDetailPage() {
           tehsil: res.tehsil,
           village: res.village,
           settlement: res.settlement ?? "",
-          year: activeYear,
+          ...(fetchYear ? { year: fetchYear } : {}),
         });
         setRecords(
           Array.isArray(data) ? (data as SolarMonthlySupplyListItem[]) : [],
@@ -219,15 +268,12 @@ export default function HqSolarSiteDetailPage() {
   useEffect(() => {
     void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemId, activeYear]);
+  }, [systemId, fetchYear]);
 
-  const periodScopeLabel = useMemo(() => {
-    const monthLabelText =
-      activeMonth === "All Months"
-        ? "All months"
-        : (EXECUTIVE_MONTHS[Number(activeMonth) - 1] ?? activeMonth);
-    return `${activeYear} · ${monthLabelText}`;
-  }, [activeYear, activeMonth]);
+  const periodScopeLabel = useMemo(
+    () => executivePeriodLabel(activePeriod),
+    [activePeriod],
+  );
 
   const title = site?.unique_identifier
     ? kv(site.unique_identifier)
@@ -237,10 +283,13 @@ export default function HqSolarSiteDetailPage() {
 
   const monthBranches = useMemo((): MonthBranch[] => {
     const byMonth = new Map<string, SolarMonthlySupplyListItem[]>();
-    const monthNum =
-      activeMonth === "All Months" ? null : Number(activeMonth);
+    const monthNum = activeMonth === ALL_MONTHS ? null : Number(activeMonth);
     for (const row of records) {
       if (monthNum != null && row.month !== monthNum) continue;
+      if (rangeYm) {
+        const ym = row.year * 100 + row.month;
+        if (ym < rangeYm.start || ym > rangeYm.end) continue;
+      }
       const key = monthSortKey(row);
       const list = byMonth.get(key);
       if (list) list.push(row);
@@ -258,24 +307,28 @@ export default function HqSolarSiteDetailPage() {
         let exportKwh = 0;
         let importKwh = 0;
         let netKwh = 0;
+        let consumedKwh = 0;
         for (const r of sorted) {
           const t = recordTotals(r);
           exportKwh += Number(t.exportKwh) || 0;
           importKwh += Number(t.importKwh) || 0;
           netKwh += Number(t.netKwh) || 0;
+          consumedKwh += Number(t.consumedKwh) || 0;
         }
         const first = sorted[0];
         return {
           key,
-          year: first?.year ?? activeYearNum,
+          year: first?.year ?? Number(activeYear),
           month: first?.month ?? 0,
           records: sorted,
           exportKwh,
           importKwh,
           netKwh,
+          consumedKwh,
+          preGreen: sorted.some((r) => r.meter_phase === "pre_green"),
         };
       });
-  }, [records, activeMonth, activeYearNum]);
+  }, [records, activeMonth, activeYear, rangeYm]);
 
   const latestMonthKey = monthBranches[0]?.key ?? "";
 
@@ -291,7 +344,7 @@ export default function HqSolarSiteDetailPage() {
   const monthsPagination = useClientPagination(monthBranches, 8);
 
   useEffect(() => {
-    if (activeMonth !== "All Months") {
+    if (activeMonth !== ALL_MONTHS) {
       const key = `${activeYear}-${String(activeMonth).padStart(2, "0")}`;
       setExpandedMonths(new Set([key]));
       return;
@@ -302,7 +355,7 @@ export default function HqSolarSiteDetailPage() {
   useEffect(() => {
     monthsPagination.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthBranches.length, activeYear, activeMonth]);
+  }, [monthBranches.length, activePeriod]);
 
   return (
     <PageShell>
@@ -385,10 +438,23 @@ export default function HqSolarSiteDetailPage() {
               <StatCard
                 label="Months logged"
                 value={metrics.months_logged}
+                description={
+                  Number(metrics.pre_green_months_logged ?? 0) > 0
+                    ? `+ ${metrics.pre_green_months_logged} before green meter`
+                    : "Green meter months"
+                }
                 accent="amber"
               />
             </div>
           ) : null}
+
+          <GreenMeterBaselineCard
+            logs={baselineLogs}
+            loading={baselineLoading}
+            greenMeterDate={
+              site.green_meter_connection_date ?? site.green_connection_date
+            }
+          />
 
           <div className="rounded-lg border border-border/70 bg-muted/10">
             <button
@@ -481,8 +547,9 @@ export default function HqSolarSiteDetailPage() {
                 Monthly energy records
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                Filter by year and month, then expand a branch for peak / off-peak
-                detail — newest update first within a month.
+                Filter by year and month or a custom date range, then expand a
+                branch for peak / off-peak detail — newest update first within a
+                month. Ranges include every month they touch.
               </p>
             </CardHeader>
 
@@ -494,51 +561,16 @@ export default function HqSolarSiteDetailPage() {
                 </Badge>
               </div>
 
-              <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Field className="min-w-0 gap-1">
-                  <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Year
-                  </FieldLabel>
-                  <Select
-                    value={filterYear}
-                    onValueChange={(v) => setFilterYear(v ?? filterYear)}
-                  >
-                    <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
-                      <SelectValue placeholder="Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EXECUTIVE_YEARS.map((y) => (
-                        <SelectItem key={y} value={String(y)}>
-                          {y}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+              <FieldGroup className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <ExecutivePeriodFields
+                  value={filterPeriod}
+                  onChange={(patch) =>
+                    setFilterPeriod((prev) => ({ ...prev, ...patch }))
+                  }
+                  dataKind="solar"
+                />
 
-                <Field className="min-w-0 gap-1">
-                  <FieldLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Month
-                  </FieldLabel>
-                  <Select
-                    value={filterMonth}
-                    onValueChange={(v) => setFilterMonth(v ?? filterMonth)}
-                  >
-                    <SelectTrigger className="h-8 w-full bg-background text-xs shadow-none">
-                      <SelectValue placeholder="Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All Months">All months</SelectItem>
-                      {EXECUTIVE_MONTHS.map((label, index) => (
-                        <SelectItem key={label} value={String(index + 1)}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                <div className="col-span-2 flex items-end sm:col-span-2">
+                <div className="col-span-2 flex items-end sm:col-span-1">
                   <Button
                     type="button"
                     size="sm"
@@ -560,14 +592,12 @@ export default function HqSolarSiteDetailPage() {
                       size="sm"
                       className="h-8 text-xs"
                       onClick={() => {
-                        const [, m] = latestMonthKey.split("-");
-                        setFilterMonth(String(Number(m)));
-                        setActiveMonth(String(Number(m)));
-                        setSearchParams((prev) => {
-                          const next = new URLSearchParams(prev);
-                          next.set("year", activeYear);
-                          next.set("month", String(Number(m)));
-                          return next;
+                        const [y, m] = latestMonthKey.split("-");
+                        commitPeriod({
+                          year: String(Number(y)),
+                          month: String(Number(m)),
+                          dateFrom: "",
+                          dateTo: "",
                         });
                       }}
                     >
@@ -580,15 +610,9 @@ export default function HqSolarSiteDetailPage() {
                       variant="ghost"
                       size="sm"
                       className="h-8 text-xs text-muted-foreground"
-                      onClick={() => {
-                        setFilterMonth("All Months");
-                        setActiveMonth("All Months");
-                        setSearchParams((prev) => {
-                          const next = new URLSearchParams(prev);
-                          next.delete("month");
-                          return next;
-                        });
-                      }}
+                      onClick={() =>
+                        commitPeriod({ ...activePeriod, month: ALL_MONTHS })
+                      }
                     >
                       Show all months
                     </Button>
@@ -605,7 +629,8 @@ export default function HqSolarSiteDetailPage() {
                 <p className="text-sm text-destructive">{recordsError}</p>
               ) : records.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No monthly records for {activeYear} at this site.
+                  No monthly records for{" "}
+                  {rangeActive ? periodScopeLabel : activeYear} at this site.
                 </p>
               ) : monthBranches.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
@@ -617,17 +642,16 @@ export default function HqSolarSiteDetailPage() {
                     variant="outline"
                     size="sm"
                     className="mt-3 h-8"
-                    onClick={() => {
-                      setFilterMonth("All Months");
-                      setActiveMonth("All Months");
-                      setSearchParams((prev) => {
-                        const next = new URLSearchParams(prev);
-                        next.delete("month");
-                        return next;
-                      });
-                    }}
+                    onClick={() =>
+                      commitPeriod({
+                        ...activePeriod,
+                        month: ALL_MONTHS,
+                        dateFrom: "",
+                        dateTo: "",
+                      })
+                    }
                   >
-                    Show all months
+                    {rangeActive ? "Clear date range" : "Show all months"}
                   </Button>
                 </div>
               ) : (
@@ -752,6 +776,90 @@ function MetricChip({
   );
 }
 
+function BranchChips({ branch }: { branch: MonthBranch }) {
+  if (branch.preGreen) {
+    return (
+      <MetricChip
+        label="Consumed"
+        value={fmtNum(branch.consumedKwh)}
+        valueClassName="text-red-700 dark:text-red-400"
+      />
+    );
+  }
+  return (
+    <>
+      <MetricChip
+        label="Export"
+        value={fmtNum(branch.exportKwh)}
+        valueClassName="text-amber-700 dark:text-amber-400"
+      />
+      <MetricChip
+        label="Import"
+        value={fmtNum(branch.importKwh)}
+        valueClassName="text-red-700 dark:text-red-400"
+      />
+      <MetricChip
+        label="Net"
+        value={fmtNum(branch.netKwh)}
+        valueClassName="text-foreground"
+      />
+    </>
+  );
+}
+
+/** Before-green-meter record: units consumed only (nothing exported). */
+function PreGreenRecordTable({ row }: { row: SolarMonthlySupplyListItem }) {
+  const th =
+    "px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
+  return (
+    <div className="p-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Units consumed (before green meter — nothing exported)
+      </p>
+      <div className="overflow-hidden rounded-md border border-border/70">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/40">
+              <th className={cn(th, "text-left")}>Band</th>
+              <th className={cn(th, "text-right")}>Consumed</th>
+              <th className={cn(th, "text-right")}>Export</th>
+              <th className={cn(th, "text-right")}>Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(
+              [
+                ["Peak", row.import_peak],
+                ["Off-peak", row.import_off_peak],
+              ] as const
+            ).map(([band, v]) => (
+              <tr key={band} className="border-b border-border/50 last:border-0">
+                <td className="px-2.5 py-2 text-xs font-medium">{band}</td>
+                <td className="px-2.5 py-2 text-right text-xs tabular-nums text-red-700">
+                  {fmtNum(v)}
+                </td>
+                <td className="px-2.5 py-2 text-right text-xs text-muted-foreground">
+                  n/a
+                </td>
+                <td className="px-2.5 py-2 text-right text-xs text-muted-foreground">
+                  n/a
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-muted/20">
+              <td className="px-2.5 py-2 text-xs font-semibold">Total</td>
+              <td className="px-2.5 py-2 text-right text-xs font-semibold tabular-nums">
+                {fmtNum(Number(row.import_peak ?? 0) + Number(row.import_off_peak ?? 0))}
+              </td>
+              <td colSpan={2} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function MonthTreeBranch({
   branch,
   open,
@@ -797,43 +905,21 @@ function MonthTreeBranch({
                   {branch.records.length} record
                   {branch.records.length === 1 ? "" : "s"}
                 </span>
+                {branch.preGreen ? <MeterPhaseBadge phase="pre_green" /> : null}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Click to {open ? "hide" : "view"} peak / off-peak breakdown
+                Click to {open ? "hide" : "view"}{" "}
+                {branch.preGreen ? "units consumed" : "peak / off-peak breakdown"}
               </p>
             </div>
 
             <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-              <MetricChip
-                label="Export"
-                value={fmtNum(branch.exportKwh)}
-                valueClassName="text-amber-700 dark:text-amber-400"
-              />
-              <MetricChip
-                label="Import"
-                value={fmtNum(branch.importKwh)}
-                valueClassName="text-red-700 dark:text-red-400"
-              />
-              <MetricChip
-                label="Net"
-                value={fmtNum(branch.netKwh)}
-                valueClassName="text-foreground"
-              />
+              <BranchChips branch={branch} />
             </div>
           </button>
           {/* Mobile metrics under title when chips are hidden */}
           <div className="flex gap-1.5 border-t border-border/50 px-3 py-2 sm:hidden">
-            <MetricChip
-              label="Export"
-              value={fmtNum(branch.exportKwh)}
-              valueClassName="text-amber-700"
-            />
-            <MetricChip
-              label="Import"
-              value={fmtNum(branch.importKwh)}
-              valueClassName="text-red-700"
-            />
-            <MetricChip label="Net" value={fmtNum(branch.netKwh)} />
+            <BranchChips branch={branch} />
           </div>
         </td>
       </tr>
@@ -920,6 +1006,9 @@ function MonthTreeBranch({
                         </Link>
                       </div>
 
+                      {row.meter_phase === "pre_green" ? (
+                        <PreGreenRecordTable row={row} />
+                      ) : (
                       <div className="p-3">
                         <div>
                           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -977,6 +1066,7 @@ function MonthTreeBranch({
                           </div>
                         </div>
                       </div>
+                      )}
                     </article>
                   );
                 })}

@@ -41,6 +41,10 @@ export const tehsilRoutes = {
   solarMonthlyLogEdit: (recordId: string) =>
     `${TEHSIL_BASE}/solar-monthly-logging/${encodeURIComponent(recordId)}/edit`,
   waterAlerts: `${TEHSIL_BASE}/water-alerts`,
+  /** Manager Operations overrides on entries in this tehsil (read-only). */
+  changeHistory: `${TEHSIL_BASE}/change-history`,
+  /** Villages, settlements and population for the manager's tehsils. */
+  geography: `${TEHSIL_BASE}/geography`,
   submissionReview: (id: string) => `${TEHSIL_BASE}/review/${id}`,
 } as const;
 
@@ -53,6 +57,10 @@ export const hqRoutes = {
   sitesTechInfo: `${HQ_DASHBOARD}/sites-technical-info`,
   attention: `${HQ_DASHBOARD}/attention`,
   deleteRequests: `${HQ_DASHBOARD}/delete-requests`,
+  /** Rejected / deleted approved entries (Manager Operations overrides). */
+  changeHistory: `${HQ_DASHBOARD}/change-history`,
+  /** Villages, settlements and population for assigned tehsils. */
+  geography: `${HQ_DASHBOARD}/geography`,
   waterAnalysis: `${HQ_DASHBOARD}/water`,
   solarAnalysis: `${HQ_DASHBOARD}/solar`,
   waterSystem: (id: string) =>
@@ -81,6 +89,7 @@ export const accountRoutes = {
 export const adminRoutes = {
   users: "/admin/users",
   locations: "/admin/locations",
+  geography: "/admin/geography",
 } as const;
 
 /** Training center — guides for all portal roles; videos restricted on page. */

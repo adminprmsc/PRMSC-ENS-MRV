@@ -30,6 +30,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Download,
+  Info,
   Search,
   SlidersHorizontal,
   Table2,
@@ -98,6 +99,8 @@ import {
 export type DataGridColumnMeta = {
   filterVariant?: "text" | "select" | "none";
   filterOptions?: string[];
+  /** Explanation shown in a tooltip from an ⓘ next to the column header. */
+  headerInfo?: ReactNode;
 };
 
 type DataGridProps<T extends Record<string, unknown>> = {
@@ -240,7 +243,9 @@ export default function DataGrid<T extends Record<string, unknown>>({
     const exportRows = table.getFilteredRowModel().rows.map((r) => {
       const out: Record<string, unknown> = {};
       for (const col of visibleLeafColumns) {
-        out[String(col.columnDef.header ?? col.id)] = r.getValue(col.id);
+        // Display-only columns (e.g. row actions) have no data to export.
+        if (!col.accessorFn) continue;
+        out[getColumnLabel(col)] = r.getValue(col.id);
       }
       return out;
     });
@@ -473,17 +478,39 @@ export default function DataGrid<T extends Record<string, unknown>>({
                       className="h-10 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       {h.isPlaceholder ? null : (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground"
-                          onClick={h.column.getToggleSortingHandler()}
-                        >
-                          {flexRender(
-                            h.column.columnDef.header,
-                            h.getContext(),
-                          )}
-                          <SortIcon sorted={sorted} />
-                        </button>
+                        <span className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-foreground"
+                            onClick={h.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(
+                              h.column.columnDef.header,
+                              h.getContext(),
+                            )}
+                            <SortIcon sorted={sorted} />
+                          </button>
+                          {getColumnMeta(h.column.columnDef).headerInfo ? (
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-label={`About ${getColumnLabel(h.column)}`}
+                                  >
+                                    <Info className="size-3.5" />
+                                  </button>
+                                }
+                              />
+                              <TooltipContent className="block w-72 max-w-[calc(100vw-2rem)] p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal">
+                                <div className="space-y-2">
+                                  {getColumnMeta(h.column.columnDef).headerInfo}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </span>
                       )}
                     </TableHead>
                   );
