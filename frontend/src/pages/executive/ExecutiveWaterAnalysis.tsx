@@ -121,6 +121,7 @@ const ExecutiveWaterAnalysis = () => {
       />
 
       <ExecutiveScopeFiltersCard
+        dataKind="water"
         filters={scope.filters}
         activeScopeLabel={scope.activeScopeLabel}
         tehsilOptions={scope.tehsilOptions}

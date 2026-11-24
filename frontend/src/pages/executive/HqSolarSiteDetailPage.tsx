@@ -19,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldGroup } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SolarSiteTypeBadge } from "@/components/SolarSiteTypeBadge";
+import { MeterPhaseBadge } from "@/components/solar/MeterPhaseFields";
+import { GreenMeterBaselineCard } from "@/components/solar/GreenMeterBaselineCard";
 import { cn } from "@/lib/utils";
 import { hqRoutes } from "@/constants/routes";
 import { HQ_NEW_TAB_LINK_PROPS, resolveHqReturnPath, withHqReturnPath } from "@/lib/hqDetailLink";
@@ -93,6 +95,16 @@ function fmtNum(v: unknown) {
 }
 
 function recordTotals(row: SolarMonthlySupplyListItem) {
+  // Before-green-meter months: consumption only — keep it out of import.
+  if (row.meter_phase === "pre_green") {
+    return {
+      exportKwh: 0,
+      importKwh: 0,
+      netKwh: 0,
+      consumedKwh:
+        Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0),
+    };
+  }
   const exportKwh =
     row.export_total ??
     Number(row.export_off_peak ?? 0) + Number(row.export_peak ?? 0);
@@ -101,7 +113,7 @@ function recordTotals(row: SolarMonthlySupplyListItem) {
     Number(row.import_off_peak ?? 0) + Number(row.import_peak ?? 0);
   const netKwh =
     row.net_total ?? Number(row.net_off_peak ?? 0) + Number(row.net_peak ?? 0);
-  return { exportKwh, importKwh, netKwh };
+  return { exportKwh, importKwh, netKwh, consumedKwh: 0 };
 }
 
 function monthLabel(month: number): string {
@@ -122,6 +134,9 @@ type MonthBranch = {
   exportKwh: number;
   importKwh: number;
   netKwh: number;
+  /** Units consumed in "before green meter" records. */
+  consumedKwh: number;
+  preGreen: boolean;
 };
 
 type LocationState = {
@@ -184,6 +199,32 @@ export default function HqSolarSiteDetailPage() {
   };
 
   const applyPeriodFilters = () => commitPeriod(filterPeriod);
+
+  /** All years — the before-green-meter baseline usually predates the filter. */
+  const [baselineLogs, setBaselineLogs] = useState<SolarMonthlySupplyListItem[]>(
+    [],
+  );
+  const [baselineLoading, setBaselineLoading] = useState(true);
+  useEffect(() => {
+    if (!systemId) return;
+    let cancelled = false;
+    setBaselineLoading(true);
+    getSolarSupplyData({ solar_system_id: systemId })
+      .then((d: unknown) => {
+        if (!cancelled) {
+          setBaselineLogs(Array.isArray(d) ? (d as SolarMonthlySupplyListItem[]) : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBaselineLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBaselineLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [systemId]);
 
   const loadAll = async () => {
     if (!systemId) {
@@ -266,11 +307,13 @@ export default function HqSolarSiteDetailPage() {
         let exportKwh = 0;
         let importKwh = 0;
         let netKwh = 0;
+        let consumedKwh = 0;
         for (const r of sorted) {
           const t = recordTotals(r);
           exportKwh += Number(t.exportKwh) || 0;
           importKwh += Number(t.importKwh) || 0;
           netKwh += Number(t.netKwh) || 0;
+          consumedKwh += Number(t.consumedKwh) || 0;
         }
         const first = sorted[0];
         return {
@@ -281,6 +324,8 @@ export default function HqSolarSiteDetailPage() {
           exportKwh,
           importKwh,
           netKwh,
+          consumedKwh,
+          preGreen: sorted.some((r) => r.meter_phase === "pre_green"),
         };
       });
   }, [records, activeMonth, activeYear, rangeYm]);
@@ -393,10 +438,23 @@ export default function HqSolarSiteDetailPage() {
               <StatCard
                 label="Months logged"
                 value={metrics.months_logged}
+                description={
+                  Number(metrics.pre_green_months_logged ?? 0) > 0
+                    ? `+ ${metrics.pre_green_months_logged} before green meter`
+                    : "Green meter months"
+                }
                 accent="amber"
               />
             </div>
           ) : null}
+
+          <GreenMeterBaselineCard
+            logs={baselineLogs}
+            loading={baselineLoading}
+            greenMeterDate={
+              site.green_meter_connection_date ?? site.green_connection_date
+            }
+          />
 
           <div className="rounded-lg border border-border/70 bg-muted/10">
             <button
@@ -509,7 +567,7 @@ export default function HqSolarSiteDetailPage() {
                   onChange={(patch) =>
                     setFilterPeriod((prev) => ({ ...prev, ...patch }))
                   }
-                  allowAllYears={false}
+                  dataKind="solar"
                 />
 
                 <div className="col-span-2 flex items-end sm:col-span-1">
@@ -718,6 +776,90 @@ function MetricChip({
   );
 }
 
+function BranchChips({ branch }: { branch: MonthBranch }) {
+  if (branch.preGreen) {
+    return (
+      <MetricChip
+        label="Consumed"
+        value={fmtNum(branch.consumedKwh)}
+        valueClassName="text-red-700 dark:text-red-400"
+      />
+    );
+  }
+  return (
+    <>
+      <MetricChip
+        label="Export"
+        value={fmtNum(branch.exportKwh)}
+        valueClassName="text-amber-700 dark:text-amber-400"
+      />
+      <MetricChip
+        label="Import"
+        value={fmtNum(branch.importKwh)}
+        valueClassName="text-red-700 dark:text-red-400"
+      />
+      <MetricChip
+        label="Net"
+        value={fmtNum(branch.netKwh)}
+        valueClassName="text-foreground"
+      />
+    </>
+  );
+}
+
+/** Before-green-meter record: units consumed only (nothing exported). */
+function PreGreenRecordTable({ row }: { row: SolarMonthlySupplyListItem }) {
+  const th =
+    "px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
+  return (
+    <div className="p-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Units consumed (before green meter — nothing exported)
+      </p>
+      <div className="overflow-hidden rounded-md border border-border/70">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/40">
+              <th className={cn(th, "text-left")}>Band</th>
+              <th className={cn(th, "text-right")}>Consumed</th>
+              <th className={cn(th, "text-right")}>Export</th>
+              <th className={cn(th, "text-right")}>Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(
+              [
+                ["Peak", row.import_peak],
+                ["Off-peak", row.import_off_peak],
+              ] as const
+            ).map(([band, v]) => (
+              <tr key={band} className="border-b border-border/50 last:border-0">
+                <td className="px-2.5 py-2 text-xs font-medium">{band}</td>
+                <td className="px-2.5 py-2 text-right text-xs tabular-nums text-red-700">
+                  {fmtNum(v)}
+                </td>
+                <td className="px-2.5 py-2 text-right text-xs text-muted-foreground">
+                  n/a
+                </td>
+                <td className="px-2.5 py-2 text-right text-xs text-muted-foreground">
+                  n/a
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-muted/20">
+              <td className="px-2.5 py-2 text-xs font-semibold">Total</td>
+              <td className="px-2.5 py-2 text-right text-xs font-semibold tabular-nums">
+                {fmtNum(Number(row.import_peak ?? 0) + Number(row.import_off_peak ?? 0))}
+              </td>
+              <td colSpan={2} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function MonthTreeBranch({
   branch,
   open,
@@ -763,43 +905,21 @@ function MonthTreeBranch({
                   {branch.records.length} record
                   {branch.records.length === 1 ? "" : "s"}
                 </span>
+                {branch.preGreen ? <MeterPhaseBadge phase="pre_green" /> : null}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Click to {open ? "hide" : "view"} peak / off-peak breakdown
+                Click to {open ? "hide" : "view"}{" "}
+                {branch.preGreen ? "units consumed" : "peak / off-peak breakdown"}
               </p>
             </div>
 
             <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-              <MetricChip
-                label="Export"
-                value={fmtNum(branch.exportKwh)}
-                valueClassName="text-amber-700 dark:text-amber-400"
-              />
-              <MetricChip
-                label="Import"
-                value={fmtNum(branch.importKwh)}
-                valueClassName="text-red-700 dark:text-red-400"
-              />
-              <MetricChip
-                label="Net"
-                value={fmtNum(branch.netKwh)}
-                valueClassName="text-foreground"
-              />
+              <BranchChips branch={branch} />
             </div>
           </button>
           {/* Mobile metrics under title when chips are hidden */}
           <div className="flex gap-1.5 border-t border-border/50 px-3 py-2 sm:hidden">
-            <MetricChip
-              label="Export"
-              value={fmtNum(branch.exportKwh)}
-              valueClassName="text-amber-700"
-            />
-            <MetricChip
-              label="Import"
-              value={fmtNum(branch.importKwh)}
-              valueClassName="text-red-700"
-            />
-            <MetricChip label="Net" value={fmtNum(branch.netKwh)} />
+            <BranchChips branch={branch} />
           </div>
         </td>
       </tr>
@@ -886,6 +1006,9 @@ function MonthTreeBranch({
                         </Link>
                       </div>
 
+                      {row.meter_phase === "pre_green" ? (
+                        <PreGreenRecordTable row={row} />
+                      ) : (
                       <div className="p-3">
                         <div>
                           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -943,6 +1066,7 @@ function MonthTreeBranch({
                           </div>
                         </div>
                       </div>
+                      )}
                     </article>
                   );
                 })}

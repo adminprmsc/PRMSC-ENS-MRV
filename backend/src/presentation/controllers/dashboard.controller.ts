@@ -45,6 +45,12 @@ export class DashboardController {
     });
   }
 
+  /** Years with logged water / solar data in scope (for year filters). */
+  @Get('data-years')
+  getDataYears(@Query() q: ScopeQuery) {
+    return this.dashboardService.getDataYears(q.tehsil, q.tehsils);
+  }
+
   @Get('program-summary')
   getProgramSummary(@Query() q: ScopeQuery) {
     return this.dashboardService.getProgramSummary(

@@ -1,11 +1,13 @@
 import type { QueryFilters } from "@/services/types";
 import { ALL_SETTLEMENTS } from "@/hooks/useLocationCatalog";
 import { EXECUTIVE_MONTHS, EXECUTIVE_YEARS } from "./executiveAnalysisTypes";
+import { getPakistanYear } from "@/utils/pakistanTime";
 
 export const ALL_YEARS = "All Years";
 export const ALL_MONTHS = "All Months";
 
-export const DEFAULT_EXECUTIVE_YEAR = "2026";
+/** Current year (Pakistan) — always present in data-driven year lists. */
+export const DEFAULT_EXECUTIVE_YEAR = String(getPakistanYear());
 
 /** URL / API query keys for a custom inclusive date range (YYYY-MM-DD). */
 export const DATE_FROM_PARAM = "date_from";
@@ -39,12 +41,10 @@ export function resolveExecutiveYearFromUrl(
   if (trimmed === ALL_YEARS || trimmed.toLowerCase() === "all years") {
     return ALL_YEARS;
   }
-  if (
-    EXECUTIVE_YEARS.includes(
-      Number(trimmed) as (typeof EXECUTIVE_YEARS)[number],
-    )
-  ) {
-    return trimmed;
+  // Year lists are data-driven, so accept any plausible calendar year.
+  const n = Number(trimmed);
+  if (Number.isInteger(n) && n >= 2000 && n <= 2100) {
+    return String(n);
   }
   return DEFAULT_EXECUTIVE_YEAR;
 }

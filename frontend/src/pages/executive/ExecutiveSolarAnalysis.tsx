@@ -90,8 +90,16 @@ const ExecutiveSolarAnalysis = () => {
       exportOffPeak += kwh(row.total_export_off_peak_kwh);
       importOffPeak += kwh(row.total_import_off_peak_kwh);
     }
+    let preGreenKwh = 0;
+    let preGreenMonths = 0;
+    for (const row of rows) {
+      preGreenKwh += kwh(row.pre_green_consumed_kwh);
+      preGreenMonths += Number(row.pre_green_months_logged ?? 0);
+    }
     const hint =
       "Sum across sites with time-of-use (peak / off-peak) metering.";
+    const preHint =
+      "Units consumed in months logged before each site's green meter (nothing exported). Not included in import/export above.";
     return [
       { label: "Total peak export", value: exportPeak, unit: "kWh", hint },
       { label: "Total peak import", value: importPeak, unit: "kWh", hint },
@@ -106,6 +114,18 @@ const ExecutiveSolarAnalysis = () => {
         value: importOffPeak,
         unit: "kWh",
         hint,
+      },
+      {
+        label: "Consumed before green meter",
+        value: preGreenKwh,
+        unit: "kWh",
+        hint: preHint,
+      },
+      {
+        label: "Months before green meter",
+        value: preGreenMonths,
+        unit: "site-months",
+        hint: preHint,
       },
     ];
   }, [rows]);
@@ -136,6 +156,7 @@ const ExecutiveSolarAnalysis = () => {
         villageEnabled={scope.villageEnabled}
         settlementEnabled={scope.settlementEnabled}
         periodFilterMode="year-only"
+        dataKind="solar"
         locationMeta={scope.locationMeta}
         locationsLoading={scope.catalogLoading}
         onUpdate={scope.updateFilter}

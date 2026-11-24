@@ -68,6 +68,16 @@ export type SolarSystemDetailRow = {
   avg_export_kwh_per_month?: number | null;
   avg_import_kwh_per_month?: number | null;
   avg_net_kwh_per_month?: number | null;
+  /** YYYY-MM-DD; months before it are "before green meter" logs. */
+  green_meter_connection_date?: string | null;
+  /** Before green meter baseline (units consumed, nothing exported). */
+  pre_green_months_logged?: number | null;
+  pre_green_consumed_kwh?: number | null;
+  pre_green_consumed_peak_kwh?: number | null;
+  pre_green_consumed_off_peak_kwh?: number | null;
+  avg_pre_green_consumed_kwh_per_month?: number | null;
+  /** % change of avg monthly grid import vs the pre-green baseline. */
+  grid_draw_change_pct?: number | null;
 };
 
 export const EXECUTIVE_YEARS = [2025, 2026, 2027, 2028, 2029] as const;

@@ -10,10 +10,15 @@ import {
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { SolarSystem } from './solar-system.entity';
+import type { MeterPhase } from '../../../domain/constants/solar-meter-phase.rules';
 
 @Entity('solar_energy_logging_monthly')
 @Index('IDX_solar_monthly_solar_system_id', ['solarSystemId'])
-@Index('IDX_solar_monthly_system_year_month', ['solarSystemId', 'year', 'month'])
+@Index('IDX_solar_monthly_system_year_month', [
+  'solarSystemId',
+  'year',
+  'month',
+])
 @Index('IDX_solar_monthly_year_month', ['year', 'month'])
 export class SolarEnergyLoggingMonthly {
   @PrimaryColumn({ type: 'varchar', length: 36, default: () => uuidv4() })
@@ -27,6 +32,19 @@ export class SolarEnergyLoggingMonthly {
 
   @Column({ type: 'int' })
   month!: number;
+
+  /**
+   * 'green' = net-metering log; 'pre_green' = back-dated month before the green
+   * meter (units consumed peak/off-peak in import_*, export/net NULL).
+   * See domain/constants/solar-meter-phase.rules.ts.
+   */
+  @Column({
+    name: 'meter_phase',
+    type: 'varchar',
+    length: 20,
+    default: 'green',
+  })
+  meterPhase!: MeterPhase;
 
   @Column({ name: 'export_off_peak', type: 'float', nullable: true })
   exportOffPeak!: number | null;

@@ -19,10 +19,11 @@ import {
 } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getPakistanIsoDateString } from "@/utils/pakistanTime";
-import { EXECUTIVE_MONTHS, EXECUTIVE_YEARS } from "./executiveAnalysisTypes";
+import { EXECUTIVE_MONTHS } from "./executiveAnalysisTypes";
+import { useDataYears, type DataYearsKind } from "@/hooks/useDataYears";
 import {
   ALL_MONTHS,
-  EXECUTIVE_YEAR_SELECT_OPTIONS,
+  ALL_YEARS,
   executiveYearLabel,
   formatDateRangeLabel,
   hasDateRange,
@@ -149,8 +150,10 @@ export function DateRangePicker({
   }, [open, hasRange, dateFrom, dateTo]);
 
   const today = isoToLocalDate(getPakistanIsoDateString());
-  const firstYear = Math.min(...EXECUTIVE_YEARS);
-  const lastYear = Math.max(...EXECUTIVE_YEARS);
+  // Calendar spans the years that have data, through the current year.
+  const { years: dataYears } = useDataYears("all");
+  const firstYear = Math.min(...dataYears);
+  const lastYear = Math.max(...dataYears);
 
   const draftFrom = draft?.from ? localDateToIso(draft.from) : "";
   const draftTo = draft?.to ? localDateToIso(draft.to) : draftFrom;
@@ -250,6 +253,8 @@ export function DateRangePicker({
 }
 
 type ExecutivePeriodFieldsProps = {
+  /** Which logs decide the year list: water, solar, or both (default). */
+  dataKind?: DataYearsKind;
   value: ExecutivePeriod;
   onChange: (patch: Partial<ExecutivePeriod>) => void;
   /** Show the month select in year/month mode (false for year-only screens). */
@@ -270,6 +275,7 @@ export function ExecutivePeriodFields({
   onChange,
   showMonth = true,
   allowAllYears = true,
+  dataKind = "all",
   size = "sm",
   rangeClassName = "col-span-2",
 }: ExecutivePeriodFieldsProps) {
@@ -288,9 +294,15 @@ export function ExecutivePeriodFields({
     "text-[10px] font-medium uppercase tracking-wide text-muted-foreground";
   const fieldClass = size === "sm" ? "min-w-0 gap-1" : "min-w-0";
 
+  // Only years that actually have data (plus the current and selected year).
+  const selectedYear = Number(value.year);
+  const { years: dataYears } = useDataYears(
+    dataKind,
+    Number.isInteger(selectedYear) ? [selectedYear] : [],
+  );
   const yearOptions = allowAllYears
-    ? [...EXECUTIVE_YEAR_SELECT_OPTIONS]
-    : EXECUTIVE_YEARS.map(String);
+    ? [ALL_YEARS, ...dataYears.map(String)]
+    : dataYears.map(String);
 
   return (
     <>

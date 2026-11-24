@@ -1,3 +1,4 @@
+import { getPakistanIsoDateString } from "../../../../utils/pakistanTime";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -750,10 +751,15 @@ export default function SolarSiteEditPage() {
                       <Label>Green Meter connection date</Label>
                       <Input
                         type="date"
+                        max={getPakistanIsoDateString()}
                         value={formData.green_connection_date}
                         onChange={onChange("green_connection_date")}
                         disabled={saving || deleting || !isResolved}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Months before this date are logged as "Before green meter" (units consumed only). Changing it is blocked if it would contradict
+                        months already logged.
+                      </p>
                     </div>
                   </div>
 

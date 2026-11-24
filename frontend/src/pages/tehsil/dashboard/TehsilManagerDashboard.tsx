@@ -63,6 +63,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { CommandCenterPopulationStrip } from "../../../components/geography/CommandCenterPopulationStrip";
 import { usePopulationIndex } from "../../../hooks/usePopulationIndex";
+import { useDataYears } from "../../../hooks/useDataYears";
 import type { WaterSystemRow } from "../logging/loggingComplianceTypes";
 import {
   formatAssignedOperators,
@@ -670,7 +671,10 @@ const TehsilManagerDashboard = () => {
     { value: 11, label: "November" },
     { value: 12, label: "December" },
   ];
-  const YEARS = [currentYear - 1, currentYear, currentYear + 1];
+  // Years that actually have logs (+ current & selected); 0 = all years.
+  const { years: dataYears } = useDataYears("all", [filters.year]);
+  const YEARS = [0, ...dataYears];
+  const yearText = (y: number) => (y === 0 ? "All years" : String(y));
 
   useEffect(() => {
     if (!statsError) return;
@@ -706,7 +710,7 @@ const TehsilManagerDashboard = () => {
         ? "all months"
         : (MONTHS.find((m) => m.value === activeFilters.month)?.label ??
           String(activeFilters.month));
-    return `${tehsil} · ${village} · ${month} ${activeFilters.year}`;
+    return `${tehsil} · ${village} · ${month} ${yearText(activeFilters.year)}`;
   }, [activeFilters, MONTHS]);
 
   const periodLabel = useMemo(() => {
@@ -715,7 +719,7 @@ const TehsilManagerDashboard = () => {
         ? "All months"
         : (MONTHS.find((m) => m.value === activeFilters.month)?.label ??
           String(activeFilters.month));
-    return `${month}, ${activeFilters.year}`;
+    return `${month}, ${yearText(activeFilters.year)}`;
   }, [activeFilters, MONTHS]);
 
   const waterSystems = safeSummary.water_systems ?? [];
@@ -799,6 +803,7 @@ const TehsilManagerDashboard = () => {
           />
           <FilterSelect
             label="Month"
+            disabled={filters.year === 0}
             value={String(filters.month)}
             onChange={(value) =>
               setFilters((prev) => ({
@@ -815,10 +820,14 @@ const TehsilManagerDashboard = () => {
             label="Year"
             value={String(filters.year)}
             onChange={(value) =>
-              setFilters((prev) => ({ ...prev, year: Number(value) }))
+              setFilters((prev) => {
+                const y = Number(value);
+                // A month only means something inside a specific year.
+                return { ...prev, year: y, month: y === 0 ? "" : prev.month };
+              })
             }
             options={YEARS.map((year) => ({
-              label: String(year),
+              label: yearText(year),
               value: String(year),
             }))}
           />
@@ -840,7 +849,7 @@ const TehsilManagerDashboard = () => {
         tehsil={activeFilters.tehsil}
         village={activeFilters.village}
         period={{
-          year: String(activeFilters.year),
+          year: activeFilters.year ? String(activeFilters.year) : "All Years",
           month: String(activeFilters.month),
           dateFrom: "",
           dateTo: "",

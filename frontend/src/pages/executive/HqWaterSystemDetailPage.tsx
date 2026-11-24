@@ -665,6 +665,7 @@ export default function HqWaterSystemDetailPage() {
                   onChange={(patch) =>
                     setFilterPeriod((prev) => ({ ...prev, ...patch }))
                   }
+                  dataKind="water"
                 />
                 <div className="col-span-2 flex items-end sm:col-span-1">
                   <Button

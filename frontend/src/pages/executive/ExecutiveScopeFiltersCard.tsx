@@ -34,6 +34,8 @@ type ExecutiveScopeFiltersCardProps = {
   showPeriodFilters?: boolean;
   /** full = year + month, year-only = year, none = location only */
   periodFilterMode?: ExecutivePeriodFilterMode;
+  /** Which logs decide the year list (default: water + solar). */
+  dataKind?: "all" | "water" | "solar";
   locationMeta?: {
     siteCount: number;
     villageCount: number;
@@ -129,6 +131,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
   settlementEnabled,
   showPeriodFilters = true,
   periodFilterMode,
+  dataKind = "all",
   locationMeta,
   locationsLoading,
   onUpdate,
@@ -211,6 +214,7 @@ const ExecutiveScopeFiltersCard = memo(function ExecutiveScopeFiltersCard({
               value={filters}
               onChange={updatePeriod}
               showMonth={showMonthFilter}
+              dataKind={dataKind}
             />
           ) : null}
 

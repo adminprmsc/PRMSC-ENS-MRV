@@ -497,6 +497,105 @@ export function useSolarAnalysisColumns(): Array<
           <span className="tabular-nums">{fmtNum(getValue())}</span>
         ),
       },
+      {
+        accessorKey: "avg_pre_green_consumed_kwh_per_month",
+        header: "Before green meter / mo (kWh)",
+        meta: {
+          filterVariant: "none",
+          headerInfo: (
+            <>
+              <p className="text-[13px] font-semibold">Baseline consumption</p>
+              <p className="opacity-90">
+                Average units consumed per month in the months logged{" "}
+                <span className="font-semibold">before the green meter</span>{" "}
+                was installed.
+              </p>
+              <ul className="space-y-1 border-t border-background/15 pt-2 opacity-90">
+                <li>• Peak + off-peak units, from the electricity bill</li>
+                <li>• Nothing was exported in these months</li>
+                <li>• Small text: months logged in the selected period</li>
+              </ul>
+            </>
+          ),
+        } satisfies DataGridColumnMeta,
+        cell: ({ row }) => {
+          const months = Number(row.original.pre_green_months_logged ?? 0);
+          if (!months) {
+            return <span className="text-muted-foreground text-xs">—</span>;
+          }
+          return (
+            <span className="tabular-nums" title="Units consumed per month before the green meter">
+              {fmtNum(row.original.avg_pre_green_consumed_kwh_per_month)}
+              <span className="block text-[11px] text-muted-foreground">
+                {months} month{months === 1 ? "" : "s"} consumed
+              </span>
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "grid_draw_change_pct",
+        header: "Grid draw vs baseline",
+        meta: {
+          filterVariant: "none",
+          headerInfo: (
+            <>
+              <p className="text-[13px] font-semibold">
+                Grid draw: after vs before the green meter
+              </p>
+              <p className="opacity-90">
+                How much the site's monthly grid electricity changed once the
+                green meter was installed.
+              </p>
+              <div className="rounded-md bg-background/10 px-2 py-1.5 font-mono text-[11px] leading-snug">
+                (avg import after − avg consumed before)
+                <br />÷ avg consumed before
+              </div>
+              <ul className="space-y-1 border-t border-background/15 pt-2">
+                <li className="flex gap-2">
+                  <span className="w-12 shrink-0 font-semibold text-emerald-300 dark:text-emerald-700">▼ −%</span>
+                  <span className="opacity-90">Less from the grid — saving</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="w-12 shrink-0 font-semibold text-rose-300 dark:text-rose-700">▲ +%</span>
+                  <span className="opacity-90">More from the grid than before</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="w-12 shrink-0 font-semibold">—</span>
+                  <span className="opacity-90">
+                    Needs logged months on both sides of the green meter date
+                  </span>
+                </li>
+              </ul>
+            </>
+          ),
+        } satisfies DataGridColumnMeta,
+        cell: ({ getValue }) => {
+          const v = getValue() as number | null | undefined;
+          if (v === null || v === undefined || !Number.isFinite(Number(v))) {
+            return <span className="text-muted-foreground text-xs">—</span>;
+          }
+          const n = Number(v);
+          const down = n < -0.5;
+          const up = n > 0.5;
+          return (
+            <span
+              className={
+                down
+                  ? "tabular-nums font-medium text-emerald-700 dark:text-emerald-400"
+                  : up
+                    ? "tabular-nums font-medium text-rose-700 dark:text-rose-400"
+                    : "tabular-nums"
+              }
+              title="Avg monthly grid import with the green meter vs avg units consumed before it"
+            >
+              {down ? "▼ " : up ? "▲ " : ""}
+              {n > 0 ? "+" : ""}
+              {n.toFixed(0)}%
+            </span>
+          );
+        },
+      },
     ],
     []
   );
@@ -641,5 +740,33 @@ export function solarSystemDetailFields(row: SolarSystemDetailRow) {
       label: "Avg net / month",
       value: `${fmtNum(row.avg_net_kwh_per_month)} kWh`,
     },
+    {
+      label: "Green meter connected",
+      value: row.green_meter_connection_date ?? "N/A",
+    },
+    ...(Number(row.pre_green_months_logged ?? 0) > 0
+      ? [
+          {
+            label: "Before green meter — months",
+            value: fmtInt(row.pre_green_months_logged),
+          },
+          {
+            label: "Before green meter — consumed",
+            value: `${fmtInt(row.pre_green_consumed_kwh)} kWh (peak ${fmtInt(row.pre_green_consumed_peak_kwh)} · off-peak ${fmtInt(row.pre_green_consumed_off_peak_kwh)})`,
+          },
+          {
+            label: "Before green meter — avg / month",
+            value: `${fmtNum(row.avg_pre_green_consumed_kwh_per_month)} kWh`,
+          },
+          {
+            label: "Grid draw vs baseline",
+            value:
+              row.grid_draw_change_pct === null ||
+              row.grid_draw_change_pct === undefined
+                ? "N/A"
+                : `${row.grid_draw_change_pct > 0 ? "+" : ""}${row.grid_draw_change_pct.toFixed(1)}%`,
+          },
+        ]
+      : []),
   ];
 }

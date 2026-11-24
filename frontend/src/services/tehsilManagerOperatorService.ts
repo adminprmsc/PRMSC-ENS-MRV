@@ -128,6 +128,16 @@ export const getMySubmissions = async (status?: string) => {
   return response.data;
 };
 
+/** Years that have logged water / solar data in scope (desc). */
+export const getDashboardDataYears = async (filters: QueryFilters = {}) => {
+  const response = await api.get<{
+    years: number[];
+    water_years: number[];
+    solar_years: number[];
+  }>(`/dashboard/data-years${buildQueryString(filters)}`);
+  return response.data;
+};
+
 export const getDashboardProgramSummary = async (filters: QueryFilters = {}) => {
   const response = await api.get(
     `/dashboard/program-summary${buildQueryString(filters)}`,
@@ -327,11 +337,14 @@ export const getSolarSupplyData = async (filters: QueryFilters = {}) => {
 };
 
 /** Bulk: all monthly logs for every accessible solar site for a given year (single request). */
-export const getSolarMonthlyLogsBulk = async (year: number) => {
+/** `year` null = every year (the API omits the filter). */
+export const getSolarMonthlyLogsBulk = async (year: number | null) => {
   const response = await api.get<{
     records: import("../types/api").SolarMonthlyLogTableRow[];
     sites: unknown[];
-  }>(`/operator/solar-monthly-logs-bulk${buildQueryString({ year: String(year) })}`);
+  }>(
+    `/operator/solar-monthly-logs-bulk${buildQueryString(year == null ? {} : { year: String(year) })}`,
+  );
   return response.data;
 };
 

@@ -50,6 +50,7 @@ const SNAPSHOT_LABELS: Record<string, string> = {
   status: "Status at change",
   year: "Year",
   month: "Month",
+  meter_phase: "Log type",
   export_off_peak: "Export off-peak",
   export_peak: "Export peak",
   import_off_peak: "Import off-peak",
@@ -83,7 +84,13 @@ function SnapshotDetails({ row }: { row: EntryChangeLogRow }) {
           {fields.map((k) => (
             <Fragment key={k}>
               <dt className="text-muted-foreground">{SNAPSHOT_LABELS[k]}</dt>
-              <dd className="tabular-nums">{String(record[k])}</dd>
+              <dd className="tabular-nums">
+                {k === "meter_phase"
+                  ? record[k] === "pre_green"
+                    ? "Before green meter"
+                    : "Green meter"
+                  : String(record[k])}
+              </dd>
             </Fragment>
           ))}
         </dl>

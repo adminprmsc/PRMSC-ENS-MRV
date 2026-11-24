@@ -101,6 +101,11 @@ export type SolarMonthlySupplyListItem = {
   solar_system_id?: string;
   year: number;
   month: number;
+  /** 'pre_green' = before green meter: units consumed only, nothing exported. */
+  meter_phase?: "green" | "pre_green" | null;
+  units_consumed_peak?: number | null;
+  units_consumed_off_peak?: number | null;
+  units_consumed_total?: number | null;
   tou_required?: boolean | null;
   export_off_peak?: number | null;
   export_peak?: number | null;
@@ -132,4 +137,5 @@ export type SolarMonthlySupplyRecordDetail = SolarMonthlySupplyListItem & {
   tehsil: string;
   village: string;
   settlement?: string | null;
+  green_meter_connection_date?: string | null;
 };

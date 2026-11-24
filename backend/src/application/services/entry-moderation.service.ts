@@ -563,6 +563,7 @@ export class EntryModerationService {
       solar_system_id: r.solarSystemId,
       year: r.year,
       month: r.month,
+      meter_phase: r.meterPhase ?? 'green',
       export_off_peak: r.exportOffPeak,
       export_peak: r.exportPeak,
       import_off_peak: r.importOffPeak,

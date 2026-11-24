@@ -693,6 +693,48 @@ export class DashboardService {
     }));
   }
 
+  /**
+   * Calendar years that actually have logged data in scope — drives every
+   * year filter so users only see years they can pick something from.
+   */
+  async getDataYears(tehsil?: string, tehsils?: string) {
+    const scoped = this.needsSystemJoinForScope(tehsil, undefined, tehsils);
+
+    let wq = this.waterLogRepo
+      .createQueryBuilder('log')
+      .select('DISTINCT EXTRACT(YEAR FROM log.log_date)::int', 'year')
+      .where('log.log_date IS NOT NULL');
+    if (scoped) {
+      wq = wq.innerJoin(WaterSystem, 'ws', 'ws.id = log.water_system_id');
+      this.applyTehsilScopeToQb(wq, 'ws', tehsil, tehsils);
+    }
+
+    let sq = this.solarLogRepo
+      .createQueryBuilder('log')
+      .select('DISTINCT log.year', 'year')
+      .where('log.year IS NOT NULL');
+    if (scoped) {
+      sq = sq.innerJoin(SolarSystem, 'ss', 'ss.id = log.solar_system_id');
+      this.applyTehsilScopeToQb(sq, 'ss', tehsil, tehsils);
+    }
+
+    const [w, so] = await Promise.all([
+      wq.getRawMany<{ year: number | string }>(),
+      sq.getRawMany<{ year: number | string }>(),
+    ]);
+    const clean = (rows: Array<{ year: number | string }>) =>
+      [...new Set(rows.map((r) => Number(r.year)))]
+        .filter((y) => Number.isInteger(y) && y >= 2000 && y <= 2100)
+        .sort((a, b) => b - a);
+    const water = clean(w);
+    const solar = clean(so);
+    return {
+      years: [...new Set([...water, ...solar])].sort((a, b) => b - a),
+      water_years: water,
+      solar_years: solar,
+    };
+  }
+
   async getSolarGeneration(
     tehsil: string | undefined,
     village: string | undefined,
@@ -742,6 +784,9 @@ export class DashboardService {
       .select('log.year', 'year')
       .addSelect('log.month', 'month')
       .addSelect(`SUM(COALESCE(${offPeak}, 0) + COALESCE(${peak}, 0))`, 'total')
+      // Green-meter logs only: pre-green months have no export and their
+      // consumption is a baseline, reported separately (pre_green_* fields).
+      .where('log.meter_phase = :_greenPhase', { _greenPhase: 'green' })
       .groupBy('log.year')
       .addGroupBy('log.month');
 
@@ -972,41 +1017,79 @@ export class DashboardService {
         'solar_connection_date',
       )
       .addSelect(
-        'SUM(COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_off_peak, 0) + COALESCE(log.export_peak, 0) ELSE 0 END)`,
         'total_export_kwh',
       )
       .addSelect(
-        'SUM(COALESCE(log.export_off_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_off_peak, 0) ELSE 0 END)`,
         'total_export_off_peak_kwh',
       )
-      .addSelect('SUM(COALESCE(log.export_peak, 0))', 'total_export_peak_kwh')
       .addSelect(
-        'SUM(COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.export_peak, 0) ELSE 0 END)`,
+        'total_export_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0) ELSE 0 END)`,
         'total_import_kwh',
       )
       .addSelect(
-        'SUM(COALESCE(log.import_off_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_off_peak, 0) ELSE 0 END)`,
         'total_import_off_peak_kwh',
       )
-      .addSelect('SUM(COALESCE(log.import_peak, 0))', 'total_import_peak_kwh')
       .addSelect(
-        'SUM(COALESCE(log.net_off_peak, 0) + COALESCE(log.net_peak, 0))',
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'total_import_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_off_peak, 0) + COALESCE(log.net_peak, 0) ELSE 0 END)`,
         'total_net_kwh',
       )
-      .addSelect('SUM(COALESCE(log.net_off_peak, 0))', 'total_net_off_peak_kwh')
-      .addSelect('SUM(COALESCE(log.net_peak, 0))', 'total_net_peak_kwh')
-      // tou_required is not a DB column — derive from peak fields (same as save/normalize logic)
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_off_peak, 0) ELSE 0 END)`,
+        'total_net_off_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'green' THEN COALESCE(log.net_peak, 0) ELSE 0 END)`,
+        'total_net_peak_kwh',
+      )
+      // Before green meter: units consumed only (stored in import_*).
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_off_peak, 0) + COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_off_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_off_peak_kwh',
+      )
+      .addSelect(
+        `SUM(CASE WHEN log.meter_phase = 'pre_green' THEN COALESCE(log.import_peak, 0) ELSE 0 END)`,
+        'pre_green_consumed_peak_kwh',
+      )
+      // tou_required is not a DB column — derive from peak fields (green logs)
       .addSelect(
         `BOOL_OR(
-          log.export_peak IS NOT NULL
-          OR log.import_peak IS NOT NULL
-          OR log.net_peak IS NOT NULL
+          log.meter_phase = 'green' AND (
+            log.export_peak IS NOT NULL
+            OR log.import_peak IS NOT NULL
+            OR log.net_peak IS NOT NULL
+          )
         )`,
         'any_tou_required',
       )
       // Distinct calendar months (year-aware) so multi-year ranges average correctly.
-      .addSelect('COUNT(DISTINCT log.year * 100 + log.month)', 'months_logged')
+      .addSelect(
+        `COUNT(DISTINCT CASE WHEN log.meter_phase = 'green' THEN log.year * 100 + log.month END)`,
+        'months_logged',
+      )
+      .addSelect(
+        `COUNT(DISTINCT CASE WHEN log.meter_phase = 'pre_green' THEN log.year * 100 + log.month END)`,
+        'pre_green_months_logged',
+      )
       .addSelect('COUNT(log.id)', 'records_count')
+      .addSelect(
+        "TO_CHAR(ss.green_meter_connection_date, 'YYYY-MM-DD')",
+        'green_meter_connection_date',
+      )
       .groupBy('ss.id')
       .addGroupBy('ss.unique_identifier')
       .addGroupBy('ss.tehsil')
@@ -1016,6 +1099,7 @@ export class DashboardService {
       .addGroupBy('ss.disco_info')
       .addGroupBy('ss.bill_reference_number')
       .addGroupBy('ss.solar_connection_date')
+      .addGroupBy('ss.green_meter_connection_date')
       .orderBy('ss.tehsil')
       .addOrderBy('ss.village')
       .addOrderBy('ss.unique_identifier');
@@ -1047,6 +1131,9 @@ export class DashboardService {
       const netOffPeak = parseFloat(str(r.total_net_off_peak_kwh));
       const netPeak = parseFloat(str(r.total_net_peak_kwh));
       const mLogged = parseInt(str(r.months_logged), 10);
+      const preMonths = parseInt(str(r.pre_green_months_logged), 10);
+      const preTotal = parseFloat(str(r.pre_green_consumed_kwh));
+      const preAvg = preMonths > 0 ? preTotal / preMonths : null;
       const recs = parseInt(str(r.records_count), 10);
       const touRaw = r.any_tou_required;
       const anyTou =
@@ -1081,6 +1168,23 @@ export class DashboardService {
         avg_export_kwh_per_month: mLogged > 0 ? expKwh / mLogged : null,
         avg_import_kwh_per_month: mLogged > 0 ? impKwh / mLogged : null,
         avg_net_kwh_per_month: mLogged > 0 ? netTotal / mLogged : null,
+        green_meter_connection_date:
+          (r.green_meter_connection_date as string | null) ?? null,
+        // Before-green-meter baseline (units consumed, nothing exported).
+        pre_green_months_logged: preMonths,
+        pre_green_consumed_kwh: preTotal,
+        pre_green_consumed_peak_kwh: parseFloat(
+          str(r.pre_green_consumed_peak_kwh),
+        ),
+        pre_green_consumed_off_peak_kwh: parseFloat(
+          str(r.pre_green_consumed_off_peak_kwh),
+        ),
+        avg_pre_green_consumed_kwh_per_month: preAvg,
+        // % drop in monthly grid draw after the green meter vs the baseline.
+        grid_draw_change_pct:
+          preAvg && preAvg > 0 && mLogged > 0
+            ? ((impKwh / mLogged - preAvg) / preAvg) * 100
+            : null,
       };
     });
 
