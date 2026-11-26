@@ -29,6 +29,7 @@ import {
   NOTIFICATION_TYPE_ENTRY_CHANGE,
   NOTIFICATIONS_QUERY_KEY,
   type AppNotification,
+  type NotificationsResponse,
 } from "@/services/notificationsService";
 
 const POLL_MS = 60_000;
@@ -86,8 +87,26 @@ export function NotificationBell() {
     mutationFn: markNotificationsRead,
     onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY }),
   });
+  // Marks EVERY unread notification on the server — not just the ≤50 listed.
+  // Optimistic: the badge drops to 0 at once; rolled back if the call fails.
   const markAll = useMutation({
     mutationFn: () => markAllNotificationsReadOfType(),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+      const previous = qc.getQueryData<NotificationsResponse>(NOTIFICATIONS_QUERY_KEY);
+      if (previous) {
+        qc.setQueryData<NotificationsResponse>(NOTIFICATIONS_QUERY_KEY, {
+          notifications: previous.notifications.map((n) => ({ ...n, is_read: true })),
+          unread_count: 0,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(NOTIFICATIONS_QUERY_KEY, ctx.previous);
+      toast.error("Couldn’t mark notifications as read. Please try again.");
+    },
+    onSuccess: () => setFreshIds(new Set()),
     onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY }),
   });
 
@@ -198,7 +217,14 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(92vw,380px)] gap-0 p-0">
         <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-          <p className="text-sm font-semibold">Notifications</p>
+          <p className="text-sm font-semibold">
+            Notifications
+            {unread > 0 ? (
+              <span className="ml-1.5 text-xs font-medium text-muted-foreground tabular-nums">
+                {unread > 999 ? "999+" : unread} unread
+              </span>
+            ) : null}
+          </p>
           <div className="ml-auto flex items-center gap-1">
           <Button
             type="button"
@@ -225,7 +251,8 @@ export function NotificationBell() {
             variant="ghost"
             size="sm"
             className="h-7 gap-1 text-xs"
-            disabled={markAll.isPending || items.every((n) => n.is_read && !freshIds.has(n.id))}
+            // Server count, not just the listed items — more than 50 can be unread.
+            disabled={markAll.isPending || unread === 0}
             onClick={() => markAll.mutate()}
           >
             <CheckCheck className="size-3.5" />
@@ -278,6 +305,12 @@ export function NotificationBell() {
               );
             })
           )}
+          {unread > items.filter((n) => !n.is_read).length ? (
+            <p className="border-t bg-muted/30 px-3 py-2 text-center text-[11px] text-muted-foreground">
+              Showing the latest {items.length}. {unread} unread in total — use{" "}
+              <span className="font-medium text-foreground">Mark all read</span> to clear them all.
+            </p>
+          ) : null}
         </div>
         {showHistoryLink ? (
           <button
