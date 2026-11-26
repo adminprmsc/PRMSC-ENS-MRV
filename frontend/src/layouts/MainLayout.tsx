@@ -27,10 +27,12 @@ import {
   User as UserIcon,
   X,
   History,
+  Settings,
   Sparkles,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { ReleaseAnnouncementBanner } from "../components/releases/ReleaseAnnouncementBanner";
+import { NavBadge, NavBadgeDot } from "../components/layout/NavBadge";
 import {
   RELEASE_QUERY_KEYS,
   getReleaseNotes,
@@ -38,7 +40,6 @@ import {
 
 import { PendingSiteDeleteRequestsPrompt } from "../components/PendingSiteDeleteRequestsPrompt";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Separator } from "../components/ui/separator";
 import {
@@ -77,6 +78,8 @@ type NavItem = {
   label: string;
   end?: boolean;
   badge?: number;
+  /** Badge colour: alert (red, default) or info (blue). */
+  badgeTone?: "alert" | "info";
 };
 
 type NavSection = {
@@ -412,7 +415,9 @@ const MainLayout = () => {
           path: releaseRoutes.whatsNew,
           icon: <Sparkles className="size-4 shrink-0 opacity-90" />,
           label: "What's new",
-          ...(releaseUnread > 0 ? { badge: releaseUnread } : {}),
+          ...(releaseUnread > 0
+            ? { badge: releaseUnread, badgeTone: "info" as const }
+            : {}),
         },
         {
           path: trainingRoutes.hub,
@@ -425,6 +430,11 @@ const MainLayout = () => {
     sections.push({
       title: "Account",
       items: [
+        {
+          path: accountRoutes.settings,
+          icon: <Settings className="size-4 shrink-0 opacity-90" />,
+          label: "Settings",
+        },
         {
           path: accountRoutes.changePassword,
           icon: <KeyRound className="size-4 shrink-0 opacity-90" />,
@@ -586,12 +596,7 @@ const MainLayout = () => {
                       {item.icon}
                       <span className="truncate">{item.label}</span>
                       {item.badge ? (
-                        <Badge
-                          variant="destructive"
-                          className="ml-auto h-5 min-w-5 justify-center px-1 text-[10px]"
-                        >
-                          {item.badge}
-                        </Badge>
+                        <NavBadge count={item.badge} tone={item.badgeTone ?? "alert"} />
                       ) : null}
                     </NavLink>
                   );
@@ -623,7 +628,7 @@ const MainLayout = () => {
                     >
                       {item.icon}
                       {item.badge ? (
-                        <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
+                        <NavBadgeDot tone={item.badgeTone ?? "alert"} />
                       ) : null}
                     </TooltipTrigger>
                     <TooltipContent side="right" sideOffset={10}>

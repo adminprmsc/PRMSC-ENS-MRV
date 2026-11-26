@@ -66,6 +66,7 @@ import UsersAdminPage from "./pages/admin/UsersAdminPage";
 import AdminLocationsPage from "./pages/admin/AdminLocationsPage";
 import GeographyPage from "./pages/geography/GeographyPage";
 import WhatsNewPage from "./pages/releases/WhatsNewPage";
+import SettingsPage from "./pages/account/SettingsPage";
 import TrainingLayout from "./pages/training/TrainingLayout";
 import { TrainingHub } from "./pages/training/TrainingHub";
 import TrainingGuidePage from "./pages/training/TrainingGuidePage";
@@ -183,6 +184,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
                   <AdminLocationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/account/settings"
+              element={
+                <ProtectedRoute allowedRoles={[...PORTAL_ROLES]}>
+                  <SettingsPage />
                 </ProtectedRoute>
               }
             />

@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 import "./index.css";
+import { installAudioUnlock } from "./lib/notificationSound";
+
+// Browsers allow sound only after a user gesture — unlock on the first one.
+installAudioUnlock();
 
 const queryClient = new QueryClient({
   defaultOptions: {

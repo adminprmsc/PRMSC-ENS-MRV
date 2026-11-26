@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { Bell, CheckCheck, History } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Bell, CheckCheck, History, Volume2, VolumeX } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -12,6 +13,15 @@ import { hqRoutes, releaseRoutes, tehsilRoutes } from "@/constants/routes";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { roundNumbersInText } from "@/lib/roundNumbersInText";
+import {
+  lastAlertedAt,
+  setLastAlertedAt,
+  useNotificationPrefs,
+} from "@/lib/notificationPrefs";
+import {
+  playChimeFromGesture,
+  playNotificationChime,
+} from "@/lib/notificationSound";
 import {
   fetchNotifications,
   markAllNotificationsReadOfType,
@@ -56,6 +66,11 @@ export function NotificationBell() {
   /** Ids that were unread when the panel opened — kept highlighted as "New" while it stays open. */
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
   const knownIds = useRef<Set<string> | null>(null);
+  const userId = user?.id ? String(user.id) : undefined;
+  const { prefs, update: updatePrefs } = useNotificationPrefs(userId);
+  /** Bumped on each new arrival → replays the ring / pop animations. */
+  const [ringKey, setRingKey] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   const { data } = useQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
@@ -76,12 +91,32 @@ export function NotificationBell() {
     onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY }),
   });
 
-  // Toast notices that arrive while the app is open (not the ones present at first load).
+  /**
+   * Alert on new notifications: those that arrive while the app is open,
+   * plus — on first load — unread ones newer than the last alert on this
+   * device (e.g. a release announced since the user's last visit).
+   */
   useEffect(() => {
-    if (!data) return;
+    if (!data || !userId) return;
     const ids = new Set(items.map((n) => n.id));
+    let arrived: AppNotification[];
     if (knownIds.current) {
-      const arrived = items.filter((n) => !n.is_read && !knownIds.current!.has(n.id));
+      arrived = items.filter((n) => !n.is_read && !knownIds.current!.has(n.id));
+    } else {
+      const since = lastAlertedAt(userId);
+      arrived = items.filter((n) => {
+        if (n.is_read) return false;
+        const t = n.created_at ? Date.parse(n.created_at) : NaN;
+        return Number.isFinite(t) && t > since;
+      });
+    }
+    knownIds.current = ids;
+    if (!arrived.length) return;
+
+    setLastAlertedAt(userId, Date.now());
+    setRingKey((k) => k + 1);
+    if (prefs.sound) playNotificationChime();
+    if (prefs.popups) {
       for (const n of arrived.slice(0, 3)) {
         const link = notificationLink(n, role);
         toast.info(n.title, {
@@ -89,10 +124,14 @@ export function NotificationBell() {
           ...(link ? { action: { label: "View", onClick: () => navigate(link) } } : {}),
         });
       }
+      if (arrived.length > 3) {
+        toast.info(`+${arrived.length - 3} more notifications`, {
+          description: "Open the bell to see them all.",
+        });
+      }
     }
-    knownIds.current = ids;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, userId]);
 
   // Opening the panel = the user has seen what's listed → mark those read.
   const onOpenChange = (next: boolean) => {
@@ -124,16 +163,63 @@ export function NotificationBell() {
         )}
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
       >
-        <Bell className="size-4" />
+        <motion.span
+          key={`bell-${ringKey}`}
+          className="inline-flex origin-top"
+          animate={
+            ringKey && !reduceMotion
+              ? { rotate: [0, -18, 15, -12, 9, -5, 0] }
+              : { rotate: 0 }
+          }
+          transition={{ duration: 0.9, ease: "easeInOut" }}
+        >
+          <Bell className="size-4" />
+        </motion.span>
         {unread > 0 ? (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold leading-none text-white">
-            {unread > 99 ? "99+" : unread}
-          </span>
+          <>
+            {ringKey && !reduceMotion ? (
+              <span
+                key={`ping-${ringKey}`}
+                aria-hidden
+                className="absolute -top-0.5 -right-0.5 size-4 animate-ping rounded-full bg-rose-500/60 [animation-iteration-count:3]"
+              />
+            ) : null}
+            <motion.span
+              key={`badge-${unread}`}
+              initial={reduceMotion ? false : { scale: 0.4 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 520, damping: 14 }}
+              className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-background tabular-nums"
+            >
+              {unread > 99 ? "99+" : unread}
+            </motion.span>
+          </>
         ) : null}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(92vw,380px)] gap-0 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
           <p className="text-sm font-semibold">Notifications</p>
+          <div className="ml-auto flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={() => {
+              const next = !prefs.sound;
+              updatePrefs({ sound: next });
+              if (next) void playChimeFromGesture();
+            }}
+            aria-pressed={!prefs.sound}
+            aria-label={prefs.sound ? "Mute notification sound" : "Unmute notification sound"}
+            title={prefs.sound ? "Sound on — click to mute" : "Sound off — click to unmute"}
+          >
+            {prefs.sound ? (
+              <Volume2 className="size-3.5" />
+            ) : (
+              <VolumeX className="size-3.5 text-muted-foreground" />
+            )}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -145,6 +231,7 @@ export function NotificationBell() {
             <CheckCheck className="size-3.5" />
             Mark all read
           </Button>
+          </div>
         </div>
         <div className="max-h-[60vh] overflow-y-auto">
           {items.length === 0 ? (

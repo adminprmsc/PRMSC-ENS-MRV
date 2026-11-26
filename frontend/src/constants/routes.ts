@@ -89,6 +89,7 @@ export const releaseRoutes = {
 /** Authenticated account flows (all portal roles) */
 export const accountRoutes = {
   changePassword: "/account/change-password",
+  settings: "/account/settings",
 } as const;
 
 /** Platform administrator */
