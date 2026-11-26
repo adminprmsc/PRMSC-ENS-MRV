@@ -9,6 +9,7 @@ import { NotificationsService } from './notifications.service';
 import { OperatorHelpersService } from './operator-helpers.service';
 import { PumpTimesService } from './pump-times.service';
 import { RbacService } from './rbac.service';
+import { ReleaseNotesService } from './release-notes.service';
 import { StorageService } from './storage.service';
 import { LocationsService } from './locations.service';
 import { TehsilAccessService } from './tehsil-access.service';
@@ -32,6 +33,7 @@ const SERVICES = [
   OperatorHelpersService,
   PumpTimesService,
   RbacService,
+  ReleaseNotesService,
   StorageService,
   TehsilAccessService,
   TehsilManagerService,

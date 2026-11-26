@@ -16,6 +16,9 @@ export type SystemMeter = {
 };
 
 export type WaterSystemRow = {
+  /** Bulk meter cutover (Pakistan wall clock): YYYY-MM-DD and HH:MM. */
+  bulk_meter_since_date?: string | null;
+  bulk_meter_since_time?: string | null;
   id: string;
   tehsil: string;
   village: string;

@@ -78,6 +78,21 @@ export class WaterSystem {
   @Column({ name: 'bulk_meter_installed', type: 'boolean', default: true })
   bulkMeterInstalled!: boolean;
 
+  /**
+   * Bulk meter start (Pakistan wall-clock). From here on volume = meter only;
+   * earlier logs = hourly estimate. NULL → earliest submitted meter log.
+   */
+  @Column({
+    name: 'bulk_meter_since_date',
+    type: 'date',
+    nullable: true,
+    transformer: dateColumnTransformer,
+  })
+  bulkMeterSinceDate!: Date | null;
+
+  @Column({ name: 'bulk_meter_since_time', type: 'time', nullable: true })
+  bulkMeterSinceTime!: string | null;
+
   @Column({ name: 'ohr_tank_capacity', type: 'float', nullable: true })
   ohrTankCapacity!: number | null;
 

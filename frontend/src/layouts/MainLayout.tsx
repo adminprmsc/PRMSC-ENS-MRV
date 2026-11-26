@@ -27,7 +27,14 @@ import {
   User as UserIcon,
   X,
   History,
+  Sparkles,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ReleaseAnnouncementBanner } from "../components/releases/ReleaseAnnouncementBanner";
+import {
+  RELEASE_QUERY_KEYS,
+  getReleaseNotes,
+} from "../services/releaseNotesService";
 
 import { PendingSiteDeleteRequestsPrompt } from "../components/PendingSiteDeleteRequestsPrompt";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
@@ -49,6 +56,7 @@ import {
   hqRoutes,
   tehsilRoutes,
   trainingRoutes,
+  releaseRoutes,
 } from "../constants/routes";
 import {
   canOnboardOperators,
@@ -188,6 +196,16 @@ const MainLayout = () => {
   const tehsilMgr = user ? isTehsilManager(user.role) : false;
   const userAdmin = user ? isUserAdminRole(user.role) : false;
   const showOnboard = user ? canOnboardOperators(user.role) : false;
+
+  // Unread release notes (announcement window) → sidebar badge.
+  const { data: releaseData } = useQuery({
+    queryKey: RELEASE_QUERY_KEYS.list,
+    queryFn: getReleaseNotes,
+    staleTime: 5 * 60_000,
+    enabled: Boolean(user),
+    retry: 1,
+  });
+  const releaseUnread = releaseData?.unread ?? 0;
 
   const onDeleteRequestCountChange = useCallback((count: number) => {
     setDeleteRequestCount(count);
@@ -391,6 +409,12 @@ const MainLayout = () => {
       title: "Help",
       items: [
         {
+          path: releaseRoutes.whatsNew,
+          icon: <Sparkles className="size-4 shrink-0 opacity-90" />,
+          label: "What's new",
+          ...(releaseUnread > 0 ? { badge: releaseUnread } : {}),
+        },
+        {
           path: trainingRoutes.hub,
           icon: <GraduationCap className="size-4 shrink-0 opacity-90" />,
           label: "Training Center",
@@ -417,6 +441,7 @@ const MainLayout = () => {
     showOnboard,
     certificateAlertCount,
     deleteRequestCount,
+    releaseUnread,
   ]);
 
   const identity = useMemo(
@@ -760,6 +785,9 @@ const MainLayout = () => {
 
           <main className="app-shell-bg relative flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-7xl">
+              {location.pathname !== releaseRoutes.whatsNew ? (
+                <ReleaseAnnouncementBanner />
+              ) : null}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={location.pathname}

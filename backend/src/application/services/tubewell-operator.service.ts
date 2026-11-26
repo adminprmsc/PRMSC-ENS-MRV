@@ -555,7 +555,9 @@ export class TubewellOperatorService {
     const tehsilScope = resolveTehsilScope(filterTehsil, tehsilsCsv);
     if (tehsilScope?.length) {
       const allowed = new Set(tehsilScope);
-      systems = systems.filter((s) => s.tehsil != null && allowed.has(s.tehsil));
+      systems = systems.filter(
+        (s) => s.tehsil != null && allowed.has(s.tehsil),
+      );
     } else if (filterTehsil && filterTehsil !== 'All Tehsils') {
       systems = systems.filter((s) => s.tehsil === filterTehsil);
     }
@@ -765,6 +767,8 @@ export class TubewellOperatorService {
         ? await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
             bulkMeterInstalled: true,
             waterSystemId: String(system.id),
+            bulkMeterSinceDate: system.bulkMeterSinceDate,
+            bulkMeterSinceTime: system.bulkMeterSinceTime,
             logDate: parsedLogDate,
             pumpEndTime: parsedPumpEnd,
             excludeRecordId,
@@ -1095,6 +1099,8 @@ export class TubewellOperatorService {
         await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
           bulkMeterInstalled: true,
           waterSystemId: String(system!.id),
+          bulkMeterSinceDate: system!.bulkMeterSinceDate,
+          bulkMeterSinceTime: system!.bulkMeterSinceTime,
           logDate: record.logDate,
           pumpEndTime: record.pumpEndTime,
           excludeRecordId: String(record.id),
@@ -1828,6 +1834,8 @@ export class TubewellOperatorService {
       await this.waterMeterVolumeService.logRequiresBulkMeterCapture({
         bulkMeterInstalled: true,
         waterSystemId: String(system.id),
+        bulkMeterSinceDate: system.bulkMeterSinceDate,
+        bulkMeterSinceTime: system.bulkMeterSinceTime,
         logDate: record.logDate,
         pumpEndTime: record.pumpEndTime,
         excludeRecordId,

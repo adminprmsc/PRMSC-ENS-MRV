@@ -9,16 +9,17 @@ import type {
   WaterSystemDetailRow,
 } from "./executiveAnalysisTypes";
 import {
-  calculatedAvgDailyM3,
-  calculatedAvgHourlyM3,
   calculatedTotalM3,
   estimatedAvgDailyM3,
   estimatedAvgHourlyM3,
   estimatedTotalM3,
+  hasHourlyData,
+  hasMeterData,
   meterAvgDailyM3,
   meterAvgHourlyM3,
   meterTotalM3,
   waterVolumeBasisLabel,
+  type WaterSourceFilter,
 } from "./waterAnalysisVolume";
 
 export {
@@ -47,19 +48,6 @@ function isBlank(v: unknown): boolean {
 
 const NA = <span className="text-muted-foreground text-xs">N/A</span>;
 
-/** Meter-derived volumes are meaningless without a bulk meter or when the API has no value. */
-function waterMeterCell(
-  row: WaterSystemDetailRow,
-  v: unknown,
-  fmt: (v: unknown) => string
-) {
-  return !row.bulk_meter_installed || isBlank(v) ? (
-    NA
-  ) : (
-    <span className="tabular-nums">{fmt(v)}</span>
-  );
-}
-
 function waterNumCell(v: unknown, fmt: (v: unknown) => string) {
   return isBlank(v) ? NA : <span className="tabular-nums">{fmt(v)}</span>;
 }
@@ -70,80 +58,71 @@ function waterMeterField(
   fmt: (v: unknown) => string,
   unit = ""
 ) {
-  if (!row.bulk_meter_installed || isBlank(v)) return "N/A";
+  void row;
+  if (isBlank(v)) return "N/A";
   return unit ? `${fmt(v)} ${unit}` : fmt(v);
 }
 
-function ohrVolumeCell(
-  row: WaterSystemDetailRow,
-  value: number | null,
-  fmt: (v: unknown) => string,
-) {
-  if (row.bulk_meter_installed) return NA;
+/** Value cell: N/A when this source has no data for the row. */
+function volCell(value: number | null, fmt: (v: unknown) => string, title: string) {
   if (value == null || !Number.isFinite(value)) return NA;
   return (
-    <span
-      className="tabular-nums"
-      title="η × pump flow rate × total runtime in period"
-    >
+    <span className="tabular-nums" title={title}>
       {fmt(value)}
     </span>
   );
 }
 
-function bulkVolumeCell(
-  row: WaterSystemDetailRow,
-  value: number | null,
-  fmt: (v: unknown) => string,
-) {
-  if (!row.bulk_meter_installed) return NA;
-  if (value == null || !Number.isFinite(value)) return NA;
-  return (
-    <span className="tabular-nums" title="From bulk meter log intervals">
-      {fmt(value)}
-    </span>
-  );
-}
+const SOURCE_BADGE: Record<string, string> = {
+  "Bulk meter":
+    "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300",
+  "Estimated (pump hours)":
+    "border-border bg-muted/60 text-muted-foreground",
+  Mixed:
+    "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300",
+};
 
+type WaterCol = ColumnDef<WaterSystemDetailRow>;
+const none = { filterVariant: "none" } satisfies DataGridColumnMeta;
+
+/**
+ * Water analysis columns for a data-source view:
+ *  all    — both sources + combined total
+ *  bulk   — bulk-meter columns only (meter era hours/days) → bulk-only export
+ *  hourly — estimate columns only (estimate era hours/days)
+ */
 export function useWaterAnalysisColumns(
   rows: WaterSystemDetailRow[] = [],
+  source: WaterSourceFilter = "all",
 ): Array<ColumnDef<WaterSystemDetailRow>> {
-  const showOhrVolumeCols =
-    rows.length === 0 || rows.some((r) => !r.bulk_meter_installed);
-  const showBulkVolumeCols =
-    rows.length === 0 || rows.some((r) => r.bulk_meter_installed);
+  const anyHourly = rows.length === 0 || rows.some(hasHourlyData);
+  const anyMeter = rows.length === 0 || rows.some(hasMeterData);
+  const showHourly = source === "hourly" || (source === "all" && anyHourly);
+  const showMeter = source === "bulk" || (source === "all" && anyMeter);
 
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const identity: WaterCol[] = [
       {
         accessorKey: "unique_identifier",
         header: "System ID",
         // Area/period come from top filters; table search covers ID + place names.
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        meta: none,
         cell: ({ getValue }) => (
           <CopyableId value={String(getValue() ?? "")} label="System ID" />
         ),
       },
-      {
-        accessorKey: "tehsil",
-        header: "Tehsil",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-      },
-      {
-        accessorKey: "village",
-        header: "Village",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-      },
+      { accessorKey: "tehsil", header: "Tehsil", meta: none },
+      { accessorKey: "village", header: "Village", meta: none },
       {
         accessorKey: "settlement",
         header: "Settlement",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        meta: none,
         cell: ({ getValue }) => (isBlank(getValue()) ? NA : String(getValue())),
       },
       {
         accessorKey: "start_of_operation",
         header: "Start date",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        meta: none,
         cell: ({ getValue }) =>
           isBlank(getValue()) ? (
             NA
@@ -160,129 +139,233 @@ export function useWaterAnalysisColumns(
           filterVariant: "select",
           filterOptions: ["Yes", "No"],
         } satisfies DataGridColumnMeta,
-        cell: ({ getValue }) => (getValue() ? "Yes" : "No"),
+        accessorFn: (row) => (row.bulk_meter_installed ? "Yes" : "No"),
         filterFn: (row, _id, value) => {
           if (!value || value === "all") return true;
           const yes = row.original.bulk_meter_installed;
           return value === "Yes" ? yes : !yes;
         },
       },
-      ...(showOhrVolumeCols
-        ? ([
-            {
-              id: "ohr_total_m3",
-              header: "Total calculated (m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) => estimatedTotalM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                ohrVolumeCell(
-                  row.original,
-                  estimatedTotalM3(row.original),
-                  fmtInt,
-                ),
-            },
-            {
-              id: "ohr_avg_daily_m3",
-              header: "Avg daily calculated (m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) =>
-                estimatedAvgDailyM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                ohrVolumeCell(
-                  row.original,
-                  estimatedAvgDailyM3(row.original),
-                  fmtNum,
-                ),
-            },
-            {
-              id: "ohr_avg_hourly_m3",
-              header: "Avg hourly calculated (m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) =>
-                estimatedAvgHourlyM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                ohrVolumeCell(
-                  row.original,
-                  estimatedAvgHourlyM3(row.original),
-                  fmtNum,
-                ),
-            },
-          ] as Array<ColumnDef<WaterSystemDetailRow>>)
-        : []),
-      ...(showBulkVolumeCols
-        ? ([
-            {
-              id: "meter_total_m3",
-              header: "Total pumped (meter, m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) => meterTotalM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                bulkVolumeCell(
-                  row.original,
-                  meterTotalM3(row.original),
-                  fmtInt,
-                ),
-            },
-            {
-              id: "meter_avg_daily_m3",
-              header: "Avg daily (meter, m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) => meterAvgDailyM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                bulkVolumeCell(
-                  row.original,
-                  meterAvgDailyM3(row.original),
-                  fmtNum,
-                ),
-            },
-            {
-              id: "meter_avg_hourly_m3",
-              header: "Avg hourly (meter, m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              accessorFn: (row: WaterSystemDetailRow) => meterAvgHourlyM3(row),
-              cell: ({ row }: { row: { original: WaterSystemDetailRow } }) =>
-                bulkVolumeCell(
-                  row.original,
-                  meterAvgHourlyM3(row.original),
-                  fmtNum,
-                ),
-            },
-            {
-              accessorKey: "latest_meter_reading_end_m3",
-              header: "Latest meter reading (m³)",
-              meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
-              cell: ({ row, getValue }) =>
-                waterMeterCell(row.original, getValue(), fmtInt),
-            },
-          ] as Array<ColumnDef<WaterSystemDetailRow>>)
-        : []),
       {
-        accessorKey: "total_pump_hours_h",
-        header: "Runtime (h)",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        accessorKey: "bulk_meter_since",
+        header: "Bulk meter since",
+        meta: {
+          filterVariant: "none",
+          headerInfo: (
+            <>
+              <p className="text-[13px] font-semibold">Bulk meter cutover</p>
+              <p className="opacity-90">
+                From this date and time only bulk-meter readings count. Logs
+                before it use the pump-hours estimate. Each log is counted once.
+              </p>
+              <p className="opacity-80">
+                Set on the water system; if not set, the first meter reading is
+                used.
+              </p>
+            </>
+          ),
+        } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          row.original.bulk_meter_since ? (
+            <span
+              className="whitespace-nowrap tabular-nums"
+              title={
+                row.original.bulk_meter_since_source === "configured"
+                  ? "Configured on the water system"
+                  : "From the first meter reading (no start configured)"
+              }
+            >
+              {row.original.bulk_meter_since}
+              {row.original.bulk_meter_since_source === "first_meter_reading" ? (
+                <span className="ml-1 text-[10px] text-muted-foreground">auto</span>
+              ) : null}
+            </span>
+          ) : (
+            NA
+          ),
+      },
+    ];
+
+    if (source === "all") {
+      identity.push({
+        id: "volume_source",
+        header: "Volume source",
+        accessorFn: (row) => waterVolumeBasisLabel(row),
+        meta: {
+          filterVariant: "select",
+          filterOptions: ["Bulk meter", "Estimated (pump hours)", "Mixed"],
+        } satisfies DataGridColumnMeta,
+        cell: ({ getValue }) => {
+          const v = String(getValue());
+          return (
+            <span
+              className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${SOURCE_BADGE[v] ?? ""}`}
+            >
+              {v}
+            </span>
+          );
+        },
+      });
+      identity.push({
+        id: "total_water_m3",
+        header: "Total water (m³)",
+        accessorFn: (row) => calculatedTotalM3(row),
+        meta: {
+          filterVariant: "none",
+          headerInfo: (
+            <>
+              <p className="text-[13px] font-semibold">All sources combined</p>
+              <p className="opacity-90">
+                Bulk meter volume (from the cutover) + pump-hours estimate
+                (before it). No date is counted twice.
+              </p>
+            </>
+          ),
+        } satisfies DataGridColumnMeta,
+        cell: ({ row }) =>
+          volCell(calculatedTotalM3(row.original), fmtInt, "Meter + estimate"),
+      });
+    }
+
+    const hourly: WaterCol[] = showHourly
+      ? [
+          {
+            id: "ohr_total_m3",
+            header: "Total calculated (m³)",
+            meta: none,
+            accessorFn: (row) => estimatedTotalM3(row),
+            cell: ({ row }) =>
+              row.original.estimate_inputs_missing ? (
+                <span
+                  className="whitespace-nowrap text-xs font-medium text-amber-700 dark:text-amber-400"
+                  title="Pump hours were logged before the bulk meter, but the site has no design/actual fill time or flow rate, so they can't be estimated. Add them on the water system."
+                >
+                  Needs fill times
+                </span>
+              ) : (
+                volCell(estimatedTotalM3(row.original), fmtInt, "η × flow × pump hours (before bulk cutover)")
+              ),
+          },
+          {
+            id: "ohr_avg_daily_m3",
+            header: "Avg daily calculated (m³)",
+            meta: none,
+            accessorFn: (row) => estimatedAvgDailyM3(row),
+            cell: ({ row }) =>
+              volCell(estimatedAvgDailyM3(row.original), fmtNum, "Per estimate-era day"),
+          },
+          {
+            id: "ohr_avg_hourly_m3",
+            header: "Avg hourly calculated (m³)",
+            meta: none,
+            accessorFn: (row) => estimatedAvgHourlyM3(row),
+            cell: ({ row }) =>
+              volCell(estimatedAvgHourlyM3(row.original), fmtNum, "Per estimate-era pump hour"),
+          },
+        ]
+      : [];
+
+    const meter: WaterCol[] = showMeter
+      ? [
+          {
+            id: "meter_total_m3",
+            header: "Total pumped (meter, m³)",
+            meta: none,
+            accessorFn: (row) => meterTotalM3(row),
+            cell: ({ row }) =>
+              volCell(meterTotalM3(row.original), fmtInt, "Bulk meter intervals from the cutover"),
+          },
+          {
+            id: "meter_avg_daily_m3",
+            header: "Avg daily (meter, m³)",
+            meta: none,
+            accessorFn: (row) => meterAvgDailyM3(row),
+            cell: ({ row }) =>
+              volCell(meterAvgDailyM3(row.original), fmtNum, "Per metered day"),
+          },
+          {
+            id: "meter_avg_hourly_m3",
+            header: "Avg hourly (meter, m³)",
+            meta: none,
+            accessorFn: (row) => meterAvgHourlyM3(row),
+            cell: ({ row }) =>
+              volCell(meterAvgHourlyM3(row.original), fmtNum, "Per metered pump hour"),
+          },
+          {
+            accessorKey: "latest_meter_reading_end_m3",
+            header: "Latest meter reading (m³)",
+            meta: none,
+            cell: ({ getValue }) =>
+              volCell(getValue() as number | null, fmtInt, "Cumulative reading at the last metered log"),
+          },
+          {
+            accessorKey: "unmetered_bulk_logs",
+            header: "Logs missing reading",
+            meta: {
+              filterVariant: "none",
+              headerInfo: (
+                <>
+                  <p className="text-[13px] font-semibold">Data quality</p>
+                  <p className="opacity-90">
+                    Logs on/after the bulk cutover without a meter reading.
+                    Their pump hours count, but no volume is added — they are
+                    not estimated, so the meter is never mixed with estimates.
+                  </p>
+                </>
+              ),
+            } satisfies DataGridColumnMeta,
+            cell: ({ getValue }) => {
+              const n = Number(getValue() ?? 0);
+              return n > 0 ? (
+                <span className="font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                  {fmtInt(n)}
+                </span>
+              ) : (
+                <span className="tabular-nums text-muted-foreground">0</span>
+              );
+            },
+          },
+        ]
+      : [];
+
+    // Runtime columns follow the selected source's era.
+    const hoursKey =
+      source === "bulk" ? "bulk_pump_hours_h" : source === "hourly" ? "hourly_pump_hours_h" : "total_pump_hours_h";
+    const daysKey =
+      source === "bulk" ? "bulk_days_logged" : source === "hourly" ? "hourly_days_logged" : "days_logged";
+    const logsKey =
+      source === "bulk" ? "bulk_logs_count" : source === "hourly" ? "hourly_logs_count" : "logs_count";
+    const runtime: WaterCol[] = [
+      {
+        accessorKey: hoursKey,
+        header: source === "all" ? "Runtime (h)" : source === "bulk" ? "Runtime, meter era (h)" : "Runtime, estimate era (h)",
+        meta: none,
         cell: ({ getValue }) => waterNumCell(getValue(), fmtNum),
       },
       {
-        accessorKey: "days_logged",
-        header: "Days logged",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        accessorKey: daysKey,
+        header: source === "all" ? "Days logged" : source === "bulk" ? "Days metered" : "Days estimated",
+        meta: none,
         cell: ({ getValue }) => waterNumCell(getValue(), fmtInt),
       },
       {
-        accessorKey: "logs_count",
+        accessorKey: logsKey,
         header: "Log entries",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        meta: none,
         cell: ({ getValue }) => waterNumCell(getValue(), fmtInt),
       },
-      {
+    ];
+    if (source === "all") {
+      runtime.push({
         accessorKey: "avg_hours_per_day_logged",
         header: "Avg runtime / day (h)",
-        meta: { filterVariant: "none" } satisfies DataGridColumnMeta,
+        meta: none,
         cell: ({ getValue }) => waterNumCell(getValue(), fmtNum),
-      },
-    ],
-    [showOhrVolumeCols, showBulkVolumeCols],
-  );
+      });
+    }
+
+    return [...identity, ...hourly, ...meter, ...runtime];
+  }, [source, showHourly, showMeter]);
 }
 
 export function useSolarAnalysisColumns(): Array<
@@ -605,7 +688,7 @@ export function waterSystemDetailFields(row: WaterSystemDetailRow) {
   const text = (v: unknown) => (isBlank(v) ? "N/A" : String(v));
   const num = (v: unknown, fmt: (v: unknown) => string, unit = "") =>
     isBlank(v) ? "N/A" : unit ? `${fmt(v)} ${unit}` : fmt(v);
-  const ohrFields = row.bulk_meter_installed
+  const ohrFields = !hasHourlyData(row)
     ? []
     : [
         {
@@ -621,9 +704,15 @@ export function waterSystemDetailFields(row: WaterSystemDetailRow) {
           value: num(estimatedAvgHourlyM3(row), fmtNum, "m³"),
         },
       ];
-  const meterFields = !row.bulk_meter_installed
+  const meterFields = !hasMeterData(row)
     ? []
     : [
+        {
+          label: "Bulk meter since",
+          value: row.bulk_meter_since
+            ? `${row.bulk_meter_since}${row.bulk_meter_since_source === "first_meter_reading" ? " (first reading)" : ""}`
+            : "N/A",
+        },
         {
           label: "Total pumped (meter)",
           value: num(meterTotalM3(row), fmtInt, "m³"),

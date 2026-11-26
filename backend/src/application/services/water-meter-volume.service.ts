@@ -11,6 +11,7 @@ import {
   getCalendarYear,
 } from '../../domain/utils/date.util';
 import { WaterEnergyLoggingDaily } from '../../infrastructure/database/entities/water-energy-logging-daily.entity';
+import { wallClockKey } from '../../domain/utils/water-source.util';
 
 export class MeterReadingOrderError extends Error {
   readonly code = 'meter_reading_order';
@@ -84,9 +85,20 @@ export class WaterMeterVolumeService {
     logDate: Date;
     pumpEndTime?: string | null;
     excludeRecordId?: string | null;
+    /** Configured bulk-meter start; when set it decides, not the meter chain. */
+    bulkMeterSinceDate?: Date | string | null;
+    bulkMeterSinceTime?: string | null;
   }): Promise<boolean> {
     if (!options.bulkMeterInstalled) {
       return false;
+    }
+    const cutover = wallClockKey(
+      options.bulkMeterSinceDate,
+      options.bulkMeterSinceTime,
+    );
+    if (cutover) {
+      const key = wallClockKey(options.logDate, options.pumpEndTime);
+      return key !== null && key >= cutover;
     }
     const earliest = await this.getEarliestSubmittedMeterLog(
       options.waterSystemId,
@@ -102,6 +114,37 @@ export class WaterMeterVolumeService {
     candidate.createdAt = new Date(0);
     candidate.id = '';
     return this.compareWaterLogSort(candidate, earliest) >= 0;
+  }
+
+  /**
+   * Earliest submitted metered log per site as a wall-clock key
+   * ("YYYY-MM-DD HH:MM:SS", pump start → end) — the fallback bulk cutover.
+   */
+  async earliestMeterLogKeys(
+    waterSystemIds: string[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (!waterSystemIds.length) return out;
+    const rows = await this.waterLogRepo
+      .createQueryBuilder('log')
+      .select('log.water_system_id', 'sid')
+      .addSelect(
+        `MIN(TO_CHAR(log.log_date, 'YYYY-MM-DD') || ' ' || TO_CHAR(COALESCE(log.pump_start_time, log.pump_end_time, TIME '00:00'), 'HH24:MI:SS'))`,
+        'k',
+      )
+      .where('log.water_system_id IN (:...ids)', { ids: waterSystemIds })
+      .andWhere('log.meter_reading_end IS NOT NULL')
+      .andWhere('(log.status IS NULL OR log.status IN (:...statuses))', {
+        statuses: [
+          SUBMISSION_STATUS_SUBMITTED,
+          SUBMISSION_STATUS_ACCEPTED,
+          SUBMISSION_STATUS_REVERTED_BACK,
+        ],
+      })
+      .groupBy('log.water_system_id')
+      .getRawMany<{ sid: string; k: string | null }>();
+    for (const r of rows) if (r.k) out.set(String(r.sid), r.k);
+    return out;
   }
 
   async getEarliestSubmittedMeterLog(

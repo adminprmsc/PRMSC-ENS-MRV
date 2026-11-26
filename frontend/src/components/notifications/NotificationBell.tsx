@@ -8,7 +8,7 @@ import { Bell, CheckCheck, History } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ROLE } from "@/constants/roles";
-import { hqRoutes, tehsilRoutes } from "@/constants/routes";
+import { hqRoutes, releaseRoutes, tehsilRoutes } from "@/constants/routes";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { roundNumbersInText } from "@/lib/roundNumbersInText";
@@ -30,6 +30,9 @@ export function notificationLink(n: AppNotification, role: string | undefined): 
   if (n.type === NOTIFICATION_TYPE_ENTRY_CHANGE && (isHq || isTehsil)) {
     const base = isHq ? hqRoutes.changeHistory : tehsilRoutes.changeHistory;
     return n.entity_id ? `${base}?highlight=${encodeURIComponent(n.entity_id)}` : base;
+  }
+  if (n.type === "release_note" && n.entity_id) {
+    return releaseRoutes.note(n.entity_id);
   }
   if (n.submission_id) {
     if (isHq) return hqRoutes.waterSubmissionDetails(n.submission_id);

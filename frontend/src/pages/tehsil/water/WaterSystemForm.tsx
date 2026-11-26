@@ -1,3 +1,4 @@
+import { BulkCutoverFields } from "../../../components/water/BulkCutoverFields";
 import { useState, useMemo, useEffect, type ChangeEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { tehsilRoutes } from "../../../constants/routes";
@@ -132,6 +133,8 @@ const WaterSystemForm = () => {
     height_to_ohr: "",
     pump_flow_rate: "",
     bulk_meter_installed: true,
+    bulk_meter_since_date: "",
+    bulk_meter_since_time: "",
     ohr_tank_capacity: "",
     ohr_fill_required: "",
     pump_capacity: "",
@@ -216,6 +219,15 @@ const WaterSystemForm = () => {
       }
     }
   };
+
+  const setField = (
+    field:
+      | "bulk_meter_since_date"
+      | "bulk_meter_since_time"
+      | "ohr_fill_required"
+      | "time_to_fill",
+    value: string,
+  ) => setFormData((prev) => ({ ...prev, [field]: value }));
 
   const handleChange = async (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -680,6 +692,20 @@ const WaterSystemForm = () => {
                       </Button>
                     </div>
                   </div>
+
+                  {formData.bulk_meter_installed ? (
+                    <BulkCutoverFields
+                      date={formData.bulk_meter_since_date}
+                      time={formData.bulk_meter_since_time}
+                      designFill={formData.ohr_fill_required}
+                      actualFill={formData.time_to_fill}
+                      onDate={(e) => setField("bulk_meter_since_date", e.target.value)}
+                      onTime={(e) => setField("bulk_meter_since_time", e.target.value)}
+                      onDesignFill={(e) => setField("ohr_fill_required", e.target.value)}
+                      onActualFill={(e) => setField("time_to_fill", e.target.value)}
+                      disabled={loading}
+                    />
+                  ) : null}
 
                   {!formData.bulk_meter_installed ? (
                     <FieldGroup className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

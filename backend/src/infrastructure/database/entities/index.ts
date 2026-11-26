@@ -19,6 +19,8 @@ export { LocationVillage } from './location-village.entity';
 export { LocationSettlement } from './location-settlement.entity';
 export { EntryChangeLog } from './entry-change-log.entity';
 export { LocationPopulationLog } from './location-population-log.entity';
+export { ReleaseNoteReceipt } from './release-note-receipt.entity';
+export { WaterBulkCutoverLog } from './water-bulk-cutover-log.entity';
 
 import { Role } from './role.entity';
 import { User } from './user.entity';
@@ -41,6 +43,8 @@ import { LocationVillage } from './location-village.entity';
 import { LocationSettlement } from './location-settlement.entity';
 import { EntryChangeLog } from './entry-change-log.entity';
 import { LocationPopulationLog } from './location-population-log.entity';
+import { ReleaseNoteReceipt } from './release-note-receipt.entity';
+import { WaterBulkCutoverLog } from './water-bulk-cutover-log.entity';
 
 export const ALL_ENTITIES = [
   Role,
@@ -64,4 +68,6 @@ export const ALL_ENTITIES = [
   LocationSettlement,
   EntryChangeLog,
   LocationPopulationLog,
+  ReleaseNoteReceipt,
+  WaterBulkCutoverLog,
 ];

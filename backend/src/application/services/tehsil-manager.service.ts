@@ -44,6 +44,9 @@ import { SolarSystem } from '../../infrastructure/database/entities/solar-system
 import { SystemMeter } from '../../infrastructure/database/entities/system-meter.entity';
 import { SolarEnergyLoggingMonthly } from '../../infrastructure/database/entities/solar-energy-logging-monthly.entity';
 import { Notification } from '../../infrastructure/database/entities/notification.entity';
+import { WaterBulkCutoverLog } from '../../infrastructure/database/entities/water-bulk-cutover-log.entity';
+import { cutoverImpact } from '../../domain/utils/water-cutover-impact.util';
+import { wallClockKey } from '../../domain/utils/water-source.util';
 import { User } from '../../infrastructure/database/entities/user.entity';
 import { UserWaterSystem } from '../../infrastructure/database/entities/user-water-system.entity';
 import { UserManagerOperation } from '../../infrastructure/database/entities/user-manager-operation.entity';
@@ -92,6 +95,8 @@ export class TehsilManagerService {
     private readonly calibrationCertRepo: Repository<WaterSystemCalibrationCertificate>,
     @InjectRepository(WaterEnergyLoggingDaily)
     private readonly waterDailyRepo: Repository<WaterEnergyLoggingDaily>,
+    @InjectRepository(WaterBulkCutoverLog)
+    private readonly cutoverLogRepo: Repository<WaterBulkCutoverLog>,
     @InjectRepository(SolarSystem)
     private readonly solarSystemRepo: Repository<SolarSystem>,
     @InjectRepository(SystemMeter)
@@ -490,6 +495,67 @@ export class TehsilManagerService {
     system: WaterSystem | SolarSystem,
   ): Promise<SystemMeter | null> {
     return this.operatorHelpers.getActiveMeter(system, this.systemMeterRepo);
+  }
+
+  /**
+   * Parse the bulk-meter start (Pakistan wall-clock date + time) from a
+   * water-system payload. `undefined` = not sent (leave unchanged);
+   * `null` = cleared (fall back to the first meter reading).
+   */
+  private parseBulkMeterSince(data: Record<string, unknown>):
+    | {
+        ok: true;
+        value: { date: Date | null; time: string | null } | undefined;
+      }
+    | { ok: false; message: string } {
+    if (
+      !('bulk_meter_since_date' in data) &&
+      !('bulk_meter_since_time' in data)
+    ) {
+      return { ok: true, value: undefined };
+    }
+    const rawDate = this.coerceString(data.bulk_meter_since_date).trim();
+    const rawTime = this.coerceString(data.bulk_meter_since_time).trim();
+    if (!rawDate) {
+      if (rawTime) {
+        return {
+          ok: false,
+          message: 'Bulk meter start time needs a start date',
+        };
+      }
+      return { ok: true, value: { date: null, time: null } };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return { ok: false, message: 'Bulk meter start date must be YYYY-MM-DD' };
+    }
+    const d = new Date(`${rawDate}T00:00:00.000Z`);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== rawDate) {
+      return {
+        ok: false,
+        message: 'Bulk meter start date is not a valid date',
+      };
+    }
+    const tm = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(rawTime || '00:00');
+    if (
+      !tm ||
+      Number(tm[1]) > 23 ||
+      Number(tm[2]) > 59 ||
+      Number(tm[3] ?? 0) > 59
+    ) {
+      return {
+        ok: false,
+        message: 'Bulk meter start time must be HH:MM (24-hour)',
+      };
+    }
+    const time = `${tm[1].padStart(2, '0')}:${tm[2]}:${tm[3] ?? '00'}`;
+    const pkNow = new Date(Date.now() + 5 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 19)
+      .replace('T', ' ');
+    if (`${rawDate} ${time}` > pkNow) {
+      return { ok: false, message: 'Bulk meter start cannot be in the future' };
+    }
+    return { ok: true, value: { date: d, time } };
   }
 
   /** Green meter dates can't be in the future (Pakistan calendar day). */
@@ -1291,6 +1357,12 @@ export class TehsilManagerService {
       timeToFill: this.toFloatOrNone(data.time_to_fill),
       createdBy: jwt.sub,
     });
+    const since = this.parseBulkMeterSince(data);
+    if (!since.ok) return { statusCode: 400, body: { message: since.message } };
+    if (since.value && newSystem.bulkMeterInstalled) {
+      newSystem.bulkMeterSinceDate = since.value.date;
+      newSystem.bulkMeterSinceTime = since.value.time;
+    }
 
     const meterPayload = this.currentMeterPayload(data, MeterType.TUBEWELL);
     const validation = this.validateWaterSystemMeterLogic({
@@ -1670,6 +1742,67 @@ export class TehsilManagerService {
       }
       system.bulkMeterInstalled = bmi;
     }
+    const since = this.parseBulkMeterSince(data);
+    if (!since.ok) return { statusCode: 400, body: { message: since.message } };
+    let cutoverAudit: WaterBulkCutoverLog | null = null;
+    let cutoverWarning: string | null = null;
+    if (since.value) {
+      const previousSince = wallClockKey(
+        system.bulkMeterSinceDate,
+        system.bulkMeterSinceTime,
+      );
+      const nextSince = wallClockKey(since.value.date, since.value.time);
+      if (previousSince !== nextSince) {
+        // Protect measured data: a start AFTER existing meter readings would
+        // make reports ignore them. Hours-only logs after it are only flagged.
+        const existing = await this.waterDailyRepo
+          .createQueryBuilder('log')
+          .select([
+            'log.id',
+            'log.logDate',
+            'log.pumpStartTime',
+            'log.pumpEndTime',
+            'log.meterReadingEnd',
+          ])
+          .where('log.water_system_id = :id', { id: system.id })
+          .andWhere('(log.status IS NULL OR log.status != :rej)', {
+            rej: SUBMISSION_STATUS_REJECTED,
+          })
+          .getMany();
+        const impact = cutoverImpact(
+          existing,
+          since.value.date,
+          since.value.time,
+        );
+        if (system.bulkMeterInstalled && impact.ignoredMeterReadings.length) {
+          const list = impact.ignoredMeterReadings.slice(0, 5).join(', ');
+          return {
+            statusCode: 409,
+            body: {
+              message: `This start is after ${impact.ignoredMeterReadings.length} existing meter reading(s) (${list}${impact.ignoredMeterReadings.length > 5 ? ', …' : ''}). They would stop counting. Choose a start on or before ${impact.ignoredMeterReadings[0]}.`,
+              error: 'bulk_meter_start_after_readings',
+              earliest_reading: impact.ignoredMeterReadings[0],
+              ignored_readings: impact.ignoredMeterReadings,
+            },
+          };
+        }
+        if (impact.newlyUnmetered > 0) {
+          cutoverWarning = `${impact.newlyUnmetered} log(s) on or after the new start have no meter reading — they count no water until a reading is added.`;
+        }
+        const actor = await this.loadActor(jwt);
+        cutoverAudit = this.cutoverLogRepo.create({
+          id: uuidv4(),
+          waterSystemId: String(system.id),
+          previousSince,
+          newSince: nextSince,
+          newlyUnmeteredLogs: impact.newlyUnmetered,
+          performedBy: actor?.id ?? jwt.sub ?? null,
+          performedByName: actor?.name ?? null,
+        });
+      }
+      system.bulkMeterSinceDate = since.value.date;
+      system.bulkMeterSinceTime = since.value.time;
+    }
 
     const activeMeter = await this.getActiveMeter(system);
     const meterPayload = this.currentMeterPayload(data, MeterType.TUBEWELL, {
@@ -1747,12 +1880,16 @@ export class TehsilManagerService {
 
     try {
       await this.waterSystemRepo.save(system);
+      if (cutoverAudit) await this.cutoverLogRepo.save(cutoverAudit);
       return {
         statusCode: 200,
         body: {
-          message: 'Water system updated successfully',
+          message: cutoverWarning
+            ? `Water system updated. ${cutoverWarning}`
+            : 'Water system updated successfully',
           id: String(system.id),
           updated_at: system.updatedAt?.toISOString() ?? null,
+          ...(cutoverWarning ? { warning: cutoverWarning } : {}),
         },
       };
     } catch (e) {
@@ -1807,6 +1944,12 @@ export class TehsilManagerService {
         height_to_ohr: system.heightToOhr,
         pump_flow_rate: system.pumpFlowRate,
         bulk_meter_installed: system.bulkMeterInstalled,
+        bulk_meter_since_date: system.bulkMeterSinceDate
+          ? this.isoDate(system.bulkMeterSinceDate)
+          : null,
+        bulk_meter_since_time: system.bulkMeterSinceTime
+          ? String(system.bulkMeterSinceTime).slice(0, 5)
+          : null,
         ohr_tank_capacity: system.ohrTankCapacity,
         ohr_fill_required: system.ohrFillRequired,
         pump_capacity: pumpCapacityKwFromHp(system.pumpHorsePower),

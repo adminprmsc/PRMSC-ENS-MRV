@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import {
   METER_TYPE_TUBEWELL,
   SUBMISSION_STATUS_REJECTED,
@@ -21,6 +21,12 @@ import { SystemMeter } from '../../infrastructure/database/entities/system-meter
 import { UserWaterSystem } from '../../infrastructure/database/entities/user-water-system.entity';
 import { WaterEnergyLoggingDaily } from '../../infrastructure/database/entities/water-energy-logging-daily.entity';
 import { WaterSystem } from '../../infrastructure/database/entities/water-system.entity';
+import {
+  logSource,
+  resolveCutoverKey,
+  summarizeBySource,
+  wallClockKey,
+} from '../../domain/utils/water-source.util';
 import { WaterMeterVolumeService } from './water-meter-volume.service';
 
 @Injectable()
@@ -541,9 +547,14 @@ export class DashboardService {
     }
 
     const logs = await qb.getMany();
+    const cutovers = await this.bulkCutovers(logs);
 
     if (period.isRange) {
-      const monthlyTotals = this.aggregateMonthlyTotals(logs, period.start);
+      const monthlyTotals = this.aggregateMonthlyTotals(
+        logs,
+        cutovers,
+        period.start,
+      );
       return monthBucketsForPeriod(period).map((b) => ({
         year: b.year,
         month: b.month,
@@ -551,7 +562,7 @@ export class DashboardService {
       }));
     }
 
-    const monthlyTotals = this.aggregateMonthlyTotals(logs);
+    const monthlyTotals = this.aggregateMonthlyTotals(logs, cutovers);
 
     if (year && month) {
       return [
@@ -593,8 +604,43 @@ export class DashboardService {
    * Sum interval volumes per calendar month. When `countFrom` is set, logs
    * before that day still seed meter baselines but are not counted.
    */
+  /** Bulk cutover key per site that appears in `logs` (null = never bulk). */
+  private async bulkCutovers(
+    logs: WaterEnergyLoggingDaily[],
+  ): Promise<Map<string, string | null>> {
+    const ids = [...new Set(logs.map((l) => String(l.waterSystemId)))];
+    const out = new Map<string, string | null>();
+    if (!ids.length) return out;
+    const [systems, earliest] = await Promise.all([
+      this.waterSystemRepo.find({
+        where: { id: In(ids) },
+        select: {
+          id: true,
+          bulkMeterInstalled: true,
+          bulkMeterSinceDate: true,
+          bulkMeterSinceTime: true,
+        },
+      }),
+      this.waterMeterVolume.earliestMeterLogKeys(ids),
+    ]);
+    for (const ws of systems) {
+      const sid = String(ws.id);
+      out.set(
+        sid,
+        resolveCutoverKey({
+          bulkMeterInstalled: Boolean(ws.bulkMeterInstalled),
+          bulkMeterSinceDate: ws.bulkMeterSinceDate,
+          bulkMeterSinceTime: ws.bulkMeterSinceTime,
+          earliestMeterLogKey: earliest.get(sid) ?? null,
+        }),
+      );
+    }
+    return out;
+  }
+
   private aggregateMonthlyTotals(
     logs: WaterEnergyLoggingDaily[],
+    cutovers: Map<string, string | null>,
     countFrom?: string | null,
   ): Map<string, number> {
     const bySystem = new Map<string, WaterEnergyLoggingDaily[]>();
@@ -607,9 +653,12 @@ export class DashboardService {
     }
 
     const monthly = new Map<string, number>();
-    for (const systemLogs of bySystem.values()) {
+    for (const [sid, systemLogs] of bySystem) {
       const volumes = this.waterMeterVolume.computeIntervalVolumes(systemLogs);
+      const cutover = cutovers.get(sid) ?? null;
       for (const log of systemLogs) {
+        // Meter volume counts only from the site's bulk cutover onward.
+        if (logSource(log, cutover) !== 'bulk') continue;
         const vol = volumes[String(log.id)];
         if (vol != null && log.logDate) {
           if (countFrom) {
@@ -880,62 +929,35 @@ export class DashboardService {
     }
     const allLogs = await logsQb.getMany();
 
-    const waterBySystem =
-      this.waterMeterVolume.aggregateSystemEffectiveVolumesInRange(allLogs, {
-        startDate: rangeStart,
-        endDateExclusive: rangeEndExclusive,
-      });
-    const meterBySystem =
-      this.waterMeterVolume.aggregateSystemMeterSnapshotsInRange(allLogs, {
-        startDate: rangeStart,
-        endDateExclusive: rangeEndExclusive,
-      });
-
-    const hoursQb = this.waterLogRepo
-      .createQueryBuilder('log')
-      .select('log.water_system_id', 'water_system_id')
-      .addSelect(
-        'SUM(COALESCE(log.pump_operating_hours, 0))',
-        'total_pump_hours',
-      )
-      .addSelect('COUNT(DISTINCT log.log_date)', 'days_logged')
-      .addSelect('COUNT(log.id)', 'logs_count')
-      .where('log.water_system_id IN (:...ids)', { ids: systemIds })
-      .andWhere(this.logNotRejectedQb('log'))
-      .groupBy('log.water_system_id');
-
-    if (rangeStart) {
-      hoursQb.andWhere('log.log_date >= :start', { start: rangeStart });
+    // Fallback bulk cutover per site = earliest submitted metered log.
+    const earliestMeter =
+      await this.waterMeterVolume.earliestMeterLogKeys(systemIds);
+    const logsBySystem = new Map<string, WaterEnergyLoggingDaily[]>();
+    for (const log of allLogs) {
+      const sid = String(log.waterSystemId);
+      const list = logsBySystem.get(sid) ?? [];
+      list.push(log);
+      logsBySystem.set(sid, list);
     }
-    if (rangeEndExclusive) {
-      hoursQb.andWhere('log.log_date < :end', { end: rangeEndExclusive });
-    }
-
-    const hoursRows = await hoursQb.getRawMany<{
-      water_system_id: string;
-      total_pump_hours: string;
-      days_logged: string;
-      logs_count: string;
-    }>();
-    const hoursBySystem = new Map(
-      hoursRows.map((r) => [String(r.water_system_id), r]),
-    );
 
     const rows = [];
     for (const system of systems) {
       const sid = String(system.id);
-      const water = waterBySystem[sid] ?? 0;
-      const meter = meterBySystem[sid] ?? {
-        latest_meter_reading_end: null,
-        period_meter_net_m3: null,
-      };
-      const stats = hoursBySystem.get(sid);
-      const hours = stats ? parseFloat(stats.total_pump_hours || '0') : 0;
-      const dLogged = stats ? parseInt(stats.days_logged || '0', 10) : 0;
-      const lCount = stats ? parseInt(stats.logs_count || '0', 10) : 0;
-      if (lCount === 0) {
-        continue;
-      }
+      const systemLogs = logsBySystem.get(sid) ?? [];
+      if (!systemLogs.length) continue;
+
+      const bulkMeter = Boolean(system.bulkMeterInstalled);
+      const configuredCutover = wallClockKey(
+        system.bulkMeterSinceDate,
+        system.bulkMeterSinceTime,
+      );
+      const cutoverKey = resolveCutoverKey({
+        bulkMeterInstalled: bulkMeter,
+        bulkMeterSinceDate: system.bulkMeterSinceDate,
+        bulkMeterSinceTime: system.bulkMeterSinceTime,
+        earliestMeterLogKey: earliestMeter.get(sid) ?? null,
+      });
+
       // Estimated water = η × Q × t, with η = design fill time / actual fill time.
       const designFill = Number(system.ohrFillRequired);
       const actualFill = Number(system.timeToFill);
@@ -943,20 +965,40 @@ export class DashboardService {
       const efficiency =
         designFill > 0 && actualFill > 0 ? designFill / actualFill : null;
       const flowRate = flow > 0 ? flow : null;
-      const bulkMeter = Boolean(system.bulkMeterInstalled);
-      const estimated =
-        efficiency != null && flowRate != null
-          ? efficiency * flowRate * hours
-          : null;
-      const calculatedTotalM3 = bulkMeter ? water : estimated;
-      const calculatedAvgDailyM3 =
-        calculatedTotalM3 != null && dLogged > 0
-          ? calculatedTotalM3 / dLogged
-          : null;
-      const calculatedAvgHourlyM3 =
-        calculatedTotalM3 != null && hours > 0
-          ? calculatedTotalM3 / hours
-          : null;
+
+      // One source per log: meter at/after the cutover, estimate before it.
+      const src = summarizeBySource(systemLogs, {
+        cutoverKey,
+        intervalVolumes:
+          this.waterMeterVolume.computeIntervalVolumes(systemLogs),
+        efficiency,
+        flowRate,
+      });
+      // Snapshot from metered bulk-era logs only (an unmetered log there
+      // must not blank the latest reading).
+      const bulkEraLogs = systemLogs.filter(
+        (l) => logSource(l, cutoverKey) === 'bulk' && l.meterReadingEnd != null,
+      );
+      const meter = bulkEraLogs.length
+        ? (this.waterMeterVolume.aggregateSystemMeterSnapshotsInRange(
+            bulkEraLogs,
+            { startDate: rangeStart, endDateExclusive: rangeEndExclusive },
+          )[sid] ?? null)
+        : null;
+
+      const meterM3 = src.bulk.logs > 0 ? src.bulk.m3 : null;
+      const estimatedM3 = src.hourly.logs > 0 ? src.hourly.m3 : null;
+      const calculatedTotalM3 =
+        meterM3 == null && estimatedM3 == null
+          ? null
+          : (meterM3 ?? 0) + (estimatedM3 ?? 0);
+      const volumeBasis =
+        src.bulk.logs > 0 && src.hourly.logs > 0
+          ? 'mixed'
+          : src.bulk.logs > 0
+            ? 'bulk_meter'
+            : 'estimated';
+
       rows.push({
         water_system_id: system.id,
         unique_identifier: system.uniqueIdentifier,
@@ -968,25 +1010,59 @@ export class DashboardService {
           ? system.startOfOperation.toISOString().slice(0, 10)
           : null,
         bulk_meter_installed: bulkMeter,
-        /** Sum of meter interval volumes in scope (bulk meter sites only). */
-        total_water_pumped_m3: bulkMeter ? water : null,
-        latest_meter_reading_end_m3: bulkMeter
-          ? meter.latest_meter_reading_end
-          : null,
-        period_meter_net_m3: bulkMeter ? meter.period_meter_net_m3 : null,
-        total_pump_hours_h: hours,
-        days_logged: dLogged,
-        logs_count: lCount,
-        avg_m3_per_hour: bulkMeter && hours > 0 ? water / hours : null,
+        /** "YYYY-MM-DD HH:MM" from which only meter readings count. */
+        bulk_meter_since: cutoverKey ? cutoverKey.slice(0, 16) : null,
+        bulk_meter_since_source: !cutoverKey
+          ? null
+          : configuredCutover
+            ? 'configured'
+            : 'first_meter_reading',
+        /** Metered volume of logs at/after the cutover. */
+        total_water_pumped_m3: meterM3,
+        latest_meter_reading_end_m3: meter?.latest_meter_reading_end ?? null,
+        period_meter_net_m3: meter?.period_meter_net_m3 ?? null,
+        total_pump_hours_h: src.hours,
+        days_logged: src.days,
+        logs_count: src.logs,
+        bulk_pump_hours_h: src.bulk.hours,
+        bulk_days_logged: src.bulk.days,
+        bulk_logs_count: src.bulk.logs,
+        /** Bulk-era logs with no meter reading — no volume counted. */
+        unmetered_bulk_logs: src.bulk.unmeteredLogs,
+        hourly_pump_hours_h: src.hourly.hours,
+        hourly_days_logged: src.hourly.days,
+        hourly_logs_count: src.hourly.logs,
+        // Meter averages use meter-era hours/days only.
+        avg_m3_per_hour:
+          meterM3 != null && src.bulk.hours > 0
+            ? meterM3 / src.bulk.hours
+            : null,
         avg_m3_per_day_logged:
-          bulkMeter && dLogged > 0 ? water / dLogged : null,
-        avg_hours_per_day_logged: dLogged > 0 ? hours / dLogged : null,
+          meterM3 != null && src.bulk.days > 0 ? meterM3 / src.bulk.days : null,
+        avg_hours_per_day_logged: src.days > 0 ? src.hours / src.days : null,
         pumping_efficiency: efficiency,
-        estimated_water_m3: bulkMeter ? null : estimated,
+        /** η × Q × hours for logs before the cutover (or all, if no meter). */
+        estimated_water_m3: estimatedM3,
+        /** Estimate-era logs exist but η or flow rate is missing. */
+        estimate_inputs_missing: src.hourly.logs > 0 && estimatedM3 == null,
+        estimated_avg_daily_m3:
+          estimatedM3 != null && src.hourly.days > 0
+            ? estimatedM3 / src.hourly.days
+            : null,
+        estimated_avg_hourly_m3:
+          estimatedM3 != null && src.hourly.hours > 0
+            ? estimatedM3 / src.hourly.hours
+            : null,
         calculated_total_m3: calculatedTotalM3,
-        calculated_avg_daily_m3: calculatedAvgDailyM3,
-        calculated_avg_hourly_m3: calculatedAvgHourlyM3,
-        volume_basis: bulkMeter ? 'bulk_meter' : 'estimated',
+        calculated_avg_daily_m3:
+          calculatedTotalM3 != null && src.days > 0
+            ? calculatedTotalM3 / src.days
+            : null,
+        calculated_avg_hourly_m3:
+          calculatedTotalM3 != null && src.hours > 0
+            ? calculatedTotalM3 / src.hours
+            : null,
+        volume_basis: volumeBasis,
       });
     }
 

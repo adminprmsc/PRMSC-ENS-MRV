@@ -80,6 +80,12 @@ export const authRoutes = {
   resetPassword: "/reset-password",
 } as const;
 
+/** Release notes & feature training (all portal roles). */
+export const releaseRoutes = {
+  whatsNew: "/whats-new",
+  note: (id: string) => `/whats-new#${encodeURIComponent(id)}`,
+} as const;
+
 /** Authenticated account flows (all portal roles) */
 export const accountRoutes = {
   changePassword: "/account/change-password",

@@ -1,3 +1,4 @@
+import { BulkCutoverFields } from "../../../../components/water/BulkCutoverFields";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -125,6 +126,8 @@ export default function WaterSystemEditPage() {
     height_to_ohr: "",
     pump_flow_rate: "",
     bulk_meter_installed: true,
+    bulk_meter_since_date: "",
+    bulk_meter_since_time: "",
     ohr_tank_capacity: "",
     ohr_fill_required: "",
     pump_capacity: "",
@@ -201,6 +204,8 @@ export default function WaterSystemEditPage() {
         height_to_ohr: String(detail.height_to_ohr ?? ""),
         pump_flow_rate: String(detail.pump_flow_rate ?? ""),
         bulk_meter_installed: Boolean(detail.bulk_meter_installed),
+        bulk_meter_since_date: String(detail.bulk_meter_since_date ?? ""),
+        bulk_meter_since_time: String(detail.bulk_meter_since_time ?? ""),
         ohr_tank_capacity: String(detail.ohr_tank_capacity ?? ""),
         ohr_fill_required: String(detail.ohr_fill_required ?? ""),
         pump_capacity: pumpCapacityKwInputValue(detail.pump_horse_power),
@@ -288,7 +293,7 @@ export default function WaterSystemEditPage() {
         settlement,
         ...rest
       } = formData;
-      await updateWaterSystem(systemId, {
+      const res = (await updateWaterSystem(systemId, {
         tehsil: system?.tehsil,
         village: system?.village,
         settlement: settlement.trim(),
@@ -302,7 +307,12 @@ export default function WaterSystemEditPage() {
           update_mode: meterUpdateMode,
         },
         status: "submitted",
-      });
+      })) as { warning?: string } | undefined;
+      if (res?.warning) {
+        // Saved, but some logs now need a meter reading — keep the user here.
+        setToast({ message: `✅ Saved. ${res.warning}`, type: "success" });
+        return;
+      }
       setToast({ message: "✅ Water system updated!", type: "success" });
       setTimeout(() => navigate(tehsilRoutes.waterSystems), 900);
     } catch (e: unknown) {
@@ -970,6 +980,20 @@ export default function WaterSystemEditPage() {
                       </div>
                     </div>
                   </div>
+
+                  {formData.bulk_meter_installed ? (
+                    <BulkCutoverFields
+                      date={formData.bulk_meter_since_date}
+                      time={formData.bulk_meter_since_time}
+                      designFill={formData.ohr_fill_required}
+                      actualFill={formData.time_to_fill}
+                      onDate={onChange("bulk_meter_since_date")}
+                      onTime={onChange("bulk_meter_since_time")}
+                      onDesignFill={onChange("ohr_fill_required")}
+                      onActualFill={onChange("time_to_fill")}
+                      disabled={saving || !isResolved}
+                    />
+                  ) : null}
 
                   {!formData.bulk_meter_installed ? (
                     <div className="grid gap-4 md:grid-cols-2">

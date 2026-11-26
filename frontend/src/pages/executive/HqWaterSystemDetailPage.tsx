@@ -35,12 +35,17 @@ import {
 import { formatPumpCapacityKw } from "@/utils/waterPump";
 import type { WaterSystemDetailRow } from "./executiveAnalysisTypes";
 import {
+  calculatedAvgDailyM3,
+  calculatedAvgHourlyM3,
+  calculatedTotalM3,
   estimatedAvgDailyM3,
   estimatedAvgHourlyM3,
   estimatedTotalM3,
+  hasMeterData,
   meterAvgDailyM3,
   meterAvgHourlyM3,
   meterTotalM3,
+  waterVolumeBasisLabel,
 } from "./waterAnalysisVolume";
 import type { HqSubmissionRow, HqSubmissionScope } from "./hqSubmissionTypes";
 import { submissionLogDateKey } from "./hqSubmissionTypes";
@@ -459,42 +464,35 @@ export default function HqWaterSystemDetailPage() {
           {metrics ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                label={
-                  metrics.bulk_meter_installed
-                    ? "Total pumped (meter)"
-                    : "Total (calc η×Q×t)"
+                label={`Total water · ${waterVolumeBasisLabel(metrics)}`}
+                value={`${Number(calculatedTotalM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
+                description={
+                  metrics.volume_basis === "mixed"
+                    ? `Meter ${Number(meterTotalM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³ from ${metrics.bulk_meter_since ?? "cutover"} · estimate ${Number(estimatedTotalM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³ before`
+                    : metrics.bulk_meter_since
+                      ? `Bulk meter since ${metrics.bulk_meter_since}`
+                      : "η × flow × pump hours"
                 }
-                value={`${Number(
-                  (metrics.bulk_meter_installed
-                    ? meterTotalM3(metrics)
-                    : estimatedTotalM3(metrics)) ?? 0,
-                ).toLocaleString(undefined, { maximumFractionDigits: 0 })} m³`}
                 accent="blue"
               />
               <StatCard
-                label={
-                  metrics.bulk_meter_installed
-                    ? "Avg daily (meter)"
-                    : "Avg daily (calc)"
+                label="Avg daily"
+                value={`${Number(calculatedAvgDailyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`}
+                description={
+                  hasMeterData(metrics)
+                    ? `Meter days: ${Number(meterAvgDailyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`
+                    : `Estimated: ${Number(estimatedAvgDailyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`
                 }
-                value={`${Number(
-                  (metrics.bulk_meter_installed
-                    ? meterAvgDailyM3(metrics)
-                    : estimatedAvgDailyM3(metrics)) ?? 0,
-                ).toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`}
                 accent="blue"
               />
               <StatCard
-                label={
-                  metrics.bulk_meter_installed
-                    ? "Avg hourly (meter)"
-                    : "Avg hourly (calc)"
+                label="Avg hourly"
+                value={`${Number(calculatedAvgHourlyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`}
+                description={
+                  hasMeterData(metrics)
+                    ? `Meter hours: ${Number(meterAvgHourlyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`
+                    : `Estimated: ${Number(estimatedAvgHourlyM3(metrics) ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`
                 }
-                value={`${Number(
-                  (metrics.bulk_meter_installed
-                    ? meterAvgHourlyM3(metrics)
-                    : estimatedAvgHourlyM3(metrics)) ?? 0,
-                ).toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`}
                 accent="blue"
               />
               <StatCard

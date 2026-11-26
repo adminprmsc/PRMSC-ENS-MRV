@@ -18,8 +18,28 @@ export type WaterSystemDetailRow = {
   /** Site start of operation, YYYY-MM-DD. */
   start_of_operation?: string | null;
   bulk_meter_installed: boolean;
-  /** `bulk_meter` = interval sum from logs; `estimated` = η × Q × runtime. */
-  volume_basis?: "bulk_meter" | "estimated" | null;
+  /**
+   * `bulk_meter` = all logs metered; `estimated` = all logs η × Q × runtime;
+   * `mixed` = estimate before the bulk cutover, meter from it onward.
+   */
+  volume_basis?: "bulk_meter" | "estimated" | "mixed" | null;
+  /** "YYYY-MM-DD HH:MM" from which only meter readings count (null = never). */
+  bulk_meter_since?: string | null;
+  bulk_meter_since_source?: "configured" | "first_meter_reading" | null;
+  /** Meter era (at/after cutover). */
+  bulk_pump_hours_h?: number;
+  bulk_days_logged?: number;
+  bulk_logs_count?: number;
+  /** Meter-era logs without a reading — no volume counted. */
+  unmetered_bulk_logs?: number;
+  /** Hourly era (before cutover, or no bulk meter). */
+  hourly_pump_hours_h?: number;
+  hourly_days_logged?: number;
+  hourly_logs_count?: number;
+  /** Estimate-era logs exist but η or flow rate is missing on the site. */
+  estimate_inputs_missing?: boolean;
+  estimated_avg_daily_m3?: number | null;
+  estimated_avg_hourly_m3?: number | null;
   /** Total volume in scope: meter sum or estimated (see volume_basis). */
   calculated_total_m3?: number | null;
   calculated_avg_daily_m3?: number | null;

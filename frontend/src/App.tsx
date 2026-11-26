@@ -65,6 +65,7 @@ import SubmissionReview from "./pages/verification/SubmissionReview";
 import UsersAdminPage from "./pages/admin/UsersAdminPage";
 import AdminLocationsPage from "./pages/admin/AdminLocationsPage";
 import GeographyPage from "./pages/geography/GeographyPage";
+import WhatsNewPage from "./pages/releases/WhatsNewPage";
 import TrainingLayout from "./pages/training/TrainingLayout";
 import { TrainingHub } from "./pages/training/TrainingHub";
 import TrainingGuidePage from "./pages/training/TrainingGuidePage";
@@ -182,6 +183,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[...USER_ADMIN_ROLES]}>
                   <AdminLocationsPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* What's new — release notes & feature training (all portal roles) */}
+            <Route
+              path="/whats-new"
+              element={
+                <ProtectedRoute allowedRoles={[...PORTAL_ROLES]}>
+                  <WhatsNewPage />
                 </ProtectedRoute>
               }
             />

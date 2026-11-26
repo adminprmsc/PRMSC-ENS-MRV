@@ -79,6 +79,8 @@ export class WaterSubmissionDetailService {
           ? await this.waterMeterVolume.logRequiresBulkMeterCapture({
               bulkMeterInstalled,
               waterSystemId: String(system.id),
+              bulkMeterSinceDate: system.bulkMeterSinceDate,
+              bulkMeterSinceTime: system.bulkMeterSinceTime,
               logDate: record.logDate,
               pumpEndTime: record.pumpEndTime,
               excludeRecordId: String(record.id),

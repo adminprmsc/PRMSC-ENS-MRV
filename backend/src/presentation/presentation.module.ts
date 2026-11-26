@@ -7,6 +7,7 @@ import { GeographyController } from './controllers/geography.controller';
 import { HealthController } from './controllers/health.controller';
 import { LocationsController } from './controllers/locations.controller';
 import { ManagerOperationsController } from './controllers/manager-operations.controller';
+import { ReleaseNotesController } from './controllers/release-notes.controller';
 import { TehsilManagerController } from './controllers/tehsil-manager.controller';
 import { TrainingController } from './controllers/training.controller';
 import { TubewellOperatorController } from './controllers/tubewell-operator.controller';
@@ -20,6 +21,7 @@ import { UsersController } from './controllers/users.controller';
     UsersController,
     LocationsController,
     GeographyController,
+    ReleaseNotesController,
     DashboardController,
     ManagerOperationsController,
     TehsilManagerController,
